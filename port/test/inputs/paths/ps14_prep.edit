@@ -1,0 +1,11 @@
+# Integration 11 "nullunit2" edited start ps14_start (test coverage only, not story play): sram_boost.lua BOOST_EDIT_FILE.
+# PID FIELD=VALUE ... (port/test/oracle/sram_boost.lua). Eirika's Chapter 14 (Queen of White Dunes), turn 1.
+# No chapter save has a Summoner: Knoll is dead from e16/i16 on (a Shaman on Eirika's route, a Druid on Ephraim's) and
+# Ewan is a Pupil. So Ewan (pid 0x18, a gSummonConfig summoner) becomes a Summoner (class 0x31, CA_SUMMON), level 1 as
+# he is (his phantom then always gets an Iron Axe, GenerateSummonUnitDef), and stands at (18,21), so his phantom can be
+# summoned onto (17,21), next to the Soldier on the stairs at (17,20) (28 HP, an Iron Lance: he counters at range 1).
+18 class=31 x=18 y=21
+# The RN state advanced 1 step (as if one random number had been drawn before the save), so the Soldier's counter
+# hits the phantom (1 HP) after its first strike (14 damage): with the save's own state he misses and the phantom
+# strikes twice and kills him (both tried on mGBA; 2, 3 and 4 steps also kill him, 5 and 6 kill the phantom).
+RN advance=1

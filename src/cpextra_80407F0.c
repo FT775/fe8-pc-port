@@ -1,0 +1,758 @@
+#include "global.h"
+
+#include "cp_common.h"
+#include "cp_utility.h"
+#include "bmunit.h"
+#include "bmitem.h"
+#include "bmmap.h"
+#include "bmidoten.h"
+#include "bmphase.h"
+#include "bmbattle.h"
+
+#include "constants/characters.h"
+#include "constants/classes.h"
+#include "constants/items.h"
+#include "constants/terrains.h"
+
+
+s8 AiFindGoodDoorKeyUsePosition(struct Unit*, struct Vec2*);
+s8 AiFindGoodLockpickUsePosition(struct Unit*, u32, struct Vec2*, struct Vec2*);
+s8 AiTryRoguePick(void);
+void InitAiMoveMapForUnit(struct Unit*);
+void AiMapFloodRange(struct Unit*);
+void AiMapFloodRange_NoDoors(struct Unit*);
+void AiMapFloodRange_NoDoors_Pass(struct Unit*);
+
+
+struct AiSpecialItemLutEntry {
+    u16 itemId;
+    void(*func)(int itemIdx);
+};
+
+void AiSpecialItemDoorKey(int item);
+void AiSpecialItemLockpick(int item);
+void AiSpecialItemAntitoxin(int item);
+
+const struct AiSpecialItemLutEntry sAiSpecialItemFuncLut[] = {
+    { ITEM_DOORKEY,   AiSpecialItemDoorKey },
+    { ITEM_LOCKPICK,  AiSpecialItemLockpick },
+    { ITEM_ANTITOXIN, AiSpecialItemAntitoxin },
+    { },
+};
+
+
+int GetSpecialItemFuncIndex(u16 item) {
+    int index = 0;
+    u16 itemId = GetItemIndex(item);
+
+    for (; sAiSpecialItemFuncLut[index].itemId != 0; index++) {
+        if (itemId != sAiSpecialItemFuncLut[index].itemId) {
+            continue;
+        }
+
+        if (sAiSpecialItemFuncLut[index].func != 0) {
+            return index;
+        }
+    }
+
+    return -1;
+}
+
+s8 AiTryDoSpecialItems() {
+    int i;
+
+    if (gAiState.flags & AI_FLAG_STAY) {
+        return 0;
+    }
+
+    if (AiTryRoguePick() != 0) {
+        return 1;
+    }
+
+    for (i = 0; i < UNIT_ITEM_COUNT; i++) {
+        int funcIndex;
+        u16 item = gActiveUnit->items[i];
+
+        if (item == 0) {
+            break;
+        }
+
+        if (GetItemType(item) == 0) {
+            continue;
+        }
+
+        funcIndex = GetSpecialItemFuncIndex(item);
+
+        if (funcIndex == -1) {
+            continue;
+        }
+
+        sAiSpecialItemFuncLut[funcIndex].func(i);
+    }
+
+    if (gAiState.decideState == 0) {
+        return 1;
+    }
+
+    return gAiDecision.actionPerformed;
+}
+
+void AiSpecialItemDoorKey(int item) {
+    struct Vec2 pos;
+
+    if (!(gAiState.specialItemFlags & 0x80000001)) {
+        return;
+    }
+    
+    if (AiFindGoodDoorKeyUsePosition(gActiveUnit, &pos) == 0) {
+        return;
+    }
+
+    AiTryMoveTowards(pos.x, pos.y, 0, gAiState.unk7E, 1);
+
+    if (gAiDecision.actionPerformed != 1) {
+        return;
+    }
+
+    if (AiIsWithinRectDistance(pos.x, pos.y, gAiDecision.xMove, gAiDecision.yMove, 0) == 1) {
+        AiSetDecision(gAiDecision.xMove, gAiDecision.yMove, UNIT_ACTION_STEAL, 0, item, 0, 0);
+    }
+
+    return;
+}
+
+void AiSpecialItemLockpick(int item) {
+
+    struct Vec2 pos;
+    u32 flags = 0;
+
+    if (!(gAiState.specialItemFlags & 2)) {
+        return;
+    }
+
+    if (GetUnitItemCount(gActiveUnit) >= UNIT_ITEM_COUNT) {
+        if (!(gActiveUnit->aiFlags & 8)) {
+            gActiveUnit->aiFlags |= 8;
+            gAiState.decideState = 0;
+
+            return;
+        }
+    }
+
+    if (!(UNIT_CATTRIBUTES(gActiveUnit) & CA_STEAL)) {
+        return;
+    }
+
+    if (GetUnitItemCount(gActiveUnit) >= UNIT_ITEM_COUNT) {
+        flags |= 4;
+    }
+
+    if ((gActiveUnit->pCharacterData->number == CHARACTER_RENNAC) && (gActiveUnit->aiFlags & 8)) {
+        flags |= 8;
+    }
+
+    if (AiFindGoodLockpickUsePosition(gActiveUnit, flags, &pos, 0) == 1) {
+
+        AiTryMoveTowards(pos.x, pos.y, 0, gAiState.unk7E, 0);
+
+        if ((gAiDecision.actionPerformed != 1)) {
+            return;
+        }
+
+        if ((AiIsWithinRectDistance(pos.x, pos.y, gAiDecision.xMove, gAiDecision.yMove, 0) == 1)) {
+            AiSetDecision(gAiDecision.xMove, gAiDecision.yMove, UNIT_ACTION_STEAL, 0, item, 0, 0);
+        }
+    }
+
+    return;
+}
+
+void AiSpecialItemAntitoxin(int item) {
+
+    struct Vec2 pos;
+
+    if (!(gAiState.specialItemFlags & 4)) {
+        return;
+    }
+    
+    if (gActiveUnit->statusIndex != UNIT_STATUS_POISON) {
+        return;
+    }
+
+    if (AiFindSafestReachableLocation(gActiveUnit, &pos) == 1) {
+        AiSetDecision(pos.x, pos.y, UNIT_ACTION_STEAL, 0, item, 0, 0);
+    }
+
+    return;
+}
+
+u8 AiGetRangeAt(int x, int y) {
+
+    if (gMapRangeSigned[y][x] >= MAP_MOVEMENT_MAX) {
+        return -1;
+    }
+
+    if ((gBmMapUnit[y][x] != 0) && (gBmMapUnit[y][x] != gActiveUnitId)) {
+        return -1;
+    }
+
+    return gBmMapRange[y][x];
+}
+
+const u8 CONST_DATA TerrainList_AiDoor[] = {
+    TERRAIN_DOOR, TERRAIN_NONE,
+};
+
+s8 AiFindGoodDoorKeyUsePosition(struct Unit* unit, struct Vec2* pos) {
+
+    AiMapFloodRange_NoDoors_Pass(unit);
+
+    if (!AiFindClosestTerrainAdjacentPosition(TerrainList_AiDoor, 0, pos)) {
+        return 0;
+    }
+
+    AiMapFloodRange(unit);
+
+    if (gMapRangeSigned[pos->y][pos->x] >= MAP_MOVEMENT_MAX) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+const u8 CONST_DATA TerrainList_AiChest[] = {
+    TERRAIN_CHEST_FULL, TERRAIN_NONE,
+};
+
+s8 AiFindGoodChestKeyUsePosition(struct Unit* unit, struct Vec2* pos) {
+    AiMapFloodRange(unit);
+
+    if (AiFindClosestTerrainPosition(TerrainList_AiChest, 0, pos) == 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
+s8 AiFindGoodLockpickUsePosition(struct Unit* unit, u32 flags, struct Vec2* posA, struct Vec2* posB) {
+
+    InitAiMoveMapForUnit(unit);
+    AiMapFloodRange_NoDoors(unit);
+
+    if ((AiFindClosestUnlockPosition(flags | 1, posA, posB) == 1) && (gMapMovementSigned[posA->y][posA->x] < MAP_MOVEMENT_MAX)) {
+        return 1;
+    } else {
+
+        AiMapFloodRange_NoDoors_Pass(unit);
+
+        if (AiFindClosestUnlockPosition(flags, posA, posB) == 1) {
+
+            if ((gMapMovementSigned[posA->y][posA->x] < MAP_MOVEMENT_MAX) && (gBmMapUnit[posA->y][posA->x] == 0)) {
+                return 0;
+            }
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+s8 AiTryRoguePick() {
+    int flags;
+    struct Vec2 posA;
+    struct Vec2 posB;
+
+    flags = 0;
+
+    if (gActiveUnit->pClassData->number != CLASS_ROGUE) {
+        return 0;
+    } else {
+        if ((GetUnitItemCount(gActiveUnit) >= UNIT_ITEM_COUNT) && !(gActiveUnit->aiFlags & 8)) {
+            gActiveUnit->aiFlags |= 8;
+            gAiState.decideState = 0;
+            // BUG? No explicit return statement
+#ifdef PC_PORT
+            // Host-ABI value (port-plan/DIVERGENCES.md D-33). The GBA returns r0 as
+            // GetUnitItemCount left it (bl at 0x08040C7A): the aiFlags and
+            // decideState stores use r1-r3 only (0x08040C84-0x08040C9A), then
+            // b to the epilogue (0x08040C9C -> 0x08040DC2). The test above
+            // needs a count above 4, so r0 is 5. AiTryDoSpecialItems then
+            // returns 1 (0x08040860: lsls r0, r0, #24; bne). The host
+            // returned ebx = 0 here (the built object), so AiTryDoSpecialItems
+            // went on to try the unit's items.
+            return UNIT_ITEM_COUNT;
+#endif
+        } else {
+
+            if (gPlaySt.chapterIndex == 0xE) {
+
+                if (GetUnitItemCount(gActiveUnit) >= UNIT_ITEM_COUNT) {
+                    flags |= 0xC;
+                }
+
+                if (AiFindGoodLockpickUsePosition(gActiveUnit, flags, &posA, &posB) == 1) {
+                    AiTryMoveTowards(posA.x, posA.y, 0, gAiState.unk7E, 0);
+
+                    if (gAiDecision.actionPerformed == 1) {
+                        if (AiIsWithinRectDistance(posA.x, posA.y, gAiDecision.xMove, gAiDecision.yMove, 0) == 1) {
+                            AiSetDecision(gAiDecision.xMove, gAiDecision.yMove, AI_ACTION_PICK, 0, 0, posB.x, posB.y);
+                            return 1;
+                        }
+                    }
+                }
+            } else {
+                if ((GetUnitItemCount(gActiveUnit) < UNIT_ITEM_COUNT) && (AiFindGoodChestKeyUsePosition(gActiveUnit, &posA) == 1)) {
+                    AiTryMoveTowards(posA.x, posA.y, 0, gAiState.unk7E, 0);
+
+                    if (gAiDecision.actionPerformed == 1) {
+                        if (AiIsWithinRectDistance(posA.x, posA.y, gAiDecision.xMove, gAiDecision.yMove, 0) == 1) {
+                            AiSetDecision(gAiDecision.xMove, gAiDecision.yMove, AI_ACTION_PICK, 0, 0, gAiDecision.xMove, gAiDecision.yMove);
+                            return 1;
+                        }
+                    }
+                }
+            }
+            return 0;
+        }
+    }
+}
+
+void AiSetMovCostTableWithPassableWalls(const s8* cost) {
+    u16 i;
+
+    for (i = 1; i < TERRAIN_COUNT; i++) {
+        if (cost[i] >= 1) {
+            gWorkingTerrainMoveCosts[i] = cost[i];
+        } else {
+            gWorkingTerrainMoveCosts[i] = 1;
+        }
+    }
+    
+    return;
+}
+
+void AiSetMovCostTableWithPassableTerrain(const s8* cost, int terrainId) {
+    u16 i;
+
+    for (i = 1; i < TERRAIN_COUNT; i++) {
+        gWorkingTerrainMoveCosts[i] = cost[i];
+    }
+
+    gWorkingTerrainMoveCosts[terrainId] = 1;
+
+    return;
+}
+
+void AiSetMovCostTableWithTwoPassableTerrains(const s8* cost, int terrainIdA, int terraidIdB) {
+    u16 i;
+
+    for (i = 1; i < TERRAIN_COUNT; i++) {
+        gWorkingTerrainMoveCosts[i] = cost[i];
+    }
+
+    gWorkingTerrainMoveCosts[terrainIdA] = 1;
+    gWorkingTerrainMoveCosts[terraidIdB] = 1;
+
+    return;
+}
+
+void InitAiMoveMapForUnit(struct Unit* unit) {
+    SetWorkingMoveCosts(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapMovement);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+void AiMapFloodRange(struct Unit* unit) {
+    SetWorkingMoveCosts(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+void AiMapFlood_NoWall(struct Unit* unit) {
+    AiSetMovCostTableWithPassableWalls(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapMovement);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+void AiMapFlood_NoWall_Pass(struct Unit* unit) {
+    AiSetMovCostTableWithPassableWalls(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapMovement);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, 0);
+
+    return;
+}
+
+void GenerateExtendedMovementMapOnRangeNeglectWall(int x, int y, const s8* cost) {
+    AiSetMovCostTableWithPassableWalls(cost);
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(x, y, MAP_MOVEMENT_EXTENDED, 0);
+
+    return;
+}
+
+void AiMapFloodRangeFrom_NoWall(int x, int y, struct Unit* unit) {
+    AiSetMovCostTableWithPassableWalls(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(x, y, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+void AiMapFloodRange_NoDoors(struct Unit* unit) {
+    AiSetMovCostTableWithPassableTerrain(GetUnitMovementCost(unit), TERRAIN_DOOR);
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+void AiMapFloodRange_NoDoors_Pass(struct Unit* unit) {
+    AiSetMovCostTableWithPassableTerrain(GetUnitMovementCost(unit), TERRAIN_DOOR);
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, 0);
+
+    return;
+}
+
+void AiMapFloodRange_NoSnagWalls(struct Unit* unit) {
+    AiSetMovCostTableWithTwoPassableTerrains(GetUnitMovementCost(unit), TERRAIN_WALL_DAMAGED, TERRAIN_SNAG);
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+void AiMapFloodRange_NoSnagWalls_Pass(struct Unit* unit) {
+    AiSetMovCostTableWithTwoPassableTerrains(GetUnitMovementCost(unit), TERRAIN_WALL_DAMAGED, TERRAIN_SNAG);
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(unit->xPos, unit->yPos, MAP_MOVEMENT_EXTENDED, 0);
+
+    return;
+}
+
+void AiMapFloodRange_UpToMove(struct Unit* unit) {
+    SetWorkingMoveCosts(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(unit->xPos, unit->yPos, UNIT_MOV(unit), unit->index);
+
+    return;
+}
+
+void AiUpdateNoMoveFlag(struct Unit* unit) {
+
+    if ((unit->ai_config & AI_UNIT_CONFIG_FLAG_STAY) != 0) {
+        gAiState.flags |= AI_FLAG_STAY;
+    } else {
+        gAiState.flags &= ~AI_FLAG_STAY;
+    }
+
+    return;
+}
+
+void AiMapFloodRangeFrom(int x, int y, struct Unit* unit) {
+    SetWorkingMoveCosts(GetUnitMovementCost(unit));
+
+    SetWorkingBmMap(gBmMapRange);
+    GenerateMovementMap(x, y, MAP_MOVEMENT_EXTENDED, unit->index);
+
+    return;
+}
+
+int AiDetermineNightmareEffectiveness(int* numValidTargets, int* numHit, u8 threshold) {
+    int iy;
+    int ix;
+    struct Unit* unit;
+    int unitId;
+
+    *numValidTargets = 0;
+    *numHit = 0;
+
+    unitId = -1;
+
+    for (iy = gBmMapSize.y - 1; iy >= 0; iy--) {
+        for (ix = gBmMapSize.x - 1; ix >= 0; ix--) {
+            if (!(gMapRangeSigned[iy][ix])) {
+                continue;
+            }
+
+            if (gBmMapUnit[iy][ix] == 0) {
+                continue;
+            }
+
+            if (AreUnitsAllied(gActiveUnitId, gBmMapUnit[iy][ix])) {
+                continue;
+            }
+
+            unit = GetUnit(gBmMapUnit[iy][ix]);
+
+            if ((unit->statusIndex == UNIT_STATUS_POISON) || (unit->statusIndex == UNIT_STATUS_SLEEP) || (unit->statusIndex == UNIT_STATUS_SILENCED) || (unit->statusIndex == UNIT_STATUS_BERSERK)) {
+                continue;
+            }
+
+            if ((unit->statusIndex == UNIT_STATUS_PETRIFY) || (unit->statusIndex == UNIT_STATUS_13)) {
+                continue;
+            }
+
+            (*numValidTargets)++;
+
+            if (GetOffensiveStaffAccuracy(gActiveUnit, unit) < threshold) {
+                continue;
+            }
+
+            if (unitId < 0) {
+                unitId = unit->index;
+            }
+
+            (*numHit)++;
+        }
+    }
+    
+    return unitId;
+}
+
+struct UnknownAiInputA {
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+#ifdef PC_PORT
+} AGBCC_STRUCT;
+#else
+};
+#endif
+
+s8 AiTryUseNightmareStaff(struct UnknownAiInputA* input) {
+    int ix;
+    int iy;
+    int itemIdx;
+
+    u8 targetUnitId;
+    int numValidTargets;
+    int numHit;
+
+    int countA;
+    int bestNumHit;
+    int countB;
+    int uidBest;
+    int xBest;
+    int yBest;
+
+    s8 foundItem = 0;
+
+    countA = 0;
+    bestNumHit = 0;
+    countB = 0;
+    xBest = 0;
+    yBest = 0;
+
+    if (gPlaySt.chapterTurnNumber < 2) {
+        gAiState.cmd_result[0] = 0;
+        gAiState.cmd_result[1] = 0;
+
+        return 0;
+    } else {
+
+        for (itemIdx = 0; itemIdx < UNIT_ITEM_COUNT; itemIdx++) {
+            u16 item = gActiveUnit->items[itemIdx];
+
+            if (item == 0) {
+                break;
+            }
+            
+            if (GetItemIndex(item) == ITEM_NIGHTMARE) {
+                foundItem = 1;
+                break;
+            }
+        }
+
+        if (foundItem) {
+            AiStayAwareGenerateUnitMovementMap(gActiveUnit);
+            GenerateMagicSealMap(-1);
+
+            for (iy = gBmMapSize.y - 1; iy >= 0; iy--) {
+                for (ix = gBmMapSize.x - 1; ix >= 0; ix--) {
+
+                    if (gBmMapMovement[iy][ix] > MAP_MOVEMENT_MAX) {
+                        continue;
+                    }
+
+                    if ((gBmMapUnit[iy][ix] != 0) && (gBmMapUnit[iy][ix] != gActiveUnitId)) {
+                        continue;
+                    }
+
+                    BmMapFill(gBmMapRange, 0);
+                    MapAddInBoundedRange(ix, iy, GetItemMinRange(ITEM_NIGHTMARE), GetItemMaxRange(ITEM_NIGHTMARE));
+
+                    targetUnitId = AiDetermineNightmareEffectiveness(&numValidTargets, &numHit, input->unk_02);
+
+                    if (numValidTargets > countB) {
+                        countB = numValidTargets;
+                    }
+
+                    if (numValidTargets < input->unk_00) {
+                        continue;
+                    }
+
+                    if (numHit < input->unk_01) {
+                        continue;
+                    }
+
+                    if (numHit > bestNumHit) {
+                        countA = numValidTargets;
+                        bestNumHit = numHit;
+                        xBest = ix;
+                        yBest = iy;
+
+                        uidBest = targetUnitId;
+                    }
+                }
+            }
+
+            if (countA >= input->unk_01) {
+                gAiState.cmd_result[0] = 1;
+                gAiState.cmd_result[1] = xBest;
+                gAiState.cmd_result[2] = yBest;
+                gAiState.cmd_result[3] = uidBest;
+                gAiState.cmd_result[4] = itemIdx;
+                gAiState.cmd_result[5] = countB;
+            } else {
+                gAiState.cmd_result[0] = 0;
+                gAiState.cmd_result[1] = countB;
+            }
+
+            return 0;
+        }
+    }
+
+    // return 0; BUG? No explicit return if foundItem is false
+#ifdef PC_PORT
+    // Host-ABI value (port-plan/DIVERGENCES.md D-34). AiScriptCmd_01_FunctionCall
+    // stores the result in gAiScriptEnded (0x0803C702: strb r0), and
+    // DecideScriptA stops running the unit's script when that is 1
+    // (0x08039E18: cmp r0, #1). This path is the unit without Nightmare on
+    // turn 2 or later. What the GBA's r0 holds at the fall-off (0x08041270,
+    // b to the epilogue), with itemIdx where the search stopped (items[itemIdx]
+    // == 0, or 5):
+    // - itemIdx > 0: GetItemIndex(items[itemIdx - 1]), the last call in the
+    //   search loop (0x08041260; the loop exits at 0x0804124C or 0x0804125C
+    //   without writing r0).
+    // - itemIdx == 0 (no items): the argument, still in r0 from the entry
+    //   (mov r9, r0 at 0x08041204 only copies it). The one caller is
+    //   gAiScript_DemonKing with AiTryUseNightmareStaffArg at 0x085A8A70, so 0x70.
+    // The host returned 0 (eax = the empty item slot that ended the loop, or
+    // the last GetItemIndex when all 5 slots are full).
+    if (itemIdx == 0)
+        return (s8)0x70;
+
+    return (s8)GetItemIndex(gActiveUnit->items[itemIdx - 1]);
+#endif
+}
+
+s8 AiDecideNightmareStaff() {
+
+    AiSetDecision(gAiState.cmd_result[1], gAiState.cmd_result[2], AI_ACTION_DKNIGHTMARE, gAiState.cmd_result[3], gAiState.cmd_result[4], 0, 0);
+
+    return 1;
+}
+
+struct UnknownAiInputB {
+    u8 unk_00;
+    u8 unk_01;
+    u8 unk_02;
+    
+    struct UnitDefinition* unk_04;
+};
+
+s8 AiTryDKSummon(struct UnknownAiInputB* input) {
+    int ix;
+    int iy;
+
+    int numValidTargets;
+    int numHit;
+
+    int totalSummonedUnits = 0;
+
+    if (gPlaySt.chapterTurnNumber == 1) {
+        gAiState.cmd_result[0] = 1;
+        gAiState.cmd_result[1] = gActiveUnit->xPos;
+        gAiState.cmd_result[2] = gActiveUnit->yPos;
+        return 0;
+    }
+
+    BmMapFill(gBmMapRange, 0);
+    MapAddInBoundedRange(gActiveUnit->xPos, gActiveUnit->yPos, GetItemMinRange(ITEM_NIGHTMARE), GetItemMaxRange(ITEM_NIGHTMARE));
+
+    AiDetermineNightmareEffectiveness(&numValidTargets, &numHit, 0);
+
+    if (numValidTargets >= input->unk_00) {
+
+        for (iy = gBmMapSize.y - 1; iy >= 0; iy--) {
+            for (ix = gBmMapSize.x - 1; ix >= 0; ix--) {
+                struct Unit* unit;
+                struct UnitDefinition* iter;
+
+                u8 unitId = gBmMapUnit[iy][ix];
+                
+                if (unitId == 0) {
+                    continue;
+                }
+                
+                if (unitId == gActiveUnitId) {
+                    continue;
+                }
+                
+                if (!AreUnitsAllied(gActiveUnitId, unitId)) {
+                    continue;
+                }
+
+                unit = GetUnit(unitId);
+
+                for (iter = input->unk_04; iter->charIndex != 0; ++iter) {
+                    if (unit->pCharacterData->number != iter->charIndex) {
+                        continue;
+                    } 
+                    
+                    if (unit->pClassData->number != iter->classIndex) {
+                        continue;
+                    }
+
+                    totalSummonedUnits++;
+                    break;
+                }
+            }
+        }
+
+        if (totalSummonedUnits < input->unk_01) {
+            gAiState.cmd_result[0] = 1;
+            gAiState.cmd_result[1] = gActiveUnit->xPos;
+            gAiState.cmd_result[2] = gActiveUnit->yPos;
+            return 0;
+        }
+    }
+
+    gAiState.cmd_result[0] = 0;
+    return 0;
+}
+
+s8 AiDecideDKSummon() {
+    AiSetDecision(gAiState.cmd_result[1], gAiState.cmd_result[2], AI_ACTION_DKSUMMON, 0, 0, 0, 0);
+
+    return 1;
+}

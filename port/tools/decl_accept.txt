@@ -1,0 +1,49 @@
+# port/tools/decl_sweep.py: the function declarations whose type differs from the definition,
+# judged by hand (port-plan DIVERGENCES, "Host-ABI values": declaration types; round 10's C10-6).
+#
+# One site per line: KEY VERDICT reason. KEY is the declaring file, the function that holds a
+# block-scope declaration (if any) and the declared name, as decl_sweep.py prints it.
+#   fixed   the site gets the definition's type under PC_PORT (the retail declaration in #else),
+#           so the PC view must not list it any more ("FIX MISSING" otherwise)
+#   benign  retail stays: the two compilers give the same values there; the reason says why
+# decl_sweep.py --check fails on a site not listed here, a fixed site still listed, a benign
+# entry that matches no site, and a fixed entry whose declaration is no longer used.
+#
+# Fixed (round 10, port-r10-summon): a narrow return (s8, bool, u16) read through an `int` or
+# `u32` declaration. The GBA's function leaves the extended value in r0 (agbcc extends it, or
+# the value is 0/1 by construction: each checked in fireemblem8.elf) and the GBA's caller tests
+# r0 whole; the host's function sets only AL or AX, so the host caller, reading EAX whole, can
+# see the other bytes of whatever EAX held. Declared with the definition's type, the host caller
+# extends AL/AX itself: the GBA's value for every input, whatever host compiler.
+src/mapanim_summon.c:SelectSummonPos:CanUnitCrossTerrain fixed C10-6: GBA 0x0801949C returns 0/1 in r0 (adds r0, r1, #0), the caller tests r0 (0x0807B134); host setg %al left the cost-table pointer in EAX's upper bytes, so every free square counted: the Demon King summoned into the wall at (11,2)
+src/prep_sallycursor.c:CanShowUnitStatScreen fixed GBA 0x0801C928 returns 0/1; host sete/or/xor on AL kept the class pointer's upper bytes (always true): R on a class 0x62 or 0x34 unit in the preparations map opened a stat screen the GBA refuses
+src/prep_itemuse.c:CanUnitUseItemPrepScreen fixed GBA 0x08029F00 returns 0, 1 or the s8 of its callee extended (lsls/asrs #24); host returns its callees' AL with their upper bytes, and for the Juna Fruit (0xB7, level >= 10) setg %al over the unit pointer: always usable in the preparations Items, Use screen
+src/prep_utils.c:CanUnitUseItemPrepScreen fixed as src/prep_itemuse.c's declaration (CanUnitPrepScreenUse)
+src/ending_credits.c:CheckGameEndFlag fixed GBA 0x080A4CB4 returns 0/1 (lsls/lsrs #31); host EAX is clean today (movzbl, and $1) only by GCC's choice
+src/phasechangefx.c:CheckInLinkArena fixed GBA 0x08042E98 returns 0/1 (lsrs #6, ands #1); host clean today (movzbl, shr %al, and $1) only by GCC's choice; the retail declaration is K&R `int CheckInLinkArena()`
+src/prep_itemscreen.c:CheckInLinkArena fixed as src/phasechangefx.c's
+src/prep_sallycursor.c:CheckInLinkArena fixed as src/phasechangefx.c's
+src/prep_utils.c:CheckInLinkArena fixed as src/phasechangefx.c's
+src/uisupport.c:GetSupportTalkSong_ fixed GBA 0x08083790 returns u16 (lsls/lsrs #16); host returns GetSupportTalkSong's EAX, clean today only by GCC's choice
+src/classchg-handler.c:GetUnitEquippedWeapon fixed declared u32, defined u16: GBA 0x08016B28 returns ldrh or 0; host movzwl, clean today only by GCC's choice (the caller stores AX only)
+src/eventscr_gmap.c:IsWmPlaceDotActiveAtIndex fixed GBA 0x080C3094 returns 0/1; host setne %al over the proc pointer (non-zero either way), the caller tests truth only
+src/bonusclaim.c:LoadBonusContentData fixed GBA 0x080A38F4 returns 0/1; host sete %al over Checksum16's AX: with a wrong checksum the host said true when Checksum16's high byte was non-zero
+src/savemenu.c:LoadBonusContentData fixed as src/bonusclaim.c's (BonusClaimMenu_Init)
+#
+# Benign: the same values on both sides.
+src/eventscr.c:BgChangeChr benign declared (int, int), defined (u8, u8): both callees narrow on entry (GBA 0x0800B9B8 lsls/lsrs #24 of r0 and r1; host movzbl of both stack slots), so both see (u8)arg
+src/eventscr.c:EventShinningCursorAdvance benign declared (int, int, int), defined (s16, s16, s16): GBA 0x08010E6C narrows each (lsls #20/asrs #16, lsls #16/lsrs #16) and the host uses movswl and 16-bit operations; only the low 16 bits reach the results on both
+src/worldmap_main.c:GetWMCenteredCameraPosition benign declared (int, int, ...), defined (s16, s16, ...): GBA 0x080C0858 narrows both (lsls/asrs #16), the host works on AX (movzwl, cmp %dx,%ax, test %ax,%ax, store %ax): the same stored s16
+src/worldmap_mapmu.c:GetWMCenteredCameraPosition benign as src/worldmap_main.c's
+src/worldmap_gmapunit.c:SMS_DisplayOne benign parameter 6 declared int, defined s8: GBA 0x08027F28 narrows it (ldr [sp, #32]; lsls/lsrs #24), the host tests %bl; the one caller (GmapUnit_Loop) passes flags & 2 (0 or 2)
+src/bmguide.c:UpdateMenuScrollBarConfig benign declared (int x4), defined (u8, u16, u16, u8): GBA 0x080976CC narrows all four on entry, the host stores %dl/%di/%si/%bl: the same bytes stored
+src/soundroom.c:UpdateMenuScrollBarConfig benign as src/bmguide.c's
+src/eventscr_gmap.c:GmScrollManageExist benign declared s8, defined ProcPtr: both callers test the low byte only (GBA lsls r0, #24; cmp r0, #0 at 0x0800C096 and 0x0800C0A8; host cmp $1,%al and test %dl,%dl), and the proc pointer is the GBA's on both (gProcArray at its GBA address): the same answer, retail's low-byte test included (a proc in slot 18, 0x02025600, reads as none on both)
+src/worldmap_main.c:GmScrollManageExist benign as src/eventscr_gmap.c's (WorldMap_WaitCursorJump: GBA lsls r0, #24 at 0x080B96E4; host test %al,%al)
+include/functions.h:DrawGlyphRam benign K&R declaration of the port's DrawGlyphRam(int, int, int, int) (port/asm/ramfunc_pc.c); the one call (DrawTextGlyph) passes four 32-bit words on both
+port/asm/ramfunc_pc.c:DrawGlyph benign K&R declaration used only to store the address in DrawGlyphRAMFunc (StoreRoutinesToIRAM); calls go through that pointer's (int, int, int, int): four words, as the definition takes
+port/asm/ramfunc_pc.c:DecodeString benign K&R declaration used only to store the address in DecodeStringRAMFunc, whose (const char *, char *) matches the definition
+port/asm/ramfunc_pc.c:MapFloodCoreStep benign K&R declaration used only to store the address in MapFloodCoreStepRAMFunc, whose (int, int, int) matches the definition
+include/gba/m4a_internal.h:MPlayMain benign the decomp's prototype of the GBA's asm; the game only stores the address (src/m4a.c:570), and the port calls it through casts with its definition's type (port/audio/m4a_1_pc.c:936, 1508; the header prototype is renamed there, lines 122-128)
+include/gba/m4a_internal.h:SoundMainBTM benign as MPlayMain's (no C call through the header prototype)
+include/gba/m4a_internal.h:ply_note benign as MPlayMain's (src/m4a.c:344 stores the address; port/audio/m4a_1_pc.c:881 calls it with its three parameters)

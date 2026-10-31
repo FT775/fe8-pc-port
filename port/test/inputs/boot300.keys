@@ -1,0 +1,11 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file").
+# One logic tick per entry: a 10-bit active-high key mask in hex.
+# A 001, B 002, Select 004, Start 008, Right 010, Left 020, Up 040,
+# Down 080, R 100, L 200. "MASK*N" is the same mask for N ticks.
+# Ticks after the last entry have mask 000.
+#
+# boot300: boot with no keys, press A for 2 ticks at tick 200 (the health and
+# safety screen), then no keys to tick 299.
+000*200
+001*2
+000*98

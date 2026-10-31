@@ -1,0 +1,4 @@
+# Saves written by `make -f port/test/Makefile sram-capture` (port/test/README.md,
+# "Chapter saves"): game-save data made by playing the ROM. Never commit them.
+*
+!.gitignore

@@ -1,0 +1,9 @@
+# Coverage 12 "features" edited start f_tt_start (test coverage only, not story play; level-boosted, as
+# coverage 11's f_promo_start): sram_boost.lua BOOST_EDIT_FILE (PID FIELD=VALUE ..., port/test/oracle/sram_boost.lua).
+# Chapter 6's start (ch6_start + boost_ch6.keys, the edit at the end of tick 800, the world map). Ross, the trainee
+# (Journeyman, level 1 in the story save), made a Fighter (class 0x3F, his trainee promotion's first class) at
+# level 10 with a Master Seal (0x88, 1 use) in his third slot, right after his two items (a slot with an empty one
+# before it is not in the Item list: ItemSelectMenu_Usability; a first try with it in the fifth slot had no Use):
+# the "third tier" of a trainee (Journeyman, Fighter, then Hero or Warrior, with Ross's own palettes,
+# gAnimCharaPalConfig), which no story save can reach (Ross dies in Chapter 6 on Eirika's route; c11-p.md).
+07 class=3F lv=10 i3=0188

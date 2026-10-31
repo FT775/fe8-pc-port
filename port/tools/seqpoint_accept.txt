@@ -1,0 +1,13 @@
+# port/tools/seqpoint_sweep.py: the game's unsequenced side effects (GCC -Wsequence-point, PC view),
+# judged by hand (port-plan DIVERGENCES D-72 and the "Argument evaluation order" section; round 10's
+# C10-10 (a), integration 11's check-all row `seqpoint`).
+#
+# One site per line: KEY VERDICT reason. KEY is FILE:FUNCTION:OPERAND as seqpoint_sweep.py prints it.
+#   fixed   rewritten under PC_PORT (the retail line in #else): the PC view must not report it
+#   benign  retail stays: agbcc and the host GCC give the same result there; the reason says why
+#
+# Fixed (round 10, port-r10-frames 2c53c5f2):
+src/bmtrick.c:RemoveTrap:trap fixed C10-10 (a), D-72: `*trap++ = *(trap + 1)`; agbcc reads the next entry and then stores and moves on (0x0802E302: ldr r1,[r3,#8]; ldr r2,[r3,#12]; stmia r3!,{r1,r2}); the host GCC moved the pointer first, so each entry took the one two places on. PC_PORT: `*trap = *(trap + 1); trap++;`
+#
+# Benign:
+src/titlescreen.c:Title_IDLE:proc->timer benign `proc->timer = (++proc->timer & 0x3f)`: both compilers store once, (timer + 1) & 0x3F (agbcc 0x080C635E-0x080C636C, GCC Title_IDLE+0x11-+0x1b; round 10, pending/folded/r10-frames.md): the same value

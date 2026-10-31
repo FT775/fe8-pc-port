@@ -1,0 +1,18 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file").
+# Round 10 "paths" (port/test/inputs/paths/README.md).
+# Start: boot both sides with GATE0_SRAM_IN=ch8r_start.sav (the save's first 32 KiB: FNV-1a 899c302c).
+# ch8r_start is the SRAM of route_ch8.keys at tick 72,800: the suspend the game writes at turn 14's enemy phase
+# start. Resumed: the boss (red) heals on his throne first thing, gBattleTarget not filled since boot: a red actor
+# with a non-red target goes left, so the NULL target is on the right (D-48's right-side reads).
+# 3500 ticks.
+000*250
+001*2
+000*748
+008*2
+000*298
+001*2
+000*198
+001*2
+000*198
+001*2
+000*1798

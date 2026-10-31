@@ -1,0 +1,4 @@
+/* fe8pc-sdl.exe's resources (port/Makefile.mingw SDL=1, i686-w64-mingw32-windres):
+   the application manifest only (fe8pc-sdl.manifest.xml says why; not named
+   *.manifest, which the repository's .gitignore ignores). */
+1 24 "port/win32/gui/fe8pc-sdl.manifest.xml"

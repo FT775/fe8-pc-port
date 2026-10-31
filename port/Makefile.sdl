@@ -1,0 +1,82 @@
+# SDL3 window build of the PC port (port-plan/PLAN.md section 3.7, phases 2
+# and 4): the same game as `make -f port/Makefile FULL=1`, shown in a window,
+# with live keyboard and gamepad input and real-time pacing at 59.7275 Hz.
+#
+# Run from the repository root, after the GBA `make` in this tree (it is the
+# address oracle, as for FULL=1):
+#   make -f port/Makefile.sdl -j6            # build build/pc-sdl/fe8pc-sdl
+#   ./build/pc-sdl/fe8pc-sdl baserom.gba     # open the window (the user's ROM)
+# The game's saves go to baserom.sav next to the ROM (raw 32 KiB SRAM, as
+# mGBA's .sav), or to the per-user folder (~/.local/share/fe8pc/) when the
+# ROM's folder cannot be written, which the window title then says; --save
+# PATH, FE8PC_SAVE=PATH or --no-save change that (port/save/savefile_pc.c).
+#
+# port/Makefile is reused unchanged. It is included below with BUILD, FULL,
+# FIXPTR_REPORT and PORT_SRCS set by `override`, so its own rules build the
+# game and port objects, the ROM relocation table and the host linker script,
+# all in build/pc-sdl. The only difference is the platform backend:
+# port/sdl3/*.c replaces port/hw/platform_headless.c. The headless builds
+# (port/Makefile and the Gate 0 build in port/test/Makefile) do not change.
+#
+# Needs a 32-bit (i386) SDL3, found with pkg-config. On Ubuntu that is
+# libsdl3-dev:i386 (3.4.2 tested). Or set SDL_CFLAGS and SDL_LIBS.
+
+SDL_PKG_CONFIG ?= PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig pkg-config
+ifeq ($(origin SDL_LIBS),undefined)
+SDL_CFLAGS := $(shell $(SDL_PKG_CONFIG) --cflags sdl3 2>/dev/null)
+SDL_LIBS   := $(shell $(SDL_PKG_CONFIG) --libs sdl3 2>/dev/null)
+endif
+ifeq ($(strip $(SDL_LIBS)),)
+$(error port/Makefile.sdl: no 32-bit SDL3 found by pkg-config; install libsdl3-dev:i386, or set SDL_CFLAGS and SDL_LIBS)
+endif
+
+# port/Makefile's own PORT_SRCS (FULL=1), read back from `make -p` as
+# port/test/Makefile does, so new port sources reach this build too.
+SDL_BASE_PORT_SRCS := $(shell MAKEFLAGS= $(MAKE) --no-print-directory -f port/Makefile -pn FULL=1 \
+                        .sdl-none 2>/dev/null | sed -n 's/^PORT_SRCS := //p')
+ifeq ($(strip $(SDL_BASE_PORT_SRCS)),)
+$(error port/Makefile.sdl: could not read PORT_SRCS from port/Makefile)
+endif
+
+override FULL          := 1
+# A test build, `make -f port/Makefile.sdl -j6 FE8PC_TESTBUILD=1` (on the
+# command line only, port/testbuild.mk), goes to build/pc-sdl-test/fe8pc-sdl:
+# the debug-menu keys and Shift as Select (port/Makefile), and the window
+# build's test hooks (port/sdl3/test/sdl_testhook.c: a key file, frame hashes,
+# frame times, a virtual gamepad), which only a test build compiles.
+include port/testbuild.mk
+override BUILD        := build/pc-sdl$(if $(filter 1,$(FE8PC_TESTBUILD)),-test)
+override FIXPTR_REPORT := $(BUILD)/fixptr_unresolved.txt
+override PORT_SRCS     := $(filter-out port/hw/platform_headless.c,$(SDL_BASE_PORT_SRCS)) \
+                          $(wildcard port/sdl3/*.c) \
+                          $(if $(filter 1,$(FE8PC_TESTBUILD)),$(wildcard port/sdl3/test/*.c))
+
+include port/Makefile
+
+SDL_EXE := $(BUILD)/fe8pc-sdl
+
+.PHONY: sdl
+.DEFAULT_GOAL := sdl
+sdl: $(SDL_EXE)
+
+$(BUILD)/port/sdl3/%.o: PORT_CFLAGS += $(SDL_CFLAGS)
+# Recorded in port/Makefile's compile settings (B-16), like its own per-object flags.
+COMPILE_SETTINGS += | port/sdl3: $(SDL_CFLAGS)
+
+# gen_host_link.py writes a logging stub for every undefined function that is
+# neither in the GBA ELF nor in the C library, and SDL's functions are such
+# names. libSDL3 provides them, so this link uses a copy of autostubs.c without
+# the SDL_* stubs. A name SDL does not provide then fails the link, rather than
+# becoming a silent stub.
+$(BUILD)/autostubs-sdl.c: $(BUILD)/autostubs.c
+	sed -E '/^static unsigned sCount_SDL_[A-Za-z0-9_]*;$$/d; /^int SDL_[A-Za-z0-9_]*\(void\) \{/d' $< > $@
+
+$(BUILD)/autostubs-sdl.o: $(BUILD)/autostubs-sdl.c $(COMPILE_STAMP)
+	$(CC) $(PORT_CFLAGS) -w -c $< -o $@ $(WARNLOG)
+
+# RAM_CHECK (port/Makefile, B-12): every RAM symbol at its GBA address, or the link fails.
+$(SDL_EXE): $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs-sdl.o $(BUILD)/gba_mem.ld \
+            port/tools/check_ram_addrs.py
+	$(CC) $(HOST_LDFLAGS) -Wl,-T,$(BUILD)/gba_mem.ld -Wl,-Map,$(BUILD)/fe8pc-sdl.map \
+	    $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs-sdl.o $(SDL_LIBS) -lm -o $@
+	$(RAM_CHECK) --binary $@ --map $(BUILD)/fe8pc-sdl.map || { rm -f $@; exit 1; }

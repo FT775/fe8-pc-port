@@ -1,0 +1,33 @@
+# Boot from a save and load it (port/test/README.md, "Chapter saves").
+# Play with GATE0_SRAM_IN set to the save. Each press comes in a state that
+# waits for input, at least 150 ticks after that state began on the GBA, so
+# the lag-free PC takes the same path. Checked on the GBA with the two saves
+# of the chapsave presets: the save is loaded at tick 1,735.
+#
+# The title menu opens on its first entry: "Resume Chapter" when the save has
+# a valid suspend, otherwise "Restart Chapter" (Continue), and the slot list
+# then opens on the last saved slot (port/test/tools/sram_info.py tells which).
+#
+# 2,000 entries (ticks 0-1,999): append keys from tick 2,000.
+000*250
+001*2      # 250: A, the health and safety screen (waiting for a key)
+000*748
+008*2      # 1000: Start, skips the opening to the title screen
+000*298
+001*2      # 1300: A, title screen: the title menu
+000*198
+001*2      # 1500: A, the first entry (Resume Chapter or Restart Chapter): the slot list
+000*198
+001*2      # 1700: A, load the slot (the game runs from tick 1,735)
+000*298
+# c10 shard C: from tick 2,000 (turn 1, cursor on a unit at (12,13)): Right to (13,13), A (map menu),
+# Up (wraps to End), A (End): the enemy phase, where the Demon King summons on turn 1.
+000*20
+010*2      # 2020: Right
+000*30
+001*2      # 2052: A, the map menu
+000*30
+040*2      # 2084: Up, to End
+000*20
+001*2      # 2106: A, End
+000*2892

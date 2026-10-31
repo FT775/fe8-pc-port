@@ -1,0 +1,53 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file").
+# Integration 11 "nullunit2" (port/test/inputs/paths/README.md), an edited start (test coverage only, not story play).
+# Start: boot both sides with GATE0_SRAM_IN=ps14_start.sav (the save's first 32 KiB: FNV-1a 54cb2aa8).
+# Resume Chapter (resume.keys), Eirika's Chapter 14, turn 1. Ewan (made a Summoner by ps14_prep.edit) summons his
+# phantom (1 HP, an Iron Axe) onto (17,21); the phantom attacks the Soldier on the stairs at (17,20), whose counter
+# kills it: UnitKill clears its pCharacterData while it is still gActiveUnit, and PlayerPhase_FinishAction's
+# TryMakeCantoUnit reads its attributes through NULL (the audit's N2). Then the free cursor again.
+# 3569 ticks.
+000*250
+001*2
+000*748
+008*2
+000*298
+001*2
+000*198
+001*2
+000*198
+001*2
+000*318
+040
+000*4
+040
+000*4
+040
+000*24
+001
+000*30
+001
+000*30
+080
+000*10
+001
+000*50
+020
+000*30
+001
+000*330
+020
+000*20
+001
+000*30
+001
+000*30
+001
+000*30
+001
+000*30
+001
+000*630
+010
+000*20
+080
+000*230

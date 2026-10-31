@@ -1,0 +1,9 @@
+# Coverage 12 "features" edited start f_mc_start (test coverage only, not story play): sram_boost.lua
+# BOOST_EDIT_FILE (PID FIELD=VALUE ..., port/test/oracle/sram_boost.lua). Eirika's Chapter 14 (e14_start and
+# route_e14.keys, the edit at the end of tick 1600, the SRAM at tick 1725, the turn-1 suspend): Rennac (red, the
+# looting thief who holds the Member Card, UnitDef_088BBCAC) moved from the roofs at (22,12) into the secret
+# shop's corridor at (3,5), and L'Arachel (his recruiter) next to him at (3,6). In the story saves he runs off with
+# the card before anyone reaches him (two bot tries could not catch him), and every secret shop, the world map's
+# too, lets only a unit holding a Member Card in (src/eventinfo.c, src/prep_itemscreen.c).
+1C x=3 y=5
+19 x=3 y=6

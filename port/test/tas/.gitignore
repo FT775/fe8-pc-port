@@ -1,0 +1,5 @@
+# TAS-derived data (port/test/README.md, "TAS route"): per-frame key files
+# decoded from third-party TAS movies, tick routes made from them, milestone
+# lists and traces. They reproduce the TAS inputs: local only, never commit.
+*
+!.gitignore

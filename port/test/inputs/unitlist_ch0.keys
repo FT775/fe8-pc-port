@@ -1,0 +1,304 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file").
+# The map menu's Unit list in the Prologue (port-plan/pending/unitlist.md,
+# proposed DIVERGENCES.md D-39): the Prologue up to its first free player phase
+# (ticks 0-1995: the start of route_ch0_prologue.keys; the cursor is at (4,5)),
+# then the Unit list opened, scrolled through both units and all six pages,
+# Eirika's and Seth's stat screens from it, and back to the map.
+# Opening the list runs CanUnitSupportNow for each support partner; a partner
+# not in the army (GetUnitSupporterUnit NULL) reaches GetUnitSupporterCount(NULL).
+# 3000 ticks: make -f port/test/unitlist.mk (port/test/unitlist.mk).
+#
+#   1996  Down: the cursor to (4,6), an empty tile
+#   2012  A: the map menu (A on an empty tile)
+#   2044  A: Unit, the menu's first item: the Unit list opens
+#   2120  Down: Seth
+#   2140  Up: Eirika
+#   2160  Right: page 2
+#   2200  Right: page 3
+#   2240  Right: page 4
+#   2280  Right: page 5 (weapon ranks)
+#   2320  Right: page 6 (supports)
+#   2360  Down: Seth (supports page)
+#   2380  Up: Eirika
+#   2400  Left: page 5
+#   2440  Left: page 4
+#   2480  Left: page 3
+#   2520  Left: page 2
+#   2560  Left: page 1
+#   2600  R: Eirika's stat screen
+#   2660  Right: stat screen page 2
+#   2700  Right: stat screen page 3 (weapon ranks, supports)
+#   2740  Down: Seth's stat screen
+#   2780  Up: Eirika's stat screen
+#   2820  B: back to the Unit list (UnitList_ResetFromStatScreen)
+#   2900  B: the Unit list closes, back to the map
+# Ticks after the last entry have mask 000.
+#
+# --- route_ch0_prologue.keys, ticks 0-1995 ---
+000
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+080
+000*6
+001
+000*10
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+008
+000*10
+008
+000*10
+008
+000*10
+008
+000*10
+008
+000*10
+008
+000*10
+008
+000*10
+001
+000*20
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+008
+000*39
+001
+000*20
+001
+000*549
+008
+000*29
+008
+000*33
+008
+000*17
+001
+000*5
+001
+000*5
+001
+000*5
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*4
+008
+000*17
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*5
+001
+000*20
+001
+000*20
+001
+000*20
+001
+000*20
+# --- from tick 1996 ---
+080     # tick 1996: Down
+000*15
+001     # tick 2012: A
+000*31
+001     # tick 2044: A
+000*75
+080     # tick 2120: Down
+000*19
+040     # tick 2140: Up
+000*19
+010     # tick 2160: Right
+000*39
+010     # tick 2200: Right
+000*39
+010     # tick 2240: Right
+000*39
+010     # tick 2280: Right
+000*39
+010     # tick 2320: Right
+000*39
+080     # tick 2360: Down
+000*19
+040     # tick 2380: Up
+000*19
+020     # tick 2400: Left
+000*39
+020     # tick 2440: Left
+000*39
+020     # tick 2480: Left
+000*39
+020     # tick 2520: Left
+000*39
+020     # tick 2560: Left
+000*39
+100     # tick 2600: R
+000*59
+010     # tick 2660: Right
+000*39
+010     # tick 2700: Right
+000*39
+080     # tick 2740: Down
+000*39
+040     # tick 2780: Up
+000*39
+002     # tick 2820: B
+000*79
+002     # tick 2900: B

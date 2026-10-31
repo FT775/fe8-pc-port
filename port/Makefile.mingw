@@ -1,0 +1,273 @@
+# Native Windows builds of the D1-a host, 32-bit: fe8pc.exe (headless) and,
+# with SDL=1, fe8pc-sdl.exe (the SDL3 window build).
+# Cross-compiled in WSL with MinGW-w64 (apt package gcc-mingw-w64-i686).
+#
+# Run from the repository root, after the GBA `make` (as for port/Makefile FULL=1):
+#   make -f port/Makefile.mingw -j6        # build/win32/fe8pc.exe
+#   build/win32/fe8pc.exe PATH/TO/ROM.gba  # from WSL (Windows interop) or Windows
+#   make -f port/Makefile.mingw -j6 FE8PC_TESTBUILD=1   # test build, build/win32-test/fe8pc.exe
+#                                          # (port/Makefile; headless, so no live keys)
+#   make -f port/Makefile.mingw -j6 SDL=1  # the window build: build/win32-sdl/fe8pc-sdl.exe,
+#                                          # with SDL3.dll and LICENSE-SDL3.txt beside it
+#   make -f port/Makefile.mingw -j6 SDL=1 FE8PC_TESTBUILD=1  # its test build, build/win32-sdl-test
+# Without a ROM argument the exe reads baserom.gba in the current directory,
+# else an FE8 (USA) .gba next to the exe. The ROM is never copied anywhere.
+# Headless, so no save file unless asked: fe8pc.exe --save PATH [ROM] keeps
+# the game's SRAM in PATH (raw 32 KiB, as mGBA's .sav; port/save/savefile_pc.c).
+# From WSL, pass FE8PC_* settings with WSLENV, for example:
+#   FE8PC_FRAMES=60000 WSLENV=FE8PC_FRAMES build/win32/fe8pc.exe baserom.gba
+#
+# This file reuses port/Makefile: its source lists, flags and special rules
+# (hardware.c asm, B-6 eventcall.c, B-7 bmdifficulty.c, the generated headers,
+# fixptr.py, gen_host_link.py) apply unchanged, with these Windows changes
+# passed as command-line overrides:
+#   - CC is the MinGW i686 compiler, BUILD is build/win32 (always the FULL set);
+#   - port code also builds port/win32/*.c and sees port/win32/compat first:
+#     mmap (VirtualAlloc at fixed bases) for port/hw/memory.c, sigaction and
+#     ucontext (a vectored exception handler) for port/hw/main_pc.c;
+#   - port/Makefile's Python tools run through port/win32/pe_gba.py, which
+#     reads COFF objects (MinGW nm/objdump, the '_' prefix of C symbols).
+# The link and the PE step are here (port/win32/pe_gba.py explains them):
+# the image sits at 0x10000000 as the Linux text segment does, without ASLR
+# or relocations, and the GBA RAM sections are linked at their GBA addresses,
+# then dropped from the image so memory.c can reserve EWRAM and IWRAM.
+#
+# The window build (SDL=1, from the command line only) is the game of the
+# Linux window build (port/Makefile.sdl) for Windows: the same game and port
+# objects, the same ABI flags, linker script, RAM check (B-12) and PE step as
+# fe8pc.exe, in its own directory, build/win32-sdl, with these differences:
+#   - port/sdl3/platform_sdl3.c replaces port/hw/platform_headless.c (in a test
+#     build also port/sdl3/test/*.c, the window build's test hooks);
+#   - port/win32/gui/gui_win32.c and FE8PC_WINGUI: the exe is a GUI-subsystem
+#     exe (-mwindows), so a double-clicked exe opens no console; its log goes to
+#     fe8pc-sdl.log or, with --console, to the console, and a message box says
+#     when no ROM is found or the game stops with an error (--wrap=exit and
+#     --wrap=_exit; that file says how);
+#   - port/win32/gui/fe8pc-sdl.rc: the manifest (UTF-8 file names, Windows 10
+#     and later);
+#   - SDL3.dll is copied beside it, with SDL's licence (zlib) as
+#     LICENSE-SDL3.txt, and the exe loads it late: a delay-load import
+#     library, made here from SDL's own (dlltool), loads SDL3.dll at the first
+#     SDL call, which comes after memory.c has reserved the GBA map. A plain
+#     import loads it, and the user32 and gdi32 it imports, before main(),
+#     and their start-up mappings (about 20 MB at the bottom of the address
+#     space) took 0x02000000-0x04000FFF, so EWRAM, IWRAM and IO could not be
+#     reserved. For the same reason the exe itself imports only KERNEL32 and
+#     msvcrt (gui_win32.c loads user32 only to show a message box). SDL_*
+#     functions come from that library (pe_gba.py reads their names from
+#     PE_GBA_EXTRA_LIBS), so none of them becomes a gen_host_link.py stub;
+#     the link fails if one did;
+#   - the release exe's DWARF debug information is kept in fe8pc-sdl.debug
+#     beside it, not in the exe (SPLIT_DEBUG below).
+# SDL3_MINGW_DIR is the i686-w64-mingw32 folder of the official
+# SDL3-devel-3.4.2-mingw.tar.gz (the version of Ubuntu's libsdl3-dev:i386,
+# which the Linux window build uses). SDL's files are never committed.
+
+# MinGW's i686 defaults lay out structs the Microsoft way: -mms-bitfields
+# (bitfields of different types are not packed together) and -malign-double
+# (long long and double members 8-byte aligned). The game reads its structs
+# from the ROM in place and keeps them at GBA addresses, so they must have the
+# layout the Linux i386 build (and the GBA) gives them; for example
+# struct MultiArenaSaveTeam is 196 bytes there and 216 with the MinGW defaults.
+# port/win32/abi_check.py compares every struct size against the Linux build.
+# (SDL3.dll is built with the MinGW defaults. Some SDL structs differ between
+# the two layouts; the members the window build shares with SDL do not, which
+# compile-time checks in port/sdl3/platform_sdl3.c hold it to;
+# port/win32/README.md, "SDL's structs".)
+ABI_FLAGS  := -mno-ms-bitfields -mno-align-double
+CC         := i686-w64-mingw32-gcc $(ABI_FLAGS)
+WINDRES    ?= i686-w64-mingw32-windres
+DLLTOOL    ?= i686-w64-mingw32-dlltool
+MINGW_NM   ?= i686-w64-mingw32-nm
+OBJDUMP_W  ?= i686-w64-mingw32-objdump
+OBJCOPY_W  ?= i686-w64-mingw32-objcopy
+PYTHON     ?= python3
+IMAGE_BASE := 0x10000000
+
+ifeq ($(origin SDL),command line)
+WIN_SDL := $(SDL)
+else
+WIN_SDL := 0
+endif
+
+WIN_PORT_SRCS   := $(wildcard port/win32/*.c)
+WIN_PORT_CFLAGS := -Iport/win32/compat -D__USE_MINGW_ANSI_STDIO=1
+
+ifeq ($(WIN_SDL),1)
+SDL3_MINGW_DIR ?= $(HOME)/third-party/SDL3-3.4.2-mingw/extracted/SDL3-3.4.2/i686-w64-mingw32
+SDL3_NEEDED := $(SDL3_MINGW_DIR)/include/SDL3/SDL.h $(SDL3_MINGW_DIR)/lib/libSDL3.dll.a $(SDL3_MINGW_DIR)/bin/SDL3.dll
+ifneq ($(filter-out $(wildcard $(SDL3_NEEDED)),$(SDL3_NEEDED)),)
+$(error port/Makefile.mingw SDL=1: no SDL3 for MinGW in SDL3_MINGW_DIR=$(SDL3_MINGW_DIR) (the i686-w64-mingw32 folder of the official SDL3-devel-3.4.2-mingw.tar.gz); set SDL3_MINGW_DIR)
+endif
+SDL3_IMPLIB  := $(SDL3_MINGW_DIR)/lib/libSDL3.dll.a
+SDL3_DLL     := $(SDL3_MINGW_DIR)/bin/SDL3.dll
+SDL3_LICENSE := $(firstword $(wildcard $(SDL3_MINGW_DIR)/share/licenses/SDL3/LICENSE.txt \
+                                       $(SDL3_MINGW_DIR)/../LICENSE.txt))
+BUILD        := build/win32-sdl
+EXE_STEM     := fe8pc-sdl
+WIN_PORT_SRCS   += $(wildcard port/win32/gui/*.c)
+WIN_PORT_CFLAGS += -I$(SDL3_MINGW_DIR)/include -DFE8PC_WINGUI=1
+# Read by pe_gba.py (gen-host-link): SDL's names are host library names.
+export PE_GBA_EXTRA_LIBS := $(SDL3_IMPLIB)
+else
+BUILD        := build/win32
+EXE_STEM     := fe8pc
+endif
+
+# A test build (FE8PC_TESTBUILD=1 on the command line only, port/testbuild.mk;
+# port/Makefile) goes to build/win32-test (build/win32-sdl-test). The game
+# objects get the flag from port/Makefile; the port objects get it here, since
+# PORT_CFLAGS is passed on the command line below.
+include port/testbuild.mk
+ifeq ($(FE8PC_TESTBUILD),1)
+BUILD           := $(BUILD)-test
+WIN_PORT_CFLAGS += -DFE8PC_TESTBUILD=1
+endif
+# 8 MB stack, as the Linux default. --wrap=main: posix_win32.c finds the ROM
+# next to the exe when no path is given.
+WIN_LDFLAGS := -static -Wl,--image-base=$(IMAGE_BASE) -Wl,--disable-dynamicbase \
+               -Wl,--disable-reloc-section -Wl,--stack,0x800000 -Wl,--no-check-sections \
+               -Wl,--wrap=OnMain -Wl,--wrap=main
+WIN_LINK_EXTRA :=
+ifeq ($(WIN_SDL),1)
+WIN_LDFLAGS    += -mwindows -Wl,--wrap=exit -Wl,--wrap=_exit
+WIN_LINK_EXTRA := $(BUILD)/fe8pc-sdl-res.o $(BUILD)/libSDL3-delay.a
+endif
+
+# port/Makefile's own values, read with port/win32/vars.mk. The query clears
+# MAKEFLAGS, so it is told which compiler safety checks this build has
+# (port/Makefile, PORT_SAFETY_CHECKS: on in a test build, off in the exes the
+# player runs, as on Linux); the objects' sub-make below is told the same. An
+# exe with them on links __stack_chk_fail and the __*_chk functions from
+# mingw-w64's libmingwex, which -static already links: no -lssp (GCC's libssp
+# imports ADVAPI32.dll, which IMPORT_CHECK below refuses). Keep the safety flags
+# (-fstack-protector*) off the link line: given them, GCC's driver adds -lssp by
+# itself (the builds review measured it); IMPORT_CHECK would then fail the exe.
+WIN_SAFETY_CHECKS := $(if $(filter 1,$(FE8PC_TESTBUILD)),1,0)
+PORT_MK := MAKEFLAGS= $(MAKE) --no-print-directory -s -f port/Makefile -f port/win32/vars.mk
+LINUX_PORT_CFLAGS := $(shell $(PORT_MK) FULL=1 PORT_SAFETY_CHECKS=$(WIN_SAFETY_CHECKS) print-PORT_CFLAGS)
+LINUX_PORT_SRCS   := $(shell $(PORT_MK) FULL=1 print-PORT_SRCS)
+ifeq ($(WIN_SDL),1)
+LINUX_PORT_SRCS := $(filter-out port/hw/platform_headless.c,$(LINUX_PORT_SRCS)) $(wildcard port/sdl3/*.c) \
+                   $(if $(filter 1,$(FE8PC_TESTBUILD)),$(wildcard port/sdl3/test/*.c))
+endif
+
+WIN_VARS := FULL=1 'CC=$(CC)' BUILD=$(BUILD) PORT_SAFETY_CHECKS=$(WIN_SAFETY_CHECKS) \
+            'PYTHON=$(PYTHON) port/win32/pe_gba.py run' \
+            'PORT_CFLAGS=$(LINUX_PORT_CFLAGS) $(WIN_PORT_CFLAGS)' \
+            'PORT_SRCS=$(LINUX_PORT_SRCS) $(WIN_PORT_SRCS)' \
+            FIXPTR_REPORT=$(BUILD)/fixptr_unresolved.txt
+
+GAME_OBJS := $(shell $(PORT_MK) $(WIN_VARS) print-GAME_OBJS)
+PORT_OBJS := $(shell $(PORT_MK) $(WIN_VARS) print-PORT_OBJS)
+LINK_OBJS := $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs.o
+EXE       := $(BUILD)/$(EXE_STEM).exe
+BESIDE    := $(if $(filter 1,$(WIN_SDL)),$(BUILD)/SDL3.dll $(if $(SDL3_LICENSE),$(BUILD)/LICENSE-SDL3.txt))
+
+# The window build's release exe, the one people copy and play, carries no
+# DWARF debug information (about 9 MB): it goes to fe8pc-sdl.debug beside it,
+# which the exe names (a GNU debug link, for gdb). The .debug file is not for
+# players and need not be copied with the exe; abi-sdl (port/check-all.mk)
+# reads the struct layouts from it. The exe keeps its COFF symbol table (the
+# function names, about 1.6 MB), and it sits at its fixed address, so a fault
+# report's addresses are the symbols' own. With the exe alone, nm names the
+# function (i686-w64-mingw32-nm -n fe8pc-sdl.exe: the last function symbol at
+# or below ADDR); addr2line reads DWARF only, so it needs the .debug:
+# addr2line -f -e fe8pc-sdl.exe ADDR with fe8pc-sdl.debug beside the exe (it
+# follows the debug link), or -e fe8pc-sdl.debug, gives the function and the
+# source line (with the exe alone it prints "?? ??:?"). The report names the
+# build by its link time stamp (posix_win32.c, backtrace_symbols_fd): both
+# objcopy calls below write the stamp of the linked image (pe_gba.py strip
+# keeps it), through SOURCE_DATE_EPOCH, so the exe and its .debug carry the
+# same stamp, the link's (each call wrote its own clock time before
+# 2026-10-22, and 1 split in 12 gave the two files stamps 1 s apart). The
+# debug link's CRC also ties the exe to its .debug. Not --strip-all: an exe
+# without its symbol table as well was taken for malware by Malwarebytes'
+# machine learning ("MachineLearning/Anomalous.100%") and quarantined as soon
+# as it was copied to an NTFS folder or started there
+# (port-plan/pending/win9.md); this one was not. Test builds and the headless
+# fe8pc.exe keep everything in the exe (gdb, the review tools).
+SPLIT_DEBUG := $(if $(and $(filter 1,$(WIN_SDL)),$(filter-out 1,$(FE8PC_TESTBUILD))),1)
+DEBUG_FILE  := $(BUILD)/$(EXE_STEM).debug
+SPLIT_CMD    = stamp=$$($(PYTHON) port/win32/pe_gba.py stamp $@) && \
+               SOURCE_DATE_EPOCH=$$stamp $(OBJCOPY_W) --only-keep-debug $@ $(DEBUG_FILE) && \
+               SOURCE_DATE_EPOCH=$$stamp $(OBJCOPY_W) --strip-debug --add-gnu-debuglink=$(DEBUG_FILE) $@ $@.split && \
+               mv $@.split $@ && $(PYTHON) port/win32/pe_gba.py check $@ && \
+               $(PYTHON) port/win32/pe_gba.py stamp --want $$stamp $@ $(DEBUG_FILE) \
+               || { rm -f $@ $@.split $(DEBUG_FILE); exit 1; }
+BESIDE    += $(if $(SPLIT_DEBUG),$(DEBUG_FILE))
+
+.PHONY: all objs clean
+all: objs
+	@$(MAKE) --no-print-directory -f port/Makefile.mingw $(EXE) $(BESIDE)
+
+# Every object, romreloc.o, autostubs.o and gba_mem.ld, by port/Makefile's rules.
+objs:
+	$(MAKE) --no-print-directory -f port/Makefile $(WIN_VARS) $(BUILD)/gba_mem.ld $(BUILD)/autostubs.o
+
+# B-12 (as port/Makefile): every RAM symbol of the linked image must be at its
+# GBA address, or the build fails. Checked before strip, which turns the GBA
+# RAM symbols into absolute ones.
+GBA_DIR   ?= .
+RAM_CHECK := $(PYTHON) port/win32/pe_gba.py check-ram --gba-map $(GBA_DIR)/fireemblem8.map \
+             --gba-elf $(GBA_DIR)/fireemblem8.elf --gba-dir $(GBA_DIR) --game-objs $(GAME_OBJS)
+
+# The window build: no SDL function may be a gen_host_link.py stub (each one
+# must come from SDL3.dll; a stub would return 0 where SDL does something).
+STUB_CHECK := $(if $(filter 1,$(WIN_SDL)),! grep -nE '^int (_imp__)?SDL_[A-Za-z0-9_]*\(void\)' $(BUILD)/autostubs.c \
+              || { echo "port/Makefile.mingw: SDL functions above are stubs: not in $(SDL3_IMPLIB)"; exit 1; })
+
+# Only KERNEL32.dll and msvcrt.dll may be imported, so that only they load
+# before main(): any other DLL, with what it maps at start-up, can land in the
+# GBA map before memory.c reserves it (user32 and gdi32 did; see the top of
+# this file). The window build loads SDL3.dll late and user32 by name.
+IMPORT_CHECK = imports=$$($(OBJDUMP_W) -p $@ | sed -n 's/^[[:space:]]*DLL Name: //p' | sort | tr '\n' ' '); \
+               test "$$imports" = "KERNEL32.dll msvcrt.dll " || { echo "port/Makefile.mingw: $@ imports \
+               $$imports; only KERNEL32.dll and msvcrt.dll may load before main()"; rm -f $@; exit 1; }
+
+# ld warns "section below image base" once per GBA RAM section (.gba_ewram*,
+# .gba_iwram). That is expected: those are the sections pe_gba.py strip removes.
+$(EXE): $(LINK_OBJS) $(WIN_LINK_EXTRA) $(BUILD)/gba_mem.ld port/win32/pe_gba.py port/tools/check_ram_addrs.py
+	$(STUB_CHECK)
+	$(CC) $(WIN_LDFLAGS) -Wl,-T,$(BUILD)/gba_mem.ld -Wl,-Map,$(BUILD)/$(EXE_STEM).map \
+	    $(LINK_OBJS) $(WIN_LINK_EXTRA) -lm -o $(BUILD)/$(EXE_STEM)-linked.exe
+	$(RAM_CHECK) --binary $(BUILD)/$(EXE_STEM)-linked.exe --map $(BUILD)/$(EXE_STEM).map \
+	    || { rm -f $(BUILD)/$(EXE_STEM)-linked.exe $@; exit 1; }
+	$(PYTHON) port/win32/pe_gba.py strip $(BUILD)/$(EXE_STEM)-linked.exe $@
+	$(if $(SPLIT_DEBUG),$(SPLIT_CMD))
+	@$(IMPORT_CHECK)
+
+ifeq ($(SPLIT_DEBUG),1)
+$(DEBUG_FILE): $(EXE)
+	@test -f $@ || { echo "port/Makefile.mingw: $@ is missing: remove $(EXE) and build again"; exit 1; }
+endif
+
+ifeq ($(WIN_SDL),1)
+$(BUILD)/fe8pc-sdl-res.o: port/win32/gui/fe8pc-sdl.rc port/win32/gui/fe8pc-sdl.manifest.xml
+	@mkdir -p $(@D)
+	$(WINDRES) -O coff -i $< -o $@
+
+# The delay-load import library of SDL3.dll (see the top of this file): the
+# functions SDL's import library names, each one loading SDL3.dll at its first
+# call (MinGW's __delayLoadHelper2, in libmingwex).
+$(BUILD)/SDL3.def: $(SDL3_IMPLIB)
+	@mkdir -p $(@D)
+	{ echo "LIBRARY SDL3.dll"; echo "EXPORTS"; \
+	  $(MINGW_NM) -P --defined-only $< | sed -n 's/^__imp__\([A-Za-z0-9_]*\) I .*/\1/p' | sort -u; } > $@.tmp
+	@test $$(wc -l < $@.tmp) -gt 500 || { echo "port/Makefile.mingw: too few SDL functions in $(SDL3_IMPLIB)"; exit 1; }
+	mv $@.tmp $@
+$(BUILD)/libSDL3-delay.a: $(BUILD)/SDL3.def
+	$(DLLTOOL) --input-def $< --dllname SDL3.dll --output-delaylib $@
+
+# SDL3.dll beside the exe (the exe imports it; Windows looks next to the exe
+# first), and SDL's zlib licence with it.
+$(BUILD)/SDL3.dll: $(SDL3_DLL)
+	@mkdir -p $(@D)
+	cp $< $@
+$(BUILD)/LICENSE-SDL3.txt: $(SDL3_LICENSE)
+	@mkdir -p $(@D)
+	cp $< $@
+endif
+
+clean:
+	rm -rf $(BUILD)

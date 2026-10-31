@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  fe8pc-sdl.exe's application manifest (port/win32/gui/fe8pc-sdl.rc; port/Makefile.mingw SDL=1).
+  activeCodePage UTF-8 (Windows 10 version 1903 and later): the C library and
+  the Win32 "A" calls take file names in UTF-8, as SDL's file calls do, so a
+  ROM or save file in a folder whose name is not plain ASCII opens on both
+  paths (main_pc.c and savefile_pc.c use fopen; Platform_LoadFile and
+  Platform_SaveFileAtomic use SDL). Older Windows ignore it.
+  No DPI setting here: SDL3 declares the window DPI-aware itself, so Windows
+  never stretches the picture (it stays whole-number scaled, nearest-neighbour).
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="fe8pc-sdl" version="1.0.0.0" processorArchitecture="x86"/>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+</assembly>

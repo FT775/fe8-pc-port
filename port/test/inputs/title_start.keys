@@ -1,0 +1,7 @@
+# P3.3 title scenario: no keys through the health and safety screen, then
+# Start during the opening (song 0x01) at tick 4300, held 2 ticks. The game
+# skips to the title screen, which starts the title theme (song 0x43,
+# titlescreen.c StartTitleScreen_WithMusic). No keys after that: the title
+# times out after 815 idle ticks into the class reel.
+000*4300
+008*2

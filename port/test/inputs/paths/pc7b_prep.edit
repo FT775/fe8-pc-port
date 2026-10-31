@@ -1,0 +1,5 @@
+# r10-paths edited start pc7b_start (test coverage only, not story play): sram_boost.lua BOOST_EDIT_FILE.
+# Chapter 7 (Waterside Renvall), turn 1: the ballista back-out (D-49's StartUnitBallistaSelect branch).
+# Neimi (archer) on the free ballista at (2,10), with 60 HP, defence 25 and resistance 20, so she can ride it
+# on turn 1 and live through the enemy phase.
+08 x=2 y=10 maxhp=60 hp=60 def=25 res=20

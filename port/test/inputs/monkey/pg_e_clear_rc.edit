@@ -1,0 +1,4 @@
+# Coverage 12 (c12-monkey-post): the post-game recruits' permanent flags (EVFLAG_EXTRA_UNIT(0..9),
+# 103 Caellach, 104 Glen, 105 Orson, 106 Valter, 107 Riev, 108 Hayden, 109 Fado, 110 Ismaire,
+# 111 Selena, 112 Lyon; src/bmdifficulty.c), so the next post-game preparations add them.
+FLAGS set=103,104,105,106,107,108,109,110,111,112

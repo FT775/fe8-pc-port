@@ -1,0 +1,28 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh, savechk_all.py). Hand-made
+# from frame dumps of the played build, not from a TAS.
+# SAVE-2 (port-savechk2). Erase Data with all three slots full (title menu: Resume, Restart, Erase, Extras): the list opens on the last game saved; Down one slot, A, 'Erase / Cancel' (on Cancel): Left, Erase, A (the PC writes the save at frame 2,152: that slot's SaveBlockInfo entry only). In the P5.3b chain the list opens on slot 1: slot 2 is erased. In the options-on chain it opens on slot 2: slot 3 is erased.
+# 2800 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu
+000*98
+080*2      # 1400: Down, Restart Chapter
+000*48
+080*2      # 1450: Down, Erase Data
+000*98
+001*2      # 1550: A, Erase Data: the slot list (on the last game saved)
+000*148
+080*2      # 1700: Down, the next slot
+000*148
+001*2      # 1850: A: 'Erase / Cancel', on Cancel
+000*148
+020*2      # 2000: Left, Erase
+000*148
+001*2      # 2150: A, erase
+000*648

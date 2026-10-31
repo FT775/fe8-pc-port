@@ -1,0 +1,10 @@
+# Integration 11 "nullunit2" edited start pd14_start (test coverage only, not story play): sram_boost.lua BOOST_EDIT_FILE.
+# PID FIELD=VALUE ... (port/test/oracle/sram_boost.lua). Eirika's Chapter 14 (Queen of White Dunes), turn 1.
+# Dozla: next to the cracked wall (20,13) at (19,13), 1 HP, luck 0, a Devil Axe equipped (as pe14_prep.edit), and
+# US_DROP_ITEM (state bit 0x1000; a suspend save keeps the whole state word), which no blue unit has in story play
+# (UnitChangeFaction clears it, game saves drop it): his backfire death on the wall then reaches
+# BATTLE_HandleItemDrop's UNIT_FACTION(unitB) with unitB = GetUnit(0) = NULL.
+1A x=19 y=13 hp=1 lck=0 i1=1427 addstate=1000
+# The RN state advanced 6 steps, as in pe14_prep.edit, so Dozla's first strike on the wall is a Devil Axe backfire
+# (tried on mGBA: with the save's own state there is no backfire; with 6 steps there is, as in pe14).
+RN advance=6

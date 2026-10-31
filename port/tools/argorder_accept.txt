@@ -1,0 +1,42 @@
+# port/tools/argorder_sweep.py --accept: the flagged sites judged by hand (round 9, D-52).
+#
+# One site per line: KEY VERDICT reason. KEY is file:function:hash of the expression (it survives line
+# moves; the sweep prints it). VERDICT is
+#   fixed   sequenced in agbcc's order under PC_PORT (the retail line in #else). In --view pc the site must
+#           be gone; --check fails with "FIX MISSING" otherwise.
+#   benign  the two orders cannot give different results: the reason says why.
+# --check fails on any flagged site that is not listed here, and (in --view gba) on a line here that no
+# longer matches a flagged site. Re-judge a site by hand when its key changes (its expression changed).
+#
+# agbcc: arguments left to right (calls first when the call has stack arguments); host GCC: right to left.
+
+# --- fixed (D-52): the target selection's first onSwitchIn draws its unit window through
+# GetStringFromIndex's one buffer; the GBA decodes the help text after it, the host before it.
+src/bmitemuse.c:DoUseRescueStaff:6a4f6f63      fixed  WarpUnit selection: RefreshUnitHpInfoWindow ends on "/" (0x539)
+src/bmitemuse.c:DoUseSpecialDance:e659ccef     fixed  WarpUnit selection, as DoUseRescueStaff
+src/bmitemuse.c:DoUseWarpStaff:e25417a4        fixed  WarpUnit selection, as DoUseRescueStaff
+src/bmitemuse.c:DoUseRepairStaff:a674631d      fixed  Repair selection: RefreshHammerneUnitInfoWindow ends on the last item's name
+src/bmitemuse.c:DoUseHealStaff:862c9c08        fixed  Heal selection: RefreshUnitHpInfoWindow ends on "/" (cov9 G6, route_ch8 tick 11,327)
+src/bmitemuse.c:DoUseRestoreStaff:67c6b844     fixed  Restore selection: RefreshUnitHpStatusInfoWindow ends on the status name
+src/bmitemuse.c:DoUseBarrierStaff:6e8ec638     fixed  Barrier selection: RefreshUnitResChangeInfoWindow ends on 0x53A
+src/bmitemuse.c:DoUseAttackStaff:a22262a9      fixed  OffensiveStaff selection: RefreshUnitStaffOffenseInfoWindow ends on "Hit"
+src/bmitemuse.c:StartRescueStaffSelection:eb62540b           fixed  WarpUnit selection, as DoUseRescueStaff
+# --- fixed (D-52): two RNG calls; agbcc takes the first as x (cov9 G6, dj_e12 tick 7,407)
+src/mapanim_spellassocfx.c:BG0Shaker_Loop:d5f415ee  fixed  BG0 x/y offsets from AdvanceGetLCGRNValue
+src/mapanim_spellassocfx.c:BG0Shaker_Loop:a5308b9c  fixed  BG1 x/y offsets from AdvanceGetLCGRNValue
+
+# --- benign
+src/bmitemuse.c:DoUsePutTrap:d2a8573d          benign gSelectInfo_PutTrap has no onInit, onUnk08 or onSwitchIn: NewTargetSelection only locks the game, starts a proc whose script yields at PROC_REPEAT and links the targets; no text is decoded
+src/bmitemuse.c:RepairSelectOnSelect:ea5b85fb  benign the Repair item menu's IsAvailable/Draw/OnChange callbacks read gActionData.targetIndex and the unit; nothing in StartOrphanMenu writes targetIndex or gUnitLookup, so GetUnit gives the same unit either way
+src/bmmenu.c:GenericSelection_BackToUM:6aefa000 benign the unit action menu's usability callbacks (gUnitActionMenuItems) build target lists and read gActiveUnit; none writes gActiveUnit or its xPos/yPos (summaries checked, the unknown part is their ForEach* callbacks, which add targets)
+src/fontgrp.c:ClearText:8d0341dd               benign get_draw_dest is GetTextDrawDest or GetSpriteTextDrawDest (the only two set): both only read; text->tile_width is not written
+src/bksel.c:InitBattleForecastLabels:a6bdd537  benign both arguments decode the same textIndex: GetStringFromIndex's buffer holds that text in either order (sActiveMsg cache)
+src/prep_unitselect.c:PrepUnit_DrawLeftUnitName:ece5b06d benign both arguments decode the same nameTextId (as bksel.c)
+src/prep_itemuse.c:DrawPrepScreenItemUseStatValues:b74bd061 benign both arguments call GetUnitCurrentHp(unit): it only clamps curHP to the max HP, so both calls return the same value in either order
+src/prep_itemscreen.c:sub_8099328:7b9722a4     benign CanUnitPrepScreenUse writes only gStatGainSimUnit (stat-gain simulation); GetStringFromIndex writes only its buffer; the tool's hit is a byte-pointer write it cannot place
+src/prep_unitselect.c:PrepUnit_DrawUnitItems:627da07e benign IsItemDisplayUsable only reads unit and item data; GetItemName writes only the message buffer; the tool's hit is a byte-pointer write it cannot place
+src/savedraw.c:SaveDraw_Init:37378752          benign APProc_Create starts a proc; it does not change this proc's proc_parent (the left-hand address)
+src/scene.c:Talk_OnIdle:8bbc5c42               benign Text_DrawCharacter does not change the pointer sTalkState (the left-hand address)
+src/scene.c:TalkLoadFace:62df974c              benign StartFaceAuto starts a face proc; it does not change sTalkState or activeFaceSlot (the left-hand address)
+src/scene.c:StartTalkFace:62755744             benign as TalkLoadFace
+src/sio_postbattle.c:SioPostBattle_Loop_Main:18a0c04a benign StartDrawLinkArenaRankSprites starts a proc whose script yields first and sets only the new proc's fields; parent->unk_41 is not written (link arena only)

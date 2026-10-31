@@ -1,0 +1,75 @@
+# The item gallery's start (coverage 12; port/test/inputs/gallery/README.md): BOOSTED AND EDITED, test
+# coverage only, not story play. sram_boost.lua (BOOST_EDIT_FILE, port/test/Makefile chain-save
+# gal_start) applies these lines at the end of tick 1513 of gal_prep.keys (the bot's own ROUTE_SUSPEND=1
+# run from i21_start: Ephraim's final chapter, part 1, chapterIndex 0x22, turn 1; the map menu's Suspend
+# is chosen at 1513), so the game's own suspend save, written after [Yes], holds them; the SRAM at tick
+# 1700. Resume Chapter on gal_start is that turn 1 with this army.
+#
+# The supply's lord on Ephraim's route is Ephraim (SupplyUsability, src/bmmenu.c): he stands at (11,18)
+# and the four tiles next to him are the supply's stations. Eight Wights stand round him, two next to
+# each station and one two tiles off each (for the bows), with no item (so no enemy attacks or
+# counters), 60 HP and 30 defence and resistance (so few die; the suspend save keeps 5 bits of each, so 31
+# is the most it can hold: 40 came back as 8). Every red unit is unarmed the same way, and four more Wights
+# stand in the room's south half and sides.
+# The south part of the map (rows 13 to 24) holds no AREA event (src/events/ch21b-eventinfo.h), so no
+# reinforcement comes while nobody walks north of row 13. Its two side rooms hold the doors (4,19) and
+# (18,19) and the chests (2,18) and (21,18) for the keys.
+#
+# The army: Eirika's and Ephraim's own units back in their unpromoted Lord classes (the Lunar and Solar
+# Braces), the four living units and 22 of the dead ones put back on the map (state=0), each with S rank
+# in one weapon type of its class and A in the others (the class's own battle animations), no item (every item
+# comes from the supply), power 0 (so few enemies die: only an effective or sacred weapon, a critical or an
+# HP-halving tome hurts a 30-defence Wight), some at level 10 in a class a promotion item fits, some hurt (for the heals),
+# two poisoned (Antitoxin, Restore). Fog of war (vision 3) for the Torch staff and item. The convoy is
+# emptied but for an Antitoxin, so the rolling convoy cheat (GATE0_CHEAT convoy) fills it with the first 99 items
+# of its list.
+PLAY vision=3
+CONVOY clear
+CONVOY add 6F   # an Antitoxin in slot 0 (it is item 108 of the cheat's list, which would come too late: the poison lasts 7 turns)
+# U<unit index> fields (the unit: its character, class, what it is for). Weapon ranks: S (251) in one type
+# only, for the one unit that uses that type's S items; A (181) elsewhere. A promoted unit keeps an S rank
+# only while no other type of it is at S, and an unpromoted one drops to A after its first battle
+# (GetBattleUnitUpdatedWeaponExp, src/bmbattle.c), so S goes to promoted units with one S type each.
+U01 class=01 x=11 y=18 r1=181 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Ephraim, Lord (Solar Brace), lances (Siegmund, Reginleif)
+U02 class=02 x=9 y=17 r0=181 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Eirika, Lord (Lunar Brace), swords (Rapier, Sieglinde)
+U03 x=10 y=18 r0=251 r1=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Seth, Paladin (station W): sword S (Audhulma)
+U04 x=12 y=18 r0=181 r1=251 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Franz, Paladin (station E): lance S (Vidofnir)
+U05 state=0 x=9 y=16 r3=251 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Innes, Sniper: bow S (Nidhogg)
+U06 state=0 x=13 y=17 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Myrrh, Manakete (Divinestone)
+U07 state=0 x=8 y=17 class=4C r4=251 r6=181 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # L'Arachel as a Valkyrie: staff S (Latona), light
+U09 state=0 x=11 y=17 r0=181 r1=181 r2=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Duessel, Great Knight (station N)
+U0A state=0 x=10 y=16 caps=1 r4=181 r5=181 r6=251 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Saleh, Sage: light S (Ivaldi), staves, anima
+U0B state=0 x=12 y=16 lv=10 r0=181 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Marisa, Myrmidon (Hero Crest; Shamshir)
+U0D state=0 x=13 y=16 caps=1 r4=181 r5=251 r7=181 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Knoll, Druid: anima S (Excalibur), staves, dark
+U0E state=0 x=13 y=19 r2=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Garcia, Fighter (Hero Crest), axes
+U0F state=0 x=9 y=19 r2=251 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Dozla, Berserker: axe S (Garm)
+U10 state=0 x=12 y=20 class=2F r7=251 hp=3 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Ewan as a Druid: dark S only (Gleipnir, Naglfar)
+U11 state=0 x=11 y=19 r0=181 r2=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Gerik, Hero (station S)
+U12 state=0 x=10 y=20 lv=10 r1=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Tana, Pegasus Knight (Elysian Whip)
+U13 state=0 x=7 y=18 lv=10 r0=181 st=F1 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Colm, Thief (Ocean Seal, Lockpick), poisoned
+U14 state=0 x=14 y=17 r1=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Cormag, Wyvern Rider, lances
+U15 state=0 x=9 y=20 r4=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Natasha, Cleric, staves
+U16 state=0 x=13 y=20 r4=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Moulder, Priest, staves
+U17 state=0 x=14 y=16 lv=10 r5=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Lute, Mage (Guiding Ring), anima
+U18 state=0 x=8 y=16 lv=10 r3=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Neimi, Archer (Orion's Bolt), bows
+U1A state=0 x=12 y=15 r6=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Artur, Monk, light
+U1D state=0 x=15 y=17 lv=10 r0=181 r1=181 hp=5 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Forde, Cavalier (Knight Crest)
+U1E state=0 x=15 y=18 lv=10 r0=181 r1=181 st=F1 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Kyle, Cavalier (Knight Crest), poisoned
+U1F state=0 x=10 y=15 lv=10 hp=3 i1=0 i2=0 i3=0 i4=0 i5=0 pow=0   # Amelia, Recruit (Master Seal: no other item fits her); low stats (boosters)
+# Every red unit: no item, 60 HP, defence and resistance 30, luck 30, AI 3 and 3 (ActionStanding, NeverMove: it
+# stays on its tile); then twelve Wights moved south. (Each enemy phase starts with one main-loop pass of 380 to
+# 1,685 VBlanks on the GBA, more than the PC hook's lag replay kept, 256: port/test/pc/gate0_hook.c LAG_USED_MAX.
+# With AI1 6, DoNothing, it stays: scratch try g8.)
+RED i1=0 i2=0 i3=0 i4=0 i5=0 maxhp=60 hp=60 def=30 res=30 lck=30 ai1=3 ai2=3
+U8B x=10 y=17
+U8C x=12 y=17
+U8D x=10 y=19
+U8E x=12 y=19
+U91 x=11 y=15
+U92 x=11 y=21
+U9E x=8 y=18
+U9F x=14 y=18
+U95 x=9 y=22
+U96 x=13 y=22
+U97 x=16 y=18
+U9C x=6 y=18

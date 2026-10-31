@@ -1,0 +1,67 @@
+{
+ "format": "fe8-gate0-oracle-limits-1",
+ "about": "Known limits of the Gate 0 oracle (mGBA 0.10.5 with its HLE BIOS), from port-plan/DIVERGENCES.md section 5. tools/gate0_compare.py applies each entry that has a check: it covers only the listed bytes of the field, and only on ticks where the condition holds. Any other difference, in the same field or elsewhere, is still reported. An entry with 'frames': true also masks a frame15 difference whose previous tick differs only inside its bg2affin bytes, when the affine replay shows that bg2affin is the only cause (P2.2b; see its frames_condition). Format: port/test/README.md, 'Rules and masks'.",
+ "limits": [
+  {
+   "id": "OL-1",
+   "title": "Open-bus reads from the BIOS area",
+   "field": null,
+   "check": null,
+   "condition": "None: no trace field is known to carry it, so it is never applied.",
+   "reason": "mGBA's HLE BIOS image can return different bytes than the real BIOS latch values (0xE3A02004 after a SWI, 0xE55EC002 after an IRQ) that the port reproduces. Not hit in a trace yet; a difference it causes is reported and judged by hand against GBATEK.",
+   "ref": "port-plan/DIVERGENCES.md section 5, first known limit"
+  },
+  {
+   "id": "OL-2",
+   "title": "HLE BgAffineSet uses floating point",
+   "field": "gLCDControlBuffer",
+   "check": "affine_bg",
+   "groups": ["0x48", "0x58"],
+   "params": {"max_matrix_delta": 1, "max_offset_delta": 201},
+   "frames": true,
+   "frames_condition": "P2.2b, decided 2026-10-19: a rotated-affine frame passes when the only difference is the bg2affin part of this limit. A frame15 difference at tick t is masked (an oracle-limit frame) only when all of these hold: (1) at tick t-1, whose shadow registers the frame shows (OnVBlank flushes them after t-1's sample), every difference in every field (frame15 included) lies inside this limit, with the condition below, all of it in bg2affin (+0x48), and there is at least one; a bg3affin difference leaves the frame reported, because the decision names bg2affin only; (2) at tick t-1 BG2 is shown: DISPCNT not force-blanked, BG2 on, mode 1-5; (3) nothing else differs at tick t; (4) the affine replay proves it (GATE0_AFFINE_FROM, gate0_compare.py --affine-replay): the PC run again, with that frame drawn with the GBA's bg2affin of tick t-1, draws exactly the GBA's frame; the same frame redrawn with the PC's own registers is the PC trace's frame; and the replay equals the PC trace outside the frames at ticks t-1 and t. Any other frame difference is reported.",
+   "condition": "Only bytes of bg2affin (+0x48) or bg3affin (+0x58), a struct BgAffineDstData each, are covered. A struct is covered when each of pa, pb, pc, pd (s16) differs by at most 1 and x, y (s32) by at most 201. 201 = 1 x (120 + 80) + 1: the largest rotation centre FE8 passes is scrX 0x78, scrY 0x50 (opanim-main.c BgAffineSetOpAnim, titlescreen.c Title_SetBg2AffineScale; sysutil.c passes 0, 0), so a matrix that is off by 1 moves x or y by at most 200, plus 1 for the float rounding.",
+   "reason": "mGBA computes BgAffineSet in floats and truncates toward zero; the port (D-11) uses the hardware's integer method with the truncated sine table, where asr rounds a negative product down. Both are 'right' for their machine; GBATEK and the suite vectors back the port. Within the bounds above the two methods can differ; outside them the difference is not this limit.",
+   "ref": "port-plan/DIVERGENCES.md section 5, second known limit (hit: scripted run, ticks 5,876-5,922, gLCDControlBuffer.bg2affin)"
+  },
+  {
+   "id": "OL-3",
+   "title": "HLE ObjAffineSet uses floating point",
+   "field": "gOam",
+   "check": "affine_oam",
+   "params": {"max_matrix_delta": 1},
+   "condition": "Only OAM attr3 halfwords are covered (bytes 6-7 of each 8-byte entry, where the OBJ affine parameters pa..pd live), each when it differs by at most 1 as s16. Every other OAM byte is compared exactly.",
+   "reason": "Same as OL-2 for ObjAffineSet: mGBA's float method against the port's integer method (D-11). Listed in section 5 next to BgAffineSet; not hit in a trace yet.",
+   "ref": "port-plan/DIVERGENCES.md section 5, second known limit (ObjAffineSet)"
+  },
+  {
+   "id": "OL-5",
+   "title": "mGBA's AGB Print window sign-extends cartridge halfword loads past a 16 MiB image",
+   "field": "gBG3TilemapBuffer",
+   "check": "cells",
+   "chapter": "0x38",
+   "params": {"cells": {
+    "0x132": [["0x61DF", "0x6000"]],
+    "0x16A": [["0x61DF", "0x6000"]],
+    "0x16C": [["0x61DF", "0x6000"]],
+    "0x16E": [["0x65DF", "0x6000"]],
+    "0x170": [["0x65DF", "0x6000"]],
+    "0x172": [["0x61FF", "0x6000"]]
+   }},
+   "condition": "Only the 6 BG3 tilemap cells (col 25, row 4) and (cols 21-25, row 5), bytes 0x132-0x133 and 0x16A-0x173, are covered, each only when the GBA's halfword and the PC's are exactly the listed pair, and only on ticks where both sides have chapter 0x38 loaded (gPlaySt.chapterIndex, Castle Frelia, the 2x2 map). Hit on the routes from ch1 on at ticks 20,272-20,277 (route ch1 through the lag replay, 2026-10-20: these 6 cells and nothing else in BG3 on those ticks; equal again at 20,278). Every other BG3 byte is compared exactly.",
+   "reason": "At the Chapter 1 -> 2 change DisplayBmTile draws off the 2x2 map and reads tile ids from ROM past the 16 MiB image (0x0B2BFFE6-0x0B2C0002, map row -6, columns -3..-1). mGBA 0.10.5 sends such a cartridge halfword load (low 24 address bits below 0xFE0000, AGB_PRINT_TOP) through its AGB Print emulation, whose _agbPrintLoad returns int16_t, so LDRH gives 0xFFFFFFF3. The ARM7TDMI's LDRH zero-extends, so no hardware gives that, whatever the cartridge drives; the port (PortGbaLoad16, group F, D-27) zero-extends. A scratch build copying mGBA's sign extension matched the GBA on all 1,024 cells of every tick (port-plan/pending/merged/nullfix-groupF.md), so these 6 cells are the whole effect. What a retail cartridge drives there (undriven bus or mirrored ROM) is a separate open choice; either way the GBA zero-extends.",
+   "ref": "port-plan/DIVERGENCES.md section 5, OL-5"
+  },
+  {
+   "id": "OL-7",
+   "title": "mGBA's open bus after a DMA: Chapter 18's stale trap records lower the survival rank",
+   "field": "gPlaySt",
+   "check": "bitfield",
+   "chapter": "0x13",
+   "params": {"offset": "0x3E", "shift": 5, "bits": 3, "pairs": [[2, 3]]},
+   "condition": "Only gPlaySt.unk_30.survivalRank is covered (+0x3E bits 5-7: struct PlaySt_30's survivalRank, include/types.h), only when the GBA's value is 2 and the PC's 3 and every other bit of that byte is equal, and only on ticks where both sides have chapter 0x13 loaded (gPlaySt.chapterIndex: Eirika's Chapter 19, Last Hope). Chapter 18's ranks (Two Faces of Evil, chapter 0x12) are written by ComputeChapterRankings in GameControl_ChapterSwitch (gamecontrol.c), which sets chapterIndex to the next chapter in the same tick, so they differ only from the first tick of chapter 0x13 on, and stay until that chapter's own ranks replace them. Hit on route_e18 at ticks 92,398-92,762 (the 18 -> 19 change to the route's end; 2026-10-22, port-r10-petrify): this bit field and nothing else. Every other gPlaySt byte and bit is compared exactly, and so is this bit field with any other pair of values or in any other chapter.",
+   "reason": "mGBA 0.10.5's GBALoadBad returns its stale gba->bus word for a load one instruction past gba->dmaPC, on every pass of a loop until the next DMA (the sound FIFO DMA), where the hardware and the port give GBATEK's prefetch word (OL-7). At route_e18 26,515 the fire traps' death-record load in PidStatsRecordTargetListDefeats (ldrb at 0x08026448, D-60 (was working ID D-R10-TRAPS-1): the open bus 0x42 by GBATEK) gets the sound DMA's stale word for five empty tiles, so mGBA writes trap deaths for Seth (0x02) and Franz (0x04) that the PC does not (port-plan/pending/folded/r10-traps.md, section 4). At the chapter's end GetChapterDeathCount (gamerankings.c, GBA 0x080B6284) counts Seth, dead since an earlier chapter but now with deathLoc 0x12, as a death in this chapter, so GetChapterSurvivalRank gives 2 on mGBA and 3 on the PC. With breakpoints inside that loop (other stale bytes, no Seth or Franz record) mGBA gives 3 and the PC matches on all 92,763 ticks (the traps review), so the pair is the oracle's timing, not the port. Matching mGBA there needs a DMA cycle model (PLAN 3.4).",
+   "ref": "port-plan/DIVERGENCES.md section 5, OL-7 (second hit: port-plan/pending/folded/r10-traps.md, mask: port-plan/pending/folded/r10-petrify.md)"
+  }
+ ]
+}

@@ -1,0 +1,58 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file").
+# Integration 11 "nullunit2" (port/test/inputs/paths/README.md), an edited start (test coverage only, not story play).
+# Start: boot both sides with GATE0_SRAM_IN=pd14_start.sav (the save's first 32 KiB: FNV-1a 36c43639).
+# Resume Chapter (resume.keys), Eirika's Chapter 14, turn 1. Dozla (1 HP, a Devil Axe, and US_DROP_ITEM from
+# pd14_prep.edit) attacks the cracked wall at (20,13); the backfire kills him, so BATTLE_HandleItemDrop reads
+# UNIT_FACTION(unitB) with unitB = GetUnit(0) = NULL (then P-27's record). His death quote, then the free cursor.
+# 3508 ticks.
+000*250
+001*2
+000*748
+008*2
+000*298
+001*2
+000*198
+001*2
+000*198
+001*2
+000*318
+010
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*4
+040
+000*24
+001
+000*20
+001
+000*30
+001
+000*30
+001
+000*30
+001
+000*30
+001
+000*530
+001
+000*60
+001
+000*670

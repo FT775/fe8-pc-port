@@ -1,0 +1,432 @@
+{
+ "about": "Known limits of check-all's Gate 0 rows (port/tools/check_all.py, KNOWN_LIMITS; port/test/README.md, \"Known limits of check-all rows\"). A row listed here whose compare is DIFFERENT only inside its limits' windows (field: [[first, last], ...] ticks of compare.json's result.ticks_per_field; \"sequence\": the lag replay's off ticks; \"sram\": [[first, last], ...] SRAM offsets the end-SRAM compare may differ in) is KNOWN, not FAIL; anything outside them fails as before. Every entry is a recorded limit of the test tool or a recorded kind, never a port difference left unfixed.",
+ "rows": {
+  "route-br9-lag": [
+   {
+    "id": "N-C11-1",
+    "kind": "the lag replay's limit, C10-10 (c)'s kind: GBA lag VBlanks inside a BIOS LZ77 decompression (DIVERGENCES section 5, Lag check v2, not resolved; coverage 11's N-C11-1, integration 11's choice 4)",
+    "note": "Lagdou Ruins floor 9, turn 15: palette 9 colours 12-15 (the map's flickering palette) one step out of order after 4 GBA lag VBlanks inside an LZ77 decompression into VRAM, 62,549-62,563 (pending/c11-findings.md 2a); the same four colours again at the change to floor 10, 96,999-97,215 (GBA lag ticks 96,999 and 97,000: the GBA holds the new map's colours, the PC run the flicker's first entry; inferred the same kind, not probed: pending/c12-findings.md); every other field equal, no frame differs",
+    "windows": {
+     "gPaletteBuffer": [
+      [
+       62549,
+       62563
+      ],
+      [
+       96999,
+       97215
+      ]
+     ]
+    }
+   },
+   {
+    "id": "P-44",
+    "kind": "the GBA reference's DMA open-bus timing (mGBA GBALoadBad): D-60's NULL-unit pid reads in PidStatsRecordTargetListDefeats (0x08026448/0x08026454) return a DMA bus value when a DMA stalled the CPU there, so the GBA writes BWL records for real pids; the value depends on cycle timing (an extra breakpoint flips it), which the PC does not model (port-plan/pending/fix-bwl.md)",
+    "note": "tick 94,747: GBA PidStatsRecordLoseData(7) (lossAmt 1 to 2, favval -0x80) in suspend.0, suspend.1 and game.0",
+    "sram": [
+     [
+      "0x1B28",
+      "0x1B28"
+     ],
+     [
+      "0x1B29",
+      "0x1B29"
+     ],
+     [
+      "0x3AA0",
+      "0x3AA0"
+     ],
+     [
+      "0x3AA1",
+      "0x3AA1"
+     ],
+     [
+      "0x4870",
+      "0x4870"
+     ],
+     [
+      "0x4871",
+      "0x4871"
+     ]
+    ]
+   }
+  ],
+  "route-i21-lag": [
+   {
+    "id": "LAG-FRAME",
+    "kind": "a frame on a GBA lag tick, every traced field equal (round 8's kind 2, c10 F-E2-2; port/test/README.md, Raster-timing frames, Not covered)",
+    "note": "Ephraim's final chapter part 1: Lyon's Naglfar on a GBA lag tick (coverage 11's route_i21 62,520, integration 11's table; coverage 12's C12-SW-1)",
+    "windows": {
+     "frame15": [
+      [
+       62520,
+       62520
+      ]
+     ]
+    }
+   }
+  ],
+  "route-er3-lag": [
+   {
+    "id": "H-c12-pr-1",
+    "kind": "the lag replay's placement after a Proc_Start (C10-10 (c)'s kind), then the proc-slot knock-on and a retail uninitialised read (DIVERGENCES section 5, Knock-on: proc slot order)",
+    "note": "Lagdou Ruins floor 3 with the real army: a GBA lag VBlank in efxExcalibur_Loop_Main's step runs after efxExcaliburBGCOL3's Proc_Start on the PC run (46,646), so that proc takes another slot; at four later phase changes TerrainDisplay_Loop_OnSideChange reads another leftover windowQuadrant from the recycled slot (src/player_interface.c:1154, retail), the map's side windows slide in a tick apart (BG0/BG1 3 ticks, the main-loop events 45 against 44); every game value equal (pending/c12-postgame-real.md)",
+    "windows": {
+     "gBG0TilemapBuffer": [
+      [
+       66706,
+       66708
+      ],
+      [
+       88310,
+       88312
+      ],
+      [
+       101076,
+       101078
+      ],
+      [
+       133303,
+       133305
+      ]
+     ],
+     "gBG1TilemapBuffer": [
+      [
+       66706,
+       66708
+      ],
+      [
+       88310,
+       88312
+      ],
+      [
+       101076,
+       101078
+      ],
+      [
+       133303,
+       133305
+      ]
+     ],
+     "sequence": [
+      [
+       66705,
+       66705
+      ],
+      [
+       66707,
+       66707
+      ],
+      [
+       66709,
+       66710
+      ],
+      [
+       88309,
+       88309
+      ],
+      [
+       88311,
+       88311
+      ],
+      [
+       88313,
+       88314
+      ],
+      [
+       101075,
+       101075
+      ],
+      [
+       101077,
+       101077
+      ],
+      [
+       101079,
+       101080
+      ],
+      [
+       133302,
+       133302
+      ],
+      [
+       133304,
+       133304
+      ],
+      [
+       133306,
+       133307
+      ]
+     ]
+    }
+   }
+  ],
+  "route-gallery-lag": [
+   {
+    "id": "H-r13-gal-1",
+    "kind": "the lag replay's placement after a Proc_Start (C10-10 (c)'s kind, H-c12-pr-1's), then the proc-slot knock-on and a retail uninitialised read (DIVERGENCES section 5, Knock-on: proc slot order)",
+    "note": "The item gallery (cheat-assisted), P-41: Excalibur's battle animation at tick 93,316: the GBA's lag VBlank (lag_at 19) came after efxExcalibur's sub-proc start at event 19 and before the next Proc_Start's AllocateProcess, and its OnVBlank freed proc slot 56, which that Proc_Start then took; the lag replay runs it at event 20 (the new proc's RunProcessScript entry), after AllocateProcess took slot 15 (GBA probe on AllocateProcess 0x08002D84 and FreeProcess 0x08002D94; the PC's -finstrument-functions hooks), so sProcAllocList differs from 93,316 on. At turns 21-26 the cursor rests on a unit and TerrainDisplay's step reads leftover proc-slot data (src/player_interface.c, retail): at 94,511 and 104,696 the PC run's gProcScr_TerrainDisplay step makes a VRAM copy to 0x06001000 that the GBA's step does not make at that tick (one main-loop event more), so the side windows' BG0/BG1 cells differ for 1-4 ticks and frame 104,700 with them; every game value equal (pending/r13-fixes.md)",
+    "windows": {
+     "gBG0TilemapBuffer": [
+      [
+       94512,
+       94512
+      ],
+      [
+       96645,
+       96648
+      ],
+      [
+       98134,
+       98136
+      ],
+      [
+       104697,
+       104700
+      ],
+      [
+       110506,
+       110506
+      ]
+     ],
+     "gBG1TilemapBuffer": [
+      [
+       94512,
+       94512
+      ],
+      [
+       96645,
+       96647
+      ],
+      [
+       98134,
+       98136
+      ],
+      [
+       104697,
+       104699
+      ],
+      [
+       110506,
+       110506
+      ]
+     ],
+     "frame15": [
+      [
+       104700,
+       104700
+      ]
+     ],
+     "sequence": [
+      [
+       94511,
+       94511
+      ],
+      [
+       95746,
+       95746
+      ],
+      [
+       96644,
+       96644
+      ],
+      [
+       96646,
+       96646
+      ],
+      [
+       96648,
+       96649
+      ],
+      [
+       98133,
+       98133
+      ],
+      [
+       98135,
+       98135
+      ],
+      [
+       98137,
+       98138
+      ],
+      [
+       100477,
+       100477
+      ],
+      [
+       104696,
+       104696
+      ],
+      [
+       104698,
+       104698
+      ],
+      [
+       104700,
+       104701
+      ],
+      [
+       110505,
+       110505
+      ]
+     ]
+    }
+   },
+   {
+    "id": "LAG-FRAME",
+    "kind": "a frame on a GBA lag tick, every traced field equal (round 8's kind 2, c10 F-E2-2; port/test/README.md, Raster-timing frames, Not covered): the lag replay runs a GBA lag VBlank, and that lag frame's lines, at an event boundary, where the GBA's came inside a step",
+    "note": "The item gallery (cheat-assisted), C12-GAL-6, measured in fix round 14 from the c12-gallery photos with every frame (pending/r14-fixes.md). Each frame is on a GBA lag tick and is the only difference. Recover 127,456 and Physic 130,087: the step that ends src/bb.c's bottom-bar HBlank handler (SetPrimaryHBlankHandler(NULL), REG_IE 0x2003 -> 0x2001) ran on the GBA while its last lag frame drew lines 140-159, so the handler's last write left REG_BLDCNT 0x00EC with the bar's REG_BLDY and the tick's frame is darkened on every line until the next flush; the lag replay runs that lag frame's lines after the step (the handler already off); at Physic's lag VBlank the GBA's gLCDControlBuffer is half-written (BLDCNT 0x38C4, the PC's 0x38C8 with BLDY 4). Gleipnir 120,882/888/894, Naglfar 129,436-129,448 and 129,488-129,492, Ivaldi 27,278: the tree-0 palette copy at the GBA's lag VBlank (lag_at 25, 19, 37) used the step's state before it finished (gPaletteBuffer FNV-1a: Gleipnir GBA 1743820e, PC 17798ed6; Naglfar GBA d4ec7a83, PC 6a32fed5; Ivaldi equal, another input), so the PC's frame shows the GBA's next frame's palette (Ivaldi: PLTT after the lag VBlank GBA d6a16817, PC 1c7384b7 = the GBA's frame 27,279). Only an every-frame run shows these (the CHECK_LONG row samples frames).",
+    "windows": {
+     "frame15": [
+      [
+       27278,
+       27278
+      ],
+      [
+       120882,
+       120882
+      ],
+      [
+       120888,
+       120888
+      ],
+      [
+       120894,
+       120894
+      ],
+      [
+       127456,
+       127456
+      ],
+      [
+       129436,
+       129436
+      ],
+      [
+       129440,
+       129440
+      ],
+      [
+       129444,
+       129444
+      ],
+      [
+       129448,
+       129448
+      ],
+      [
+       129488,
+       129488
+      ],
+      [
+       129492,
+       129492
+      ],
+      [
+       130087,
+       130087
+      ]
+     ]
+    }
+   }
+  ],
+  "route-e18-lag": [
+   {
+    "id": "P-44",
+    "kind": "the GBA reference's DMA open-bus timing (mGBA GBALoadBad): D-60's NULL-unit pid reads in PidStatsRecordTargetListDefeats (0x08026448/0x08026454) return a DMA bus value when a DMA stalled the CPU there, so the GBA writes BWL records for real pids; the value depends on cycle timing (an extra breakpoint flips it), which the PC does not model (port-plan/pending/fix-bwl.md)",
+    "note": "frame 28,166: GBA death records for pid 2 and pid 4 (deathLoc 18, turn 7, cause 3), and the survival rank they change (playSt+0x3E, 0x4002: GBA 0x40, PC 0x60); in suspend.0, suspend.1 and game.0",
+    "sram": [
+     [
+      "0x1ADD",
+      "0x1ADD"
+     ],
+     [
+      "0x1ADE",
+      "0x1ADE"
+     ],
+     [
+      "0x1AE1",
+      "0x1AE1"
+     ],
+     [
+      "0x1AE6",
+      "0x1AE6"
+     ],
+     [
+      "0x1AFD",
+      "0x1AFD"
+     ],
+     [
+      "0x1AFE",
+      "0x1AFE"
+     ],
+     [
+      "0x1B01",
+      "0x1B01"
+     ],
+     [
+      "0x3A55",
+      "0x3A55"
+     ],
+     [
+      "0x3A56",
+      "0x3A56"
+     ],
+     [
+      "0x3A59",
+      "0x3A59"
+     ],
+     [
+      "0x3A5E",
+      "0x3A5E"
+     ],
+     [
+      "0x3A75",
+      "0x3A75"
+     ],
+     [
+      "0x3A76",
+      "0x3A76"
+     ],
+     [
+      "0x3A79",
+      "0x3A79"
+     ],
+     [
+      "0x4002",
+      "0x4002"
+     ],
+     [
+      "0x4825",
+      "0x4825"
+     ],
+     [
+      "0x4826",
+      "0x4826"
+     ],
+     [
+      "0x4829",
+      "0x4829"
+     ],
+     [
+      "0x482E",
+      "0x482E"
+     ],
+     [
+      "0x4845",
+      "0x4845"
+     ],
+     [
+      "0x4846",
+      "0x4846"
+     ],
+     [
+      "0x4849",
+      "0x4849"
+     ]
+    ]
+   }
+  ]
+ }
+}

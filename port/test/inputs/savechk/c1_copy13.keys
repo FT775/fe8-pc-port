@@ -1,0 +1,26 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh, savechk_all.py). Hand-made
+# from frame dumps of the played build, not from a TAS.
+# SAVE-2 (port-savechk2). Start: ch1_seize.sav (slot 1 Chapter 1, slots 2 and 3 empty, a suspend). Title menu (Resume, Restart, Copy, Erase, New Game, Extras): Copy Data; the source list opens on slot 1 (the last game saved): A; the destination list opens on slot 2 (the first empty one): Down, slot 3, A: slot 1 copied to slot 3 (no question asked; the PC writes the save at frame 2,002); back on the copy list. Writes game slot 3 only.
+# 2600 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu
+000*98
+080*2      # 1400: Down, Restart Chapter
+000*48
+080*2      # 1450: Down, Copy Data
+000*98
+001*2      # 1550: A, Copy Data: the source list
+000*148
+001*2      # 1700: A, source: slot 1
+000*148
+080*2      # 1850: Down, destination slot 2 -> slot 3
+000*148
+001*2      # 2000: A, copy to slot 3
+000*598

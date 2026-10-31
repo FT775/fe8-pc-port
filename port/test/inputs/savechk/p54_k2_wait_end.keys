@@ -1,0 +1,32 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh). Hand-made from frame dumps
+# of the played build, not from a TAS.
+# P5.4 direction 2: boot a suspend mGBA wrote (Chapter 2, turn 2's player phase), Resume, Eirika waits in place, the map menu, End: turn 2's enemy and green phases, turn 3's player phase (suspend saves).
+# 5500 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu
+000*198
+001*2      # 1500: A, Resume Chapter
+000*198
+001*2      # 1700: A, resume
+000*148
+001*2      # 1850: A, select Eirika
+000*138
+001*2      # 1990: A, her own tile: the action menu
+000*108
+040*2      # 2100: Up, wraps to Wait
+000*98
+001*2      # 2200: A, Wait
+000*148
+001*2      # 2350: A on grey Eirika: the map menu
+000*98
+040*2      # 2450: Up, wraps to End
+000*98
+001*2      # 2550: A, End
+000*2948

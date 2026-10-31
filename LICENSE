@@ -1,0 +1,45 @@
+MIT License (scoped)
+
+Copyright (c) 2026 somecallmetim_ and the FE8 PC port contributors
+
+Scope. This license covers only the work this project adds on top of the
+fireemblem8u decompilation of Fire Emblem: The Sacred Stones (the "Port"):
+
+- the files in port/, except port/audio/m4a_1_pc.c, port/audio/psg.c,
+  port/audio/psg.h and port/test/bios/suite_vectors.h, which carry their
+  own MIT notices and stay under them;
+- the files this project adds outside port/, marked A in
+  LICENSE-PORT-FILES.txt;
+- the modifications this project made to the decompilation's own files,
+  which are marked M in LICENSE-PORT-FILES.txt, to the extent those
+  modifications are separable from the decompiled code.
+
+Files of the Port that closely follow the decompilation's code
+(port/asm/arm_pc.c, the C version of its asm/arm.s and asm/arm_call.s,
+and port/asm/ramfunc_pc.c, which replaces its src/ramfunc.c) are covered
+only to the extent they are separable from the code they follow.
+
+It does not cover, and this project claims no rights over: the fireemblem8u
+decompilation and its contributors' work; any code, graphics, sound, text
+or other material owned by Nintendo or Intelligent Systems; or any
+third-party software such as SDL3. Those remain under whatever terms apply
+to them.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of the Port, to deal in the Port without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Port, and to permit
+persons to whom the Port is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice, this scope statement and this permission
+notice shall be included in all copies or substantial portions of the
+Port.
+
+THE PORT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE PORT OR THE USE OR OTHER DEALINGS IN THE
+PORT.
