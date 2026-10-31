@@ -41,7 +41,7 @@ The comparison is against the GBA build of the same game, run in mGBA 0.10.5 wit
 
 ## Bring your own ROM
 
-**No game data is distributed with the PC port.** This includes the ROM, extracted graphics, sound and text.
+**No ROM is distributed with the PC port.** The game reads its graphics, maps and tilesets, music and sound from your own copy when it runs. The game's tables, text and event scripts are built into the program from the decompilation's source. This repository is the fireemblem8u decompilation's tree with the port added, so, like that public repository, it also holds the decompilation's extracted assets (for example under `graphics/` and `texts/`).
 
 To play, you need your own copy of the original USA ROM:
 

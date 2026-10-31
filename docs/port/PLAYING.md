@@ -2,7 +2,7 @@
 
 ## What you need
 
-- **Your own copy of the game:** *Fire Emblem: The Sacred Stones* (USA), a `.gba` file, 16 MiB, SHA-1 `c25b145e37456171ada4b0d440bf88a19f4d509f`. No game data is included with the port. Hacks, translations and cut-short copies are refused.
+- **Your own copy of the game:** *Fire Emblem: The Sacred Stones* (USA), a `.gba` file, 16 MiB, SHA-1 `c25b145e37456171ada4b0d440bf88a19f4d509f`. No ROM is included: the game reads its graphics, maps and music from your copy. Hacks, translations and cut-short copies are refused.
 - **Windows:** the window build, which is three files from the build's output folder: `fe8pc-sdl.exe`, `SDL3.dll` and `LICENSE-SDL3.txt`. Tested on Windows 11; older versions are untested.
 - **Linux:** no ready-made Linux build is released. Build the window build from the source (BUILDING.md, `make -f port/Makefile.sdl`) and run it the same way, with the ROM beside it.
 - A keyboard, or any gamepad that SDL3 supports.
