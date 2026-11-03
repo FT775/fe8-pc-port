@@ -505,4 +505,136 @@ void UnitRemoveItem(struct Unit* unit, int slot);
 // NOTE: if this ends up being only used in [Get|Set]UnitLeaderCharId, having this as a macro may end up being unnecessary
 #define UNIT_LEADER_CHARACTER(aUnit) ((aUnit)->supports[UNIT_SUPPORT_MAX_COUNT-1])
 
+/*
+ * PC played builds only (PORT_PLAYED_BUILD): the Reforged Options randomizer
+ * (port/reforged/reforged_rando*.c, port/include/port_reforged.h). Each hook sits
+ * on an existing line of the game code (appended, or around a value), so the
+ * test and GBA builds keep their line counts and stay byte for byte the same:
+ * there every macro below is empty, or the value itself. With the randomizer
+ * off for the run being played, every function returns its input unchanged.
+ *   RANDO_HOOK_UNITDEF       src/bmunit.c LoadUnit, after the genMonster block:
+ *                            may point uDef at buf (a copy with another class
+ *                            or items); uDef may already be &buf.
+ *   RANDO_HOOK_UNITLOADED    src/bmunit.c LoadUnit, before UnitCheckStatCaps:
+ *                            inventory and rank fixes, enemy buffs, drops.
+ *   RANDO_HOOK_WILLREAD      src/bmsave.c ReadGameSave / ReadSuspendSave, before
+ *                            InitUnits: the tables of that save block's run.
+ *   RANDO_HOOK_CHEST         src/eventinfo.c, a chest with a set item.
+ *   RANDO_GIFT_ITEM          src/eventscr.c Event37_GiveItem (GIVEITEMTO).
+ *   RANDO_PROMOTE_JID        src/eventscr.c Event40_PromoteUnit (PROM): the class,
+ *                            resolved before the command starts its proc.
+ *   RANDO_PROMOTE_SKIP       there, before the proc: a jid of 0 (never a PROM
+ *                            class in vanilla) ends the command with no promotion
+ *                            (a randomized unit that is already promoted).
+ *   RANDO_SKIRMISH_LEADER_CLASS src/eventinfo.c GetChapterSkirmishLeaderClasses:
+ *                            the world map's skirmish icons show the leader's
+ *                            class of the run.
+ *   RANDO_STAT_GAIN          src/bmunit.c UnitAutolevelCore: a stat increase that
+ *                            would wrap the s8 stat past 127 stops at 127
+ *                            (UnitCheckStatCaps then lowers it to the cap); this
+ *                            one applies in every played run, and only changes
+ *                            what would have wrapped.
+ *   RANDO_HOOK_EVTBATTLE_ITEM src/eventscr3.c StartEventBattle: a forced weapon
+ *                            the unit cannot use is dropped (0).
+ *   RANDO_HOOK_PROMO_ITEM    src/bmitemuse.c CanUnitUsePromotionItem.
+ *   RANDO_HOOK_SHOP          src/bmshop.c StartShopScreen: the list shown.
+ *   RANDO_HOOK_MOVESCRIPT    src/bmidoten.c GenerateBestMovementScript, the
+ *                            walk's loop test (before the map read): in a
+ *                            randomized run a walk that leaves the map or
+ *                            fills the move script (a REDA target the class
+ *                            cannot reach) stops and its script is dropped.
+ *   RANDO_CHARA_PAL          src/banim-ekrmain.c, src/banim-ekrmainmini.c: a
+ *                            character battle palette by its index (orig: the
+ *                            game's own read of it). Indices 0x80 and up are the
+ *                            randomizer's palettes (a character's colours on a
+ *                            new class), which gAnimCharaPalIt then points to.
+ *   RANDO_HOOK_TEXT          src/msg.c GetStringFromIndex, after the decode: with
+ *                            "Recruitment", each slot's name becomes its fill's.
+ *   RANDO_FACE               src/face.c GetPortraitData: a slot's portrait shows
+ *                            its fill's.
+ *   RANDO_HOOK_DEATH         src/bmmind.c KillUnitOnArenaDeathMaybe: "Nuzlocke"
+ *                            records the death (the other deaths: casual mode's
+ *                            hooks call it).
+ *   RANDO_HOOK_JOINED        src/bmunit.c UnitChangeFaction: "Nuzlocke", a unit
+ *                            in the run's graveyard that turns blue dies again.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+const struct UnitDefinition *Reforged_RandoUnitDef(const struct UnitDefinition *uDef, struct UnitDefinition *buf);
+void Reforged_RandoUnitLoaded(struct Unit *unit, const struct UnitDefinition *uDef);
+void Reforged_RandoWillRead(int block);
+int Reforged_RandoChestItem(int item, int x, int y);
+int Reforged_RandoGiftItem(int item, struct Unit *target);
+int Reforged_RandoPromoteJid(struct Unit *unit, int jid); /* 0: no promotion */
+int Reforged_RandoSkirmishLeaderClass(int chapterId, const struct UnitDefinition *uDef, int jid);
+int Reforged_RandoStatGain(int stat, int gain);
+int Reforged_RandoEventBattleItem(struct Unit *unit, int item);
+int Reforged_RandoPromoItem(struct Unit *unit, int item); /* 0 or 1, or -1: the game's own check */
+const u16 *Reforged_RandoShopItems(const u16 *inventory, int shopType);
+int Reforged_RandoMoveGuard(int x, int y, u8 **output, u8 *outputStart); /* 0: stop the walk */
+char *Reforged_RandoCharaPal(int idx);
+#define RANDO_CHARA_PAL(orig, idx) Reforged_RandoCharaPal(idx)
+void Reforged_RandoText(char *buf, int size);
+int Reforged_RandoFace(int fid);
+#define RANDO_HOOK_TEXT(buf, size) Reforged_RandoText((char *)(buf), (size));
+#define RANDO_FACE(fid) Reforged_RandoFace(fid)
+void Reforged_RandoUnitDied(struct Unit *unit);
+#define RANDO_HOOK_DEATH(unit) Reforged_RandoUnitDied(unit);
+void Reforged_RandoUnitJoined(struct Unit *unit);
+#define RANDO_HOOK_JOINED(unit) Reforged_RandoUnitJoined(unit);
+#define RANDO_HOOK_UNITDEF(uDef, buf) (uDef) = Reforged_RandoUnitDef((uDef), (buf));
+#define RANDO_HOOK_UNITLOADED(unit, uDef) Reforged_RandoUnitLoaded((unit), (uDef));
+#define RANDO_HOOK_WILLREAD(block) Reforged_RandoWillRead(block);
+#define RANDO_HOOK_CHEST(info) (info).givenItem = Reforged_RandoChestItem((info).givenItem, (info).xPos, (info).yPos);
+#define RANDO_GIFT_ITEM(item, target) Reforged_RandoGiftItem((item), (target))
+#define RANDO_PROMOTE_JID(unit, jid) Reforged_RandoPromoteJid((unit), (jid))
+#define RANDO_PROMOTE_SKIP(jid) if ((jid) == 0) return EVC_ADVANCE_CONTINUE;
+#define RANDO_SKIRMISH_LEADER_CLASS(chapterId, uDef, jid) Reforged_RandoSkirmishLeaderClass((chapterId), (const struct UnitDefinition *)(uDef), (jid))
+#define RANDO_STAT_GAIN(stat, gain) Reforged_RandoStatGain((stat), (gain))
+#define RANDO_HOOK_EVTBATTLE_ITEM(unit, item) (item) =Reforged_RandoEventBattleItem((unit), (item));
+#define RANDO_HOOK_PROMO_ITEM(unit, item) { int rr_ = Reforged_RandoPromoItem((unit), (item)); if (rr_ >= 0) return rr_; }
+#define RANDO_HOOK_SHOP(inventory, shopType) (inventory) = Reforged_RandoShopItems((inventory), (shopType));
+#define RANDO_HOOK_MOVESCRIPT(x, y, output, outputStart) Reforged_RandoMoveGuard((x), (y), &(output), (outputStart)) &&
+#else
+#define RANDO_CHARA_PAL(orig, idx) (orig)
+#define RANDO_HOOK_TEXT(buf, size)
+#define RANDO_FACE(fid) (fid)
+#define RANDO_HOOK_DEATH(unit)
+#define RANDO_HOOK_JOINED(unit)
+#define RANDO_HOOK_UNITDEF(uDef, buf)
+#define RANDO_HOOK_UNITLOADED(unit, uDef)
+#define RANDO_HOOK_WILLREAD(block)
+#define RANDO_HOOK_CHEST(info)
+#define RANDO_GIFT_ITEM(item, target) (item)
+#define RANDO_PROMOTE_JID(unit, jid) (jid)
+#define RANDO_PROMOTE_SKIP(jid)
+#define RANDO_SKIRMISH_LEADER_CLASS(chapterId, uDef, jid) (jid)
+#define RANDO_STAT_GAIN(stat, gain) (gain)
+#define RANDO_HOOK_EVTBATTLE_ITEM(unit, item)
+#define RANDO_HOOK_PROMO_ITEM(unit, item)
+#define RANDO_HOOK_SHOP(inventory, shopType)
+#define RANDO_HOOK_MOVESCRIPT(x, y, output, outputStart)
+#endif
+
+/*
+ * PC played builds only: Reforged Options' "Game fixes" (port/reforged/reforged_gamefixes.c), each OFF by
+ * default (then the original's code runs). In every other build the first is the original statement and the
+ * second is empty, on the same line.
+ *   RFO_PROMO_AUTOLEVEL      src/bmunit.c UnitAutolevel, the promoted unit's extra levels: rolled with the
+ *                            base class's growths (pClassData is that class for the one call, then put back).
+ *                            UnitAutolevelCore never reads its classId, so `call` running after the swap
+ *                            (and reading the base class's .promotion there) changes nothing else.
+ *   RFO_STAFF_DROP_ORDER     src/bmunit.c LoadUnit, after RANDO_HOOK_UNITLOADED: Chapter 15's dropping
+ *                            Troubadour carries Mend first, so its status staff is the drop.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+const struct ClassData *Reforged_FixPromoAutolevelClass(struct Unit *unit);
+void Reforged_FixStaffDropOrder(struct Unit *unit);
+#define RFO_PROMO_AUTOLEVEL(unit, call) do { const struct ClassData *rfoJob_ = (unit)->pClassData; \
+    (unit)->pClassData = Reforged_FixPromoAutolevelClass(unit); call; (unit)->pClassData = rfoJob_; } while (0)
+#define RFO_STAFF_DROP_ORDER(unit) Reforged_FixStaffDropOrder(unit);
+#else
+#define RFO_PROMO_AUTOLEVEL(unit, call) call
+#define RFO_STAFF_DROP_ORDER(unit)
+#endif
+
 #endif // GUARD_BM_UNIT_H

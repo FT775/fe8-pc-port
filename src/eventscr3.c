@@ -248,7 +248,7 @@ void StartEventBattle(struct Unit * unitA, struct Unit * unitB, u8 isBallista, s
 
     ItemBackupEvtBattle = tmp;
 
-    if (item != 0)
+    RANDO_HOOK_EVTBATTLE_ITEM(unitA, item) if (item != 0)
     {
         switch (GetItemType(item))
         {

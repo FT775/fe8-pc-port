@@ -1,0 +1,34 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh). Hand-made from frame dumps
+# of the played build, not from a TAS.
+# Late-game save check, session 2. Start: the suspend late_br10_k1.keys leaves (post-game Lagdou
+# Ruins floor 10, turn 1, Eirika has waited). Resume, the map menu on Eirika (grey), End: the
+# enemy phase (Draco Zombies: Franz falls, his death quote; Myrrh falls, her two-box death quote,
+# each record written into game slot 1's pidStats; then Valter and Ephraim hold), turn 2's player
+# phase (suspend saves). The turn-2 player phase starts at about tick 9,100 on the PC.
+# 10000 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu
+000*198
+001*2      # 1500: A, Resume Chapter
+000*198
+001*2      # 1700: A, resume
+000*148
+001*2      # 1850: A on grey Eirika: the map menu
+000*98
+040*2      # 1950: Up, wraps to End
+000*98
+001*2      # 2050: A, End: the enemy phase
+000*2648
+001*2      # 4700: A, Franz's death quote (on screen from about 3,800)
+000*2198
+001*2      # 6900: A, Myrrh's death quote, first box (from about 6,300)
+000*698
+001*2      # 7600: A, her second box (from about 7,000)
+000*2398

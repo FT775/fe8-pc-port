@@ -609,7 +609,7 @@ struct Unit* LoadUnit(const struct UnitDefinition* uDef) {
         }
 
         uDef = &buf;
-    } // (uDef->genMonster)
+    } RANDO_HOOK_UNITDEF(uDef, &buf) // (uDef->genMonster); PC played builds: Reforged randomizer (include/bmunit.h)
 
     switch (uDef->allegiance) {
 
@@ -678,7 +678,7 @@ struct Unit* LoadUnit(const struct UnitDefinition* uDef) {
     if (uDef->itemDrop)
         unit->state |= US_DROP_ITEM;
 
-    UnitCheckStatCaps(unit);
+    RANDO_HOOK_UNITLOADED(unit, uDef) RFO_STAFF_DROP_ORDER(unit) UnitCheckStatCaps(unit);
 
     unit->curHP = GetUnitMaxHp(unit);
 
@@ -802,13 +802,13 @@ void UnitAutolevelWExp(struct Unit* unit, const struct UnitDefinition* uDef) {
 
 void UnitAutolevelCore(struct Unit* unit, u8 classId, int levelCount) {
     if (levelCount) {
-        unit->maxHP += GetAutoleveledStatIncrease(unit->pClassData->growthHP,  levelCount);
-        unit->pow   += GetAutoleveledStatIncrease(unit->pClassData->growthPow, levelCount);
-        unit->skl   += GetAutoleveledStatIncrease(unit->pClassData->growthSkl, levelCount);
-        unit->spd   += GetAutoleveledStatIncrease(unit->pClassData->growthSpd, levelCount);
-        unit->def   += GetAutoleveledStatIncrease(unit->pClassData->growthDef, levelCount);
-        unit->res   += GetAutoleveledStatIncrease(unit->pClassData->growthRes, levelCount);
-        unit->lck   += GetAutoleveledStatIncrease(unit->pClassData->growthLck, levelCount);
+        unit->maxHP += RANDO_STAT_GAIN(unit->maxHP, GetAutoleveledStatIncrease(unit->pClassData->growthHP,  levelCount)); // PC played builds: no s8 wrap (include/bmunit.h)
+        unit->pow   += RANDO_STAT_GAIN(unit->pow,   GetAutoleveledStatIncrease(unit->pClassData->growthPow, levelCount));
+        unit->skl   += RANDO_STAT_GAIN(unit->skl,   GetAutoleveledStatIncrease(unit->pClassData->growthSkl, levelCount));
+        unit->spd   += RANDO_STAT_GAIN(unit->spd,   GetAutoleveledStatIncrease(unit->pClassData->growthSpd, levelCount));
+        unit->def   += RANDO_STAT_GAIN(unit->def,   GetAutoleveledStatIncrease(unit->pClassData->growthDef, levelCount));
+        unit->res   += RANDO_STAT_GAIN(unit->res,   GetAutoleveledStatIncrease(unit->pClassData->growthRes, levelCount));
+        unit->lck   += RANDO_STAT_GAIN(unit->lck,   GetAutoleveledStatIncrease(unit->pClassData->growthLck, levelCount));
     }
 }
 
@@ -849,7 +849,7 @@ void UnitApplyBonusLevels(struct Unit* unit, int levelCount) {
 
 void UnitAutolevel(struct Unit* unit) {
     if (UNIT_CATTRIBUTES(unit) & CA_PROMOTED)
-        UnitAutolevelCore(unit, unit->pClassData->promotion, GetCurrentPromotedLevelBonus());
+        RFO_PROMO_AUTOLEVEL(unit, UnitAutolevelCore(unit, unit->pClassData->promotion, GetCurrentPromotedLevelBonus()));
 
     UnitAutolevelCore(unit, unit->pClassData->number, unit->level - 1);
 }
@@ -1010,7 +1010,7 @@ void UnitChangeFaction(struct Unit* unit, int faction) {
             newUnit->exp = UNIT_EXP_DISABLED;
     }
 
-    newUnit->state = newUnit->state &~ US_DROP_ITEM;
+    newUnit->state = newUnit->state &~ US_DROP_ITEM; RANDO_HOOK_JOINED(newUnit)
 
     if (newUnit->rescue)
         GetUnit(newUnit->rescue)->rescue = newUnit->index;

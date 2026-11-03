@@ -81,4 +81,32 @@ extern u8 Img_LimitViewSquareFull[];
 extern struct ProcCmd gProcScr_PlayerPhaseSelectUnit[];
 extern struct ProcCmd gProcScr_PlayerPhase[];
 
+/*
+ * PC played builds only: Reforged Options' "Game fixes" (port/reforged/reforged_gamefixes.c), OFF by default.
+ * RFO_CANTO_MOVECOUNT, src/playerphase.c PlayerPhase_ApplyUnitMovement: the move count read again after a
+ * Trade or Supply screen left with nothing moved; an Attack or Staff range shown before has erased the
+ * movement map there (0xFF), so the original loses Canto. A read that is not a real move keeps the count the
+ * first pass stored. Everywhere else, and in every other build, the map's value (the original expression).
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_FixCantoMoveCount(int mapValue, int keptMoveCount, int movementMax);
+#define RFO_CANTO_MOVECOUNT(mapValue) Reforged_FixCantoMoveCount((mapValue), gActionData.moveCount, MAP_MOVEMENT_MAX)
+#else
+#define RFO_CANTO_MOVECOUNT(mapValue) mapValue
+#endif
+
+/*
+ * PC played builds only: the map menu with a "Reforged" entry after Options (port/reforged/
+ * reforged_field_menu.c: Reforged Options during a chapter; the run's own settings shown, not
+ * changed). RFO_MAP_MENU_DEF, on src/playerphase.c's two StartOrphanMenuAdjusted lines, gives a
+ * host copy of the ROM's gMapMenuDef with that entry (the PC build reads the menu data from the ROM,
+ * src/menu_def.c is not built). Everywhere else the menu itself.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+const struct MenuDef *Reforged_MapMenuDef(const struct MenuDef *def);
+#define RFO_MAP_MENU_DEF(def) Reforged_MapMenuDef(def)
+#else
+#define RFO_MAP_MENU_DEF(def) (def)
+#endif
+
 #endif  // GUARD_PLAYERPHASE_H

@@ -224,7 +224,7 @@ void UpdateBanimFrame(void)
         LZ77UnCompWram(banim[GetBanimPalette(bid, 0)].pal, gBanimPaletteLeft);
 
         if (chara_pal != -1) {
-            LZ77UnCompWram(cbapt[chara_pal].pal, gBanimPaletteLeft);
+            LZ77UnCompWram(RANDO_CHARA_PAL(cbapt[chara_pal].pal, chara_pal), gBanimPaletteLeft);
             ApplyBanimUniquePalette((u32 *)gBanimPaletteLeft, POS_L);
         }
 
@@ -274,7 +274,7 @@ void UpdateBanimFrame(void)
         LZ77UnCompWram(banim[GetBanimPalette(bid, 1)].pal, gBanimPaletteRight);
 
         if (chara_pal != -1) {
-            LZ77UnCompWram(cbapt[chara_pal].pal, gBanimPaletteRight);
+            LZ77UnCompWram(RANDO_CHARA_PAL(cbapt[chara_pal].pal, chara_pal), gBanimPaletteRight);
             ApplyBanimUniquePalette((u32 *)gBanimPaletteRight, POS_R);
         }
 
@@ -299,7 +299,7 @@ void UpdateBanimFrame(void)
 
             for (i = 0; i < 7; i++) {
                 if (gAnimCharaPalConfig[pid][i] == jid) {
-                    gBanimTriAtkPalettes[0] = cbapt[gAnimCharaPalIt[pid][i] - 1].pal;
+                    gBanimTriAtkPalettes[0] = RANDO_CHARA_PAL(cbapt[gAnimCharaPalIt[pid][i] - 1].pal, gAnimCharaPalIt[pid][i] - 1);
                     break;
                 }
             }
@@ -315,7 +315,7 @@ void UpdateBanimFrame(void)
 
             for (i = 0; i < 7; i++) {
                 if (gAnimCharaPalConfig[pid][i] == jid) {
-                    gBanimTriAtkPalettes[1] = cbapt[gAnimCharaPalIt[pid][i] - 1].pal;
+                    gBanimTriAtkPalettes[1] = RANDO_CHARA_PAL(cbapt[gAnimCharaPalIt[pid][i] - 1].pal, gAnimCharaPalIt[pid][i] - 1);
                     break;
                 }
             }

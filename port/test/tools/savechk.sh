@@ -12,10 +12,11 @@
 #      FE8PC_KEYSCRIPT (tools/keys_to_keyscript.py), FE8PC_FRAMES = the key file's ticks,
 #      --save FE8.sav beside a copy of baserom.gba named FE8.gba. The .sav is the port's own
 #      file (savefile_pc.c), written as the game writes SRAM.
-#      SAVECHK_RFO="key = value\n..." (full and sdl only) writes reforged-options.txt into the
-#      run's own per-user folder first (FE8PC_USER_DIR, or XDG_DATA_HOME/fe8pc), and the sidecar
-#      FE8.sav.reforged is kept after each session too. The win build reads its settings from
-#      %APPDATA%\fe8pc, which this script does not touch, so SAVECHK_RFO is refused there.
+#      Every run has its own per-user folder (FE8PC_USER_DIR; XDG_DATA_HOME/fe8pc for sdl; for win
+#      FE8PC_USER_DIR passed through WSLENV as a Windows path), so the player's own settings file
+#      (%APPDATA%\fe8pc on Windows) is never read or written: without SAVECHK_RFO every option is
+#      at its default. SAVECHK_RFO="key = value\n..." writes reforged-options.txt into that folder
+#      first, and the sidecar FE8.sav.reforged is kept after each session too.
 # gba: mGBA 0.10.5 (build/gate0/mgba_lua_run, oracle/sram_capture.lua with SRAM_AT=tick:T)
 #      booting from the previous .sav (GATE0_SRAM_IN), the key file as it is.
 #
@@ -71,7 +72,6 @@ for arg in "$@"; do
         cp "$prev" "$work/run/FE8.sav"
         [ -f "$prev.reforged" ] && cp "$prev.reforged" "$work/run/FE8.sav.reforged"
         if [ -n "${SAVECHK_RFO:-}" ]; then
-            [ "$build" = win ] && { echo "SAVECHK_RFO: not for the win build" >&2; exit 2; }
             printf '%b\n' "$SAVECHK_RFO" > "$work/run/user/reforged-options.txt"
             cp "$work/run/user/reforged-options.txt" "$work/run/user/fe8pc/"
         fi
@@ -86,7 +86,8 @@ for arg in "$@"; do
                   (cd "$work/run" && SDL_VIDEO_DRIVER=offscreen SDL_AUDIO_DRIVER=dummy FE8PC_PACE=0 \
                     FE8PC_KEYSCRIPT="$ks" FE8PC_FRAMES=$ticks SDL_JOYSTICK_RAWINPUT=0 SDL_JOYSTICK_HIDAPI=0 \
                     SDL_JOYSTICK_WGI=0 SDL_JOYSTICK_GAMEINPUT=0 SDL_XINPUT_ENABLED=0 SDL_JOYSTICK_DIRECTINPUT=0 \
-                    WSLENV=SDL_VIDEO_DRIVER:SDL_AUDIO_DRIVER:FE8PC_PACE:FE8PC_FRAMES:FE8PC_KEYSCRIPT:SDL_JOYSTICK_RAWINPUT:SDL_JOYSTICK_HIDAPI:SDL_JOYSTICK_WGI:SDL_JOYSTICK_GAMEINPUT:SDL_XINPUT_ENABLED:SDL_JOYSTICK_DIRECTINPUT \
+                    FE8PC_USER_DIR="$work/run/user/fe8pc" \
+                    WSLENV=SDL_VIDEO_DRIVER:SDL_AUDIO_DRIVER:FE8PC_PACE:FE8PC_FRAMES:FE8PC_KEYSCRIPT:SDL_JOYSTICK_RAWINPUT:SDL_JOYSTICK_HIDAPI:SDL_JOYSTICK_WGI:SDL_JOYSTICK_GAMEINPUT:SDL_XINPUT_ENABLED:SDL_JOYSTICK_DIRECTINPUT:FE8PC_USER_DIR/p \
                     timeout 900 ./fe8pc-sdl.exe --save FE8.sav FE8.gba) > "$out/$name.log" 2>&1 ;;
             *) echo "build: full, sdl or win" >&2; exit 2 ;;
         esac

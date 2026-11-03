@@ -870,6 +870,7 @@ int PortSave_Init(const char *romPath, const char *savePath, int noSave)
     sOn = 1;
 #ifdef PORT_RFO_SAVEMARK
     Reforged_SaveMarkLoad(loadOther ? other : sWritePath, loadOther);
+    Reforged_SaveMarkSetWritePath(sWritePath); /* where an early mark write (a Nuzlocke death) goes */
 #endif
     return 0;
 

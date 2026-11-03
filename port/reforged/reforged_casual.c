@@ -94,7 +94,8 @@ int Reforged_CasualRetreat(struct Unit *unit)
 {
     int pid, i;
 
-    if (!Reforged_GetOption(RFO_CASUAL_MODE))
+    Reforged_RandoUnitDied(unit); /* the randomizer's Nuzlocke: a death is final */
+    if (!Reforged_GetOption(RFO_CASUAL_MODE) || Reforged_RandoNuzlocke())
         return 0;
     if (unit == NULL || unit->pCharacterData == NULL || UNIT_FACTION(unit) != FACTION_BLUE)
         return 0;

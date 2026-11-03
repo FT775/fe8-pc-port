@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The save checks as one standing check: P5.3, P5.4 and the wider ones, PASS or FAIL.
 
-    python3 port/test/tools/savechk_all.py [--builds full,sdl,win] [--parts p53,p53b,p54,rfo]
-                                           [--out DIR] [--start SAV]
+    python3 port/test/tools/savechk_all.py [--builds full,sdl,win] [--parts p53,p53b,p54,rfo[,late]]
+                                           [--out DIR] [--start SAV] [--late-saves DIR]
 
 port/test/README.md, "Save checks"; check-all's opt-in row (make -f port/check-all.mk
 CHECK_SAVES=1, row "saves"); the user's SAVE-2 B, SAVE-3 B and SAVE-4 B of 2026-10-30
@@ -33,6 +33,13 @@ tools/savechk.sh; the parts:
         options off (the control: the test falls are retail deaths there); then the chain's
         last .sav, with no sidecar, played on mGBA and on the FULL build with the options off
         (p54_k2_wait_end): mGBA loads it and both play on the same.
+  late  The late game (opt-in: the longest part, six sessions a save on every side): six story and post-game saves of
+        --late-saves (default ~/fe8-chapsaves; the chapter saves, README.md "Chapter saves", checked by
+        SHA-1): Eirika's Chapter 20 and final chapter, Ephraim's final chapter part 1, his real clear
+        save (the post-game world map), Tower of Valni floor 8, Lagdou Ruins floor 10. Each: late_*_k1
+        (save to slot 2 from the preparations or the world map where there is one, then Suspend) and
+        late_*_k2 (Resume, End, the enemy phase, the next turn's suspend saves) on mGBA and on each build,
+        then k2 from the FULL build's k1 save and from mGBA's, on every side, each against mGBA.
 
 What is checked (each a "PASS"/"FAIL" line):
   - every session completes on every side (savechk.sh exit 0);
@@ -70,6 +77,20 @@ P53 = [("s1_frelia_slot2", {2}), ("r_resume", set()), ("s2_resume2_suspend", set
 P53B = [("c1_copy13", {3}), ("c2_copy", {2}), ("c3_erase", {2}), ("s1_frelia_slot2", {2})]
 RFO = [("s1_frelia_slot2+FE8PC_RFO_TEST_FALL=4", {2}), ("s2_resume2_suspend+FE8PC_RFO_TEST_FALL=3", set()),
        ("p54_k1_end_turn", set()), ("c2_copy", {3}), ("c3_erase", {3})]
+# The late part: (name, start save in --late-saves, its first 32 KiB's SHA-1, session 1, session 2), each
+# session (key file, the game slots it writes). Session 1 saves (into slot 2 from a preparation screen or the
+# post-game world map, where the start offers one) and suspends; session 2 resumes, ends the turn and plays
+# the enemy phase to the next player phase's suspend saves (br10's: two deaths, their records in slot 1).
+LATE = [
+    ("e20", "e20_start", "4f395f0ecfdc1622a5cc8bb73bd3f3939f641dd5", ("late_e20_k1", {2}), ("late_e20_k2", set())),
+    ("e22", "e22_start", "ef755945112a91e9522624fe38408bf69190505e", ("late_e22_k1", set()), ("late_e22_k2", set())),
+    ("i21", "i21_start", "63d1dd393421717792ff630b520f03efeb2d20ca", ("late_i21_k1", {2}), ("late_i21_k2", set())),
+    ("iclear", "i_clear", "17231c1bd2ac74e38a4fba61059638a9331323bb", ("late_iclear_k1", {2}),
+     ("late_iclear_k2", set())),
+    ("bt8", "bt8_start", "caa6caa3a64a54693e9716381db0c26003e4cdaa", ("late_bt8_k1", set()), ("late_bt8_k2", set())),
+    ("br10", "br10_start", "bf1a953951988a4ade88d5df871f316a29aa0535", ("late_br10_k1", set()),
+     ("late_br10_k2", {1})),
+]
 
 
 def load_blockdiff():
@@ -232,6 +253,49 @@ def part_p54(builds, out, p53, rep):
             start = nxt
 
 
+def part_late(builds, out, saves_dir, rep):
+    """The late game: for each LATE start save, k1 then k2 on mGBA and each build (slots, --cross), then
+    k2 alone from the FULL build's k1 save (a late-game save the PC wrote) and from mGBA's (one mGBA
+    wrote), on every side, each against mGBA (--cross); mGBA must play on from the PC's save."""
+    import hashlib
+    for name, start_name, sha1, k1, k2 in LATE:
+        src = os.path.join(saves_dir, start_name + ".sav")
+        label = f"late {name}"
+        if not os.path.exists(src):
+            rep.check(False, f"{label}: start save {src}", "missing (the chapter saves: port/test/README.md, "
+                      "'Chapter saves'; --late-saves names their folder)")
+            continue
+        sha = hashlib.sha1(open(src, "rb").read()[:0x8000]).hexdigest()
+        if not rep.check(sha == sha1, f"{label}: start save is the one the key files were made from",
+                         f"{start_name}.sav SHA-1 {sha[:8]}, want {sha1[:8]}"):
+            continue
+        os.makedirs(f"{out}/late/{name}", exist_ok=True)
+        start = os.path.abspath(f"{out}/late/{name}/start.sav")
+        shutil.copy(src, start)
+        sessions = [k1, k2]
+        res = part_chain(f"late/{name}", sessions, builds, out, start, rep)
+        full, gba = res.get("full"), res.get("gba")
+        for d, src_files, who in (("d1", full, "the FULL build"), ("d2", gba, "mGBA")):
+            if not src_files:
+                rep.check(False, f"{label} {d}: k2 from {who}'s k1 save", f"{who}'s chain did not run")
+                continue
+            dstart = os.path.abspath(f"{out}/late/{name}/{d}_start.sav")
+            shutil.copy(src_files[1], dstart)
+            sess = [k2]
+            g = chain("gba", f"{out}/late/{name}/{d}_gba", dstart, sess, rep, f"{label} {d}")
+            if g and d == "d1":
+                before = BD.block_summary(sram(dstart), 3 if sram(dstart)[0x63] == 0 else 4)
+                after = BD.block_summary(sram(g[1]), 3 if sram(g[1])[0x63] == 0 else 4)
+                rep.check(after.get("valid") and after.get("turn", 0) > (before.get("turn") or 0),
+                          f"{label} d1: mGBA loads the late-game save the PC wrote and plays on",
+                          f"mGBA's last suspend: chapter {after.get('chapterIndex')} turn {after.get('turn')} "
+                          f"(the PC's: chapter {before.get('chapterIndex')} turn {before.get('turn')})")
+            for b in builds:
+                pcf = chain(b, f"{out}/late/{name}/{d}_{b}", dstart, sess, rep, f"{label} {d}")
+                if pcf and g:
+                    check_cross(g, pcf, rep, f"{label} {d}", b)
+
+
 def sidecar(path):
     kv = {}
     try:
@@ -377,6 +441,8 @@ def main():
     ap.add_argument("--parts", default="p53,p53b,p54,rfo")
     ap.add_argument("--out", default="build/savechk")
     ap.add_argument("--start", default="port/test/saves/ch1_seize.sav")
+    ap.add_argument("--late-saves", default=os.path.expanduser("~/fe8-chapsaves"),
+                    help="the folder of the chapter saves the late part starts from")
     a = ap.parse_args()
     if not os.path.isfile("port/test/tools/savechk.sh"):
         print("savechk_all.py: run from the repository root", file=sys.stderr)
@@ -428,6 +494,8 @@ def main():
         part_p54(builds, out, p53, rep)
     if "rfo" in parts:
         part_rfo(builds, out, start, rep)
+    if "late" in parts:
+        part_late(builds, out, a.late_saves, rep)
     if rep.bad:
         print(f"SAVE CHECKS: FAIL ({len(rep.bad)} of {rep.n} checks failed: {'; '.join(rep.bad[:3])}"
               f"{' ...' if len(rep.bad) > 3 else ''})")

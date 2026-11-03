@@ -93,7 +93,7 @@ char * GetStringFromIndex(int index)
     if (index == sActiveMsg)
         return sMsgString.buffer1;
     CallARM_DecompText(gMsgTable[index], sMsgString.buffer1);
-    SetMsgTerminator(sMsgString.buffer1);
+    SetMsgTerminator(sMsgString.buffer1); RANDO_HOOK_TEXT(sMsgString.buffer1, sizeof(sMsgString.buffer1))
     sActiveMsg = index;
     return sMsgString.buffer1;
 }

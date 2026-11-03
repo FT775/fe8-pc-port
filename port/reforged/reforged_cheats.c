@@ -176,7 +176,10 @@ int Reforged_CheatLevelUp(struct BattleUnit *bu)
     {
         checked = 1;
         if (CheckOn())
+        {
             SelfCheck();
+            Reforged_GameFixesSelfCheck(); /* the Game fixes' check (reforged_gamefixes.c) */
+        }
     }
 
     mode = Reforged_GetOption(RFO_CHEAT_GROWTHS);

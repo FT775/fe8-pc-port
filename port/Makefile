@@ -206,6 +206,13 @@ $(BUILD)/src/bmdifficulty.o: HOST_CPPFLAGS += $(BMDIFFICULTY_CPPFLAGS)
 .PHONY: all survey clean
 all: $(BUILD)/fe8pc
 
+# The port rules have no automatic header dependencies: a change to the port's
+# shared headers rebuilds every port object (port/win32 among them, through
+# Makefile.mingw's PORT_SRCS). A struct whose size changes (struct PortArgs)
+# would otherwise leave an object built with the old size. (After "all": the
+# first rule of this file is the default goal.)
+$(PORT_OBJS): port/include/port_hw.h port/platform.h port/include/port_controls.h
+
 # Each compile also keeps its compiler messages in OBJ.warn (empty when clean),
 # next to the object, and shows them as before. port/check-all.mk's warnings
 # gate reads these logs (port/tools/check_all.py --warn-dir), so it also sees
@@ -288,7 +295,7 @@ endif
 
 # port/reforged (above) is game-side code: the game's flags and port.h, as
 # src/ is (a shorter stem, so this rule wins over the next for these files).
-$(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/port_reforged.h port/platform.h $(COMPILE_STAMP)
+$(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/port_reforged.h port/reforged/reforged_rando.h port/platform.h $(COMPILE_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_CFLAGS) $(HOST_CPPFLAGS) -c $< -o $@ $(WARNLOG)
 

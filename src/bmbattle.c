@@ -1144,7 +1144,7 @@ void BattleGenerateHitEffects(struct BattleUnit* attacker, struct BattleUnit* de
             } // switch (GetItemWeaponEffect(attacker->weapon))
         }
 
-        if ((GetItemWeaponEffect(attacker->weapon) == WPN_EFFECT_DEVIL) && (BattleRoll1RN(31 - attacker->unit.lck, FALSE))) {
+        if ((GetItemWeaponEffect(attacker->weapon) == WPN_EFFECT_DEVIL) && (BattleRoll1RN(RFO_DEVIL_CHANCE(31 - attacker->unit.lck), FALSE))) {
             gBattleHitIterator->attributes |= BATTLE_HIT_ATTR_DEVIL;
 
             attacker->unit.curHP -= gBattleStats.damage;
@@ -1808,7 +1808,7 @@ int GetUnitKillExpBonus(struct Unit* actor, struct Unit* target) {
         if (local <= GetUnitPowerLevel(actor))
             local = GetUnitPowerLevel(target) - GetUnitPowerLevel(actor) / 2;
         else
-            local = GetUnitPowerLevel(target) - GetUnitPowerLevel(actor);
+            local = RFO_EARLY_KILL_EXP(GetUnitPowerLevel(target) - GetUnitPowerLevel(actor), actor);
 
         result += local;
     }

@@ -286,4 +286,24 @@ void BattleUnwindScripted(void);
 
 #define BUNIT_IS_OBSTACLE(aBu) (((aBu)->terrainId == TERRAIN_WALL_DAMAGED) || ((aBu)->terrainId == TERRAIN_SNAG))
 
+/*
+ * PC played builds only: Reforged Options' "Game fixes" (port/reforged/reforged_gamefixes.c), each OFF by
+ * default (then the value is the original's). In every other build each is its value, on the same line.
+ *   RFO_EARLY_KILL_EXP  src/bmbattle.c GetUnitKillExpBonus, before the route split, a target stronger
+ *                             than the actor: its kill term is never below an equal-strength kill's
+ *                             (ceil(P(actor) / 2); P is the class and level power, plus 20 x the base
+ *                             class's relative power for a promoted unit).
+ *   RFO_DEVIL_CHANCE     src/bmbattle.c BattleGenerateHitEffects: the Devil effect's backfire chance,
+ *                             31 - Luck, stops at 0 instead of wrapping to 100% (Luck 32 and up).
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_FixEarlyKillExp(int local, struct Unit *actor);
+int Reforged_FixDevilChance(int threshold);
+#define RFO_EARLY_KILL_EXP(orig, actor) Reforged_FixEarlyKillExp((orig), (actor))
+#define RFO_DEVIL_CHANCE(t) Reforged_FixDevilChance(t)
+#else
+#define RFO_EARLY_KILL_EXP(orig, actor) (orig)
+#define RFO_DEVIL_CHANCE(t) (t)
+#endif
+
 #endif // GUARD_BMBATTLE_H

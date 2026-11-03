@@ -279,7 +279,7 @@ struct ProcCmd CONST_DATA gProcScr_FaceChange[] =
 
 //! FE8U = 0x08005514
 const struct FaceData* GetPortraitData(int fid) {
-    return portrait_data + fid - 1;
+    return portrait_data + RANDO_FACE(fid) - 1;
 }
 
 //! FE8U = 0x08005528

@@ -2089,9 +2089,15 @@ saves they are given:
   boots from the `.sav` the one before left, with `--save FE8.sav`, and
   `OUTDIR/NN_NAME.sav` keeps it. `savechk.sh gba OUTDIR START.sav K...` plays
   the same chain in mGBA (`sram-capture` with `SRAM_AT=tick:T` and
-  `GATE0_SRAM_IN`). `SAVECHK_RFO="unbreakable_weapons = 1"` (full and sdl)
-  gives the run its own Reforged Options settings file, and the sidecar
-  `FE8.sav.reforged` goes along the chain. A session that fails stops the
+  `GATE0_SRAM_IN`). Each PC run has its own per-user folder (`FE8PC_USER_DIR`;
+  the window builds honour it too, the Windows one through `WSLENV`'s path
+  translation), so the player's own settings file is never read: every
+  option is at its default. Before 2026-11-03 the Windows runs read
+  `%APPDATA%\fe8pc`, the player's own options (a late-game death then
+  retreated under casual mode on the Windows side only).
+  `SAVECHK_RFO="unbreakable_weapons = 1"` gives the run its own Reforged
+  Options settings file, and the sidecar `FE8.sav.reforged` goes along the
+  chain. A session that fails stops the
   chain with exit 1 (a non-zero exit or timeout, or on pc a log without
   `frame limit T reached` and `exit 0: frames=T`): a run that died early
   leaves its input `.sav` as it was, which would look like a session that
@@ -2147,7 +2153,19 @@ saves they are given:
   Copy Data and dropped by Erase Data, the side file's fingerprints after
   every session; a control chain with the options off; then the last `.sav`
   without its side file on mGBA and on FULL with the options off: mGBA
-  plays on, and the two end saves are equal apart from the known bytes).
+  plays on, and the two end saves are equal apart from the known bytes);
+  **late** (opt-in, `--parts ...,late`; 2026-11-03) the late game from six
+  chapter saves in `--late-saves` (default `~/fe8-chapsaves/`, each checked
+  by SHA-1): Eirika's Chapter 20 and final chapter, Ephraim's final chapter
+  part 1, his real clear save (the post-game world map), Tower of Valni
+  floor 8 and Lagdou Ruins floor 10, each with the real army.
+  `late_*_k1` saves into slot 2 from the preparations or the world map
+  where the start offers that (e20, i21, iclear: a full late-game game
+  block) and suspends; `late_*_k2` resumes, ends the turn and plays the
+  enemy phase to the next turn's suspend saves (br10: two deaths, their
+  records written into slot 1). Both on mGBA and on each build, then
+  `late_*_k2` again from the FULL build's k1 save and from mGBA's, on every
+  side (P5.4 in both directions with late-game saves; mGBA must play on).
   Each session is also checked for "other slots untouched": the game slots
   whose block or SaveBlockInfo entry changed must be exactly the ones it
   writes (a table in the script). Prints a PASS/FAIL line per check and
@@ -2178,7 +2196,9 @@ back), `s2_resume2_suspend`, `s3_newgame3_suspend` (New Game, Difficult,
 slot 3), `s4_restart1_suspend`, `s5_restart2`, `s6_restart3` (Restart
 Chapter on each slot). The `s*_suspend` files end with the map menu's
 Suspend and Yes. P5.4: `p54_k1_end_turn` (Resume, End, an enemy phase with
-two battles), `p54_k2_wait_end`. The save-menu actions (port-savechk2):
+two battles), `p54_k2_wait_end`. The late game: `late_<save>_k1` and `late_<save>_k2` for
+e20, e22, i21, iclear, bt8 and br10 (each file's header says what it does).
+The save-menu actions (port-savechk2):
 `c1_copy13` (Copy Data, slot 1 to slot 3), `c2_copy` (Copy Data from the
 slot the source list opens on, the last game saved, to the slot the
 destination list opens on, the first empty one) and `c3_erase` (Erase Data:

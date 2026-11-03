@@ -1404,7 +1404,7 @@ bool PrepareBattleGraphicsMaybe(void)
             usrdefined_enable = true;
     }
 
-    SetBattleUnscripted();
+    SetBattleUnscripted(); BANIM_DANCER_WEAPON_MAPANIM(unit_bu1, bu1->weaponBefore, unit_bu2, bu2->weaponBefore)
 
     if (gEkrDistanceType != EKR_DISTANCE_PROMOTION)
     {

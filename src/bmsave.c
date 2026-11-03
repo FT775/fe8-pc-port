@@ -173,7 +173,7 @@ void WriteNewGameSave(int index, int isDifficult, int mode, int isTutorial)
     WriteLastGameSaveId(index);
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
     /* Reforged Options: a new game has no fallen units; the save mark */
-    Reforged_CasualSetFallen(NULL, 0);
+    Reforged_CasualSetFallen(NULL, 0); Reforged_RandoNewGame(); /* the randomizer: this run's tables */
     Reforged_SaveBlockWritten(index);
 #endif
 }
@@ -249,7 +249,7 @@ void ReadGameSave(int slot)
     SetGameTime(gPlaySt.time_saved);
     gPlaySt.gameSaveSlot = slot;
 
-    InitUnits();
+    RANDO_HOOK_WILLREAD(slot) InitUnits();
 
     for (i = 0; i < UNIT_SAVE_AMOUNT_BLUE; i++)
         LoadSavedUnit(src->units + i, &gUnitArrayBlue[i]);
@@ -612,7 +612,7 @@ void ReadSuspendSave(int slot)
 
     ReadSramFast(&src->action, &gActionData, sizeof(struct ActionData));
     LoadRNStateFromActionStruct();
-    InitUnits();
+    RANDO_HOOK_WILLREAD(slot + gSuspendSaveIdOffset) InitUnits();
 
     for (i = 0; i < UNIT_SAVE_AMOUNT_BLUE; i++)
         ReadSuspendSavePackedUnit(&src->blueUnits[i], &gUnitArrayBlue[i]);

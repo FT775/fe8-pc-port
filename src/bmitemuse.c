@@ -462,7 +462,7 @@ s8 CanUnitUsePromotionItem(struct Unit* unit, int item)
             it++;                                \
         }                                        \
 
-    const u8* classList = NULL;
+    const u8* classList = NULL; RANDO_HOOK_PROMO_ITEM(unit, item)
 
     if (unit->pCharacterData->number == CHARACTER_EIRIKA || unit->pCharacterData->number == CHARACTER_EPHRAIM)
     {

@@ -182,7 +182,7 @@ void GenerateBestMovementScript(int x, int y, u8 output[])
 
     // As we build the list *in reverse*, the directions are also "reversed" as we traverse the path.
 
-    while (((s8**) gWorkingBmMap)[y][x] != 0)
+    while (RANDO_HOOK_MOVESCRIPT(x, y, output, outputStart) ((s8**) gWorkingBmMap)[y][x] != 0)
     {
         // Build neighbor cost list
 

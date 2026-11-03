@@ -574,7 +574,7 @@ void KillUnitOnArenaDeathMaybe(struct Unit* unit) {
         return;
     }
 
-    UnitKill(unit);
+    RANDO_HOOK_DEATH(unit) UnitKill(unit);
 
     PidStatsRecordDefeatInfo(unit->pCharacterData->number, 0, DEFEAT_CAUSE_ARENA);
 

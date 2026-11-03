@@ -10,6 +10,7 @@
 #include <SDL3/SDL.h>
 
 #include "../platform.h"
+#include "port_controls.h"
 #ifdef FE8PC_TESTBUILD
 #include "test/sdl_testhook.h"
 #endif
@@ -54,21 +55,23 @@ int PortWin32RoamingDir(char *out, size_t outSize);
  * change: the pixels are the renderer's D3 output. VSync is off, so
  * presenting never holds up the frame step; the pacer sets the rate.
  *
- * Keys, by scancode so the keyboard layout does not matter (the user's layout):
+ * Keys, by scancode so the keyboard layout does not matter (the user's layout),
+ * as bound in port/hw/controls.c (port/include/port_controls.h; the played
+ * builds' Controls screen and settings file change them). The defaults:
  *   A: Z   B: X   L: Q   R: E   Start: Enter   Select: Backspace
  *   D-pad: the arrow keys
  *   Test builds only (FE8PC_TESTBUILD=1): either Shift is also Select.
- * Gamepads (any SDL3 gamepad, hot-plugged):
+ * Gamepads (any SDL3 gamepad, hot-plugged), the defaults:
  *   A and B: the face buttons labelled A and B (cross and circle on
  *   PlayStation pads), so a Nintendo pad matches the GBA's own layout;
  *   unlabelled pads use south for A and east for B.
  *   L and R: the shoulder buttons or the triggers. Start: start. Select: back.
- *   D-pad: the D-pad or the left stick (past half way).
+ *   D-pad: the D-pad; the left stick (past half way) always moves too.
  * Opposite directions held together read as neither (mGBA's default), since
  * a real D-pad cannot press both.
- * F11 toggles fullscreen. Closing the window (or SIGINT/SIGTERM) quits.
+ * F11 toggles fullscreen (bindable). Closing the window (or SIGINT/SIGTERM) quits.
  * Played builds: Space, or the right stick's click, held = fast-forward
- * (Reforged Options; above).
+ * (Reforged Options; above; bindable).
  *
  * Saves: the window build keeps the player's save file by default, the ROM
  * path with .sav for its extension (baserom.gba -> baserom.sav), the raw
@@ -138,29 +141,18 @@ struct Pad
 };
 static struct Pad sPads[MAX_PADS];
 
+#ifdef FE8PC_TESTBUILD
+/* Test builds only (FE8PC_TESTBUILD=1, port/Makefile; port-plan/DIVERGENCES.md TB-1):
+   either Shift is a second Select, whatever the bindings. */
 static const struct
 {
     SDL_Scancode scancode;
     uint16_t key;
 } sKeyMap[] = {
-    { SDL_SCANCODE_Z,         PLATFORM_KEY_A },
-    { SDL_SCANCODE_X,         PLATFORM_KEY_B },
-    { SDL_SCANCODE_BACKSPACE, PLATFORM_KEY_SELECT },
-    { SDL_SCANCODE_RETURN,    PLATFORM_KEY_START },
-    { SDL_SCANCODE_KP_ENTER,  PLATFORM_KEY_START },
-    { SDL_SCANCODE_RIGHT,     PLATFORM_KEY_RIGHT },
-    { SDL_SCANCODE_LEFT,      PLATFORM_KEY_LEFT },
-    { SDL_SCANCODE_UP,        PLATFORM_KEY_UP },
-    { SDL_SCANCODE_DOWN,      PLATFORM_KEY_DOWN },
-    { SDL_SCANCODE_E,         PLATFORM_KEY_R },
-    { SDL_SCANCODE_Q,         PLATFORM_KEY_L },
-#ifdef FE8PC_TESTBUILD
-    /* Test builds only (FE8PC_TESTBUILD=1, port/Makefile; port-plan/DIVERGENCES.md TB-1):
-       either Shift is a second Select. */
     { SDL_SCANCODE_LSHIFT,    PLATFORM_KEY_SELECT },
     { SDL_SCANCODE_RSHIFT,    PLATFORM_KEY_SELECT },
-#endif
 };
+#endif
 
 /* A test build says so in the window title. */
 #ifdef FE8PC_TESTBUILD
@@ -169,20 +161,92 @@ static const struct
 #define WINDOW_TITLE "FE8 PC port"
 #endif
 
+/* The gamepad binding names (port/include/port_controls.h): a button, or one
+   of these codes. */
+enum { PADB_NONE = -1, PADB_A = -2, PADB_B = -3, PADB_ZL = -4, PADB_ZR = -5 };
+
 static const struct
 {
-    SDL_GamepadButton button;
-    uint16_t key;
-} sPadMap[] = {
-    { SDL_GAMEPAD_BUTTON_BACK,           PLATFORM_KEY_SELECT },
-    { SDL_GAMEPAD_BUTTON_START,          PLATFORM_KEY_START },
-    { SDL_GAMEPAD_BUTTON_DPAD_RIGHT,     PLATFORM_KEY_RIGHT },
-    { SDL_GAMEPAD_BUTTON_DPAD_LEFT,      PLATFORM_KEY_LEFT },
-    { SDL_GAMEPAD_BUTTON_DPAD_UP,        PLATFORM_KEY_UP },
-    { SDL_GAMEPAD_BUTTON_DPAD_DOWN,      PLATFORM_KEY_DOWN },
-    { SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, PLATFORM_KEY_R },
-    { SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,  PLATFORM_KEY_L },
+    const char *name;
+    int code;
+} sPadNames[] = {
+    { "a", PADB_A },                                  { "b", PADB_B },
+    { "west", SDL_GAMEPAD_BUTTON_WEST },              { "north", SDL_GAMEPAD_BUTTON_NORTH },
+    { "back", SDL_GAMEPAD_BUTTON_BACK },              { "start", SDL_GAMEPAD_BUTTON_START },
+    { "guide", SDL_GAMEPAD_BUTTON_GUIDE },
+    { "l", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER },        { "r", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER },
+    { "zl", PADB_ZL },                                { "zr", PADB_ZR },
+    { "dpup", SDL_GAMEPAD_BUTTON_DPAD_UP },           { "dpdown", SDL_GAMEPAD_BUTTON_DPAD_DOWN },
+    { "dpleft", SDL_GAMEPAD_BUTTON_DPAD_LEFT },       { "dpright", SDL_GAMEPAD_BUTTON_DPAD_RIGHT },
+    { "lstick", SDL_GAMEPAD_BUTTON_LEFT_STICK },      { "rstick", SDL_GAMEPAD_BUTTON_RIGHT_STICK },
 };
+
+/* The bindings resolved (Controls_Generation tells when to again). */
+static struct
+{
+    unsigned generation;
+    SDL_Scancode key[CTL_COUNT][2];
+    int pad[CTL_COUNT][2];
+} sBound;
+
+static int PadCode(const char *name)
+{
+    unsigned i;
+
+    for (i = 0; i < SDL_arraysize(sPadNames); i++)
+        if (SDL_strcasecmp(name, sPadNames[i].name) == 0)
+            return sPadNames[i].code;
+    return PADB_NONE;
+}
+
+static void ResolveBindings(void)
+{
+    int a, k;
+
+    if (sBound.generation == Controls_Generation())
+        return;
+    for (a = 0; a < CTL_COUNT; a++)
+        for (k = 0; k < 2; k++)
+        {
+            const char *key = Controls_Get(a, CTL_KEY1 + k), *pad = Controls_Get(a, CTL_PAD1 + k);
+
+            sBound.key[a][k] = key[0] != '\0' ? SDL_GetScancodeFromName(key) : SDL_SCANCODE_UNKNOWN;
+            sBound.pad[a][k] = pad[0] != '\0' ? PadCode(pad) : PADB_NONE;
+        }
+    sBound.generation = Controls_Generation();
+}
+
+/* The settings file separates a row's bindings with '|' (reforged_settings.c):
+   SDL's "Keypad |" and "Keypad ||" cannot be written there, so they are never
+   binding names. */
+static int KeyNameUsable(const char *name)
+{
+    return name != NULL && name[0] != '\0' && SDL_strchr(name, '|') == NULL;
+}
+
+int Platform_BindingValid(int pad, const char *name)
+{
+    if (!KeyNameUsable(name))
+        return 0;
+    return pad ? PadCode(name) != PADB_NONE : SDL_GetScancodeFromName(name) != SDL_SCANCODE_UNKNOWN;
+}
+
+void Platform_CanonicalName(int pad, const char *name, char *out, size_t size)
+{
+    unsigned i;
+
+    SDL_snprintf(out, size, "%s", name != NULL ? name : "");
+    if (!Platform_BindingValid(pad, name))
+        return;
+    if (!pad)
+    {
+        SDL_snprintf(out, size, "%s", SDL_GetScancodeName(SDL_GetScancodeFromName(name)));
+        return;
+    }
+    for (i = 0; i < SDL_arraysize(sPadNames); i++)
+        if (SDL_strcasecmp(name, sPadNames[i].name) == 0)
+            SDL_snprintf(out, size, "%s", sPadNames[i].name);
+}
 
 static void Log(const char *fmt, ...) SDL_PRINTF_VARARG_FUNC(1);
 static void Log(const char *fmt, ...)
@@ -218,19 +282,25 @@ void Platform_SetTitleNote(const char *note)
     ApplyTitle();
 }
 
+/* FE8PC_SCALE when it is a usable scale (1 to MAX_SCALE), else 0. */
+static int EnvScale(void)
+{
+    const char *s = getenv("FE8PC_SCALE");
+    int scale = s != NULL ? atoi(s) : 0;
+
+    return scale >= 1 && scale <= MAX_SCALE ? scale : 0;
+}
+
 static int ChooseScale(void)
 {
     const char *s = getenv("FE8PC_SCALE");
     SDL_Rect usable;
     int scale;
 
+    if (EnvScale() > 0)
+        return EnvScale();
     if (s != NULL)
-    {
-        scale = atoi(s);
-        if (scale >= 1 && scale <= MAX_SCALE)
-            return scale;
         Log("[sdl] FE8PC_SCALE=%s ignored (1 to %d)\n", s, MAX_SCALE);
-    }
     scale = DEFAULT_SCALE;
     if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable))
         while (scale > 1 && (GBA_W * scale > usable.w || GBA_H * scale > usable.h))
@@ -424,13 +494,224 @@ void Platform_PresentFrame(const uint32_t *rgba, int width, int height)
 #endif
 }
 
+/* A gamepad binding (sPadNames' code) held on pad p. */
+static int PadDown(const struct Pad *p, int code)
+{
+    switch (code)
+    {
+    case PADB_NONE:
+        return 0;
+    case PADB_A:
+        return SDL_GetGamepadButton(p->pad, p->buttonA);
+    case PADB_B:
+        return SDL_GetGamepadButton(p->pad, p->buttonB);
+    case PADB_ZL:
+        return SDL_GetGamepadAxis(p->pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > TRIGGER_THRESHOLD;
+    case PADB_ZR:
+        return SDL_GetGamepadAxis(p->pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > TRIGGER_THRESHOLD;
+    default:
+        return SDL_GetGamepadButton(p->pad, (SDL_GamepadButton)code);
+    }
+}
+
+/* An action's keys or buttons (on any pad) held now. */
+static int ActionHeld(const bool *state, int action)
+{
+    unsigned i;
+    int k;
+
+    for (k = 0; k < 2; k++)
+        if (sBound.key[action][k] != SDL_SCANCODE_UNKNOWN && state[sBound.key[action][k]])
+            return 1;
+    for (i = 0; i < MAX_PADS; i++)
+        if (sPads[i].pad != NULL)
+            for (k = 0; k < 2; k++)
+                if (PadDown(&sPads[i], sBound.pad[action][k]))
+                    return 1;
+    return 0;
+}
+
+/* Rebinding (the Controls screen): while a capture is on, the fullscreen
+   binding does not toggle, so it can be bound like any key. */
+static bool sCapPrevKeys[SDL_SCANCODE_COUNT];
+static uint32_t sCapPrevPad[MAX_PADS];
+static int sCapturing;
+static int sFullscreenPadHeld;
+static unsigned sPolls;         /* Platform_PollEvents calls */
+static unsigned sCapturePolled; /* sPolls at the last capture call */
+static unsigned sFullscreenGeneration;
+
+/* A capture counts while the screen keeps asking: one not asked for 2 frames is
+   over (its screen was closed, a soft reset). */
+static int CaptureOn(void)
+{
+    return sCapturing && sPolls - sCapturePolled <= 2;
+}
+
+static uint32_t PadMask(const struct Pad *p)
+{
+    uint32_t mask = 0;
+    unsigned j;
+
+    for (j = 0; j < SDL_arraysize(sPadNames); j++)
+        if (PadDown(p, sPadNames[j].code))
+            mask |= 1u << j;
+    return mask;
+}
+
+static void CaptureSnapshot(void)
+{
+    int n = 0, i;
+    const bool *state = SDL_GetKeyboardState(&n);
+
+    SDL_memset(sCapPrevKeys, 0, sizeof(sCapPrevKeys));
+    for (i = 0; i < n && i < SDL_SCANCODE_COUNT; i++)
+        sCapPrevKeys[i] = state[i];
+    for (i = 0; i < MAX_PADS; i++)
+        sCapPrevPad[i] = sPads[i].pad != NULL ? PadMask(&sPads[i]) : 0;
+}
+
+void Platform_CaptureBegin(void)
+{
+    CaptureSnapshot();
+    sCapturing = 1;
+    sCapturePolled = sPolls;
+}
+
+void Platform_CaptureEnd(void)
+{
+    sCapturing = 0;
+}
+
+int Platform_CaptureInput(int *pad, char *name, size_t size)
+{
+    int n = 0, i, found = 0;
+    const bool *state = SDL_GetKeyboardState(&n);
+
+    sCapturePolled = sPolls;
+    for (i = 1; i < n && i < SDL_SCANCODE_COUNT && !found; i++)
+        if (state[i] && !sCapPrevKeys[i])
+        {
+            const char *keyName = SDL_GetScancodeName((SDL_Scancode)i);
+
+            /* (a key whose name is another's, or has no usable name, is not bound) */
+            if (KeyNameUsable(keyName) && SDL_GetScancodeFromName(keyName) == (SDL_Scancode)i)
+            {
+                *pad = 0;
+                SDL_snprintf(name, size, "%s", keyName);
+                found = 1;
+            }
+        }
+    for (i = 0; i < MAX_PADS && !found; i++)
+    {
+        uint32_t now = sPads[i].pad != NULL ? PadMask(&sPads[i]) : 0, fresh = now & ~sCapPrevPad[i];
+        unsigned j;
+
+        for (j = 0; j < SDL_arraysize(sPadNames) && !found; j++)
+            if (fresh & (1u << j))
+            {
+                *pad = 1;
+                SDL_snprintf(name, size, "%s", sPadNames[j].name);
+                found = 1;
+            }
+    }
+    CaptureSnapshot();
+    if (found)
+        sCapturing = 0;
+    return found;
+}
+
+static int sPendingScale; /* a window size asked for while fullscreen: set on leaving it */
+
+static int IsFullscreen(void)
+{
+    return sWindow != NULL && (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+static void ResizeWindow(int scale)
+{
+    SDL_Rect usable;
+
+    if (scale > MAX_SCALE)
+        scale = MAX_SCALE;
+    if (SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(sWindow), &usable))
+        while (scale > 1 && (GBA_W * scale > usable.w || GBA_H * scale > usable.h))
+            scale--;
+    if (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_MAXIMIZED)
+        SDL_RestoreWindow(sWindow);
+    SDL_SetWindowSize(sWindow, GBA_W * scale, GBA_H * scale);
+    SDL_SetWindowPosition(sWindow, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    Log("[sdl] window %dx%d (scale %d)\n", GBA_W * scale, GBA_H * scale, scale);
+}
+
+static void ToggleFullscreen(void)
+{
+    /* (the window's own state: SDL can refuse, or the system change it) */
+    sFullscreen = !IsFullscreen();
+    if (!SDL_SetWindowFullscreen(sWindow, sFullscreen))
+    {
+        Log("[sdl] fullscreen %s failed: %s\n", sFullscreen ? "on" : "off", SDL_GetError());
+        sFullscreen = IsFullscreen();
+        return;
+    }
+    if (!sFullscreen && sPendingScale > 0)
+    {
+        SDL_SyncWindow(sWindow);
+        ResizeWindow(sPendingScale);
+        sPendingScale = 0;
+    }
+}
+
+/* Display (Reforged Options' Display screen, port/reforged/reforged_display_menu.c). */
+void Platform_SetWindowScale(int scale)
+{
+    if (sWindow == NULL)
+        return;
+    if (EnvScale() > 0)
+    {
+        Log("[sdl] window size %dx ignored: FE8PC_SCALE is set\n", scale);
+        return;
+    }
+    if (scale <= 0)
+        scale = ChooseScale(); /* Auto */
+    if (IsFullscreen())
+    {
+        sPendingScale = scale; /* the size the window gets when it leaves fullscreen */
+        return;
+    }
+    ResizeWindow(scale);
+}
+
+void Platform_SetScaling(int mode, int smooth)
+{
+    SDL_RendererLogicalPresentation p = mode == 2 ? SDL_LOGICAL_PRESENTATION_STRETCH
+                                      : mode == 1 ? SDL_LOGICAL_PRESENTATION_LETTERBOX
+                                                  : SDL_LOGICAL_PRESENTATION_INTEGER_SCALE;
+
+    if (sRenderer == NULL || sTexture == NULL)
+        return;
+    if (!SDL_SetRenderLogicalPresentation(sRenderer, GBA_W, GBA_H, p))
+        Log("[sdl] SDL_SetRenderLogicalPresentation failed: %s\n", SDL_GetError());
+    SDL_SetTextureScaleMode(sTexture, smooth && mode != 0 ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+}
+
+void Platform_SetFullscreen(int on)
+{
+    if (sWindow == NULL || (on != 0) == IsFullscreen())
+        return;
+    ToggleFullscreen();
+}
+
 int Platform_PollEvents(void)
 {
     SDL_Event ev;
+    unsigned i;
+    int held = 0, k;
 
 #ifdef FE8PC_TESTBUILD
     PortSdlTest_Frame();
 #endif
+    ResolveBindings();
     while (SDL_PollEvent(&ev))
     {
         switch (ev.type)
@@ -440,11 +721,9 @@ int Platform_PollEvents(void)
             sQuit = 1;
             break;
         case SDL_EVENT_KEY_DOWN:
-            if (ev.key.scancode == SDL_SCANCODE_F11 && !ev.key.repeat)
-            {
-                sFullscreen = !sFullscreen;
-                SDL_SetWindowFullscreen(sWindow, sFullscreen);
-            }
+            if (!ev.key.repeat && !CaptureOn() && ev.key.scancode != SDL_SCANCODE_UNKNOWN &&
+                (ev.key.scancode == sBound.key[CTL_FULLSCREEN][0] || ev.key.scancode == sBound.key[CTL_FULLSCREEN][1]))
+                ToggleFullscreen();
             break;
         case SDL_EVENT_GAMEPAD_ADDED:
             OpenPad(ev.gdevice.which);
@@ -456,6 +735,17 @@ int Platform_PollEvents(void)
             break;
         }
     }
+    /* a gamepad's fullscreen binding: on the press, not while held; a button
+       already down when the bindings change (just bound to it) is not a press */
+    sPolls++;
+    for (i = 0; i < MAX_PADS; i++)
+        if (sPads[i].pad != NULL)
+            for (k = 0; k < 2; k++)
+                held |= PadDown(&sPads[i], sBound.pad[CTL_FULLSCREEN][k]);
+    if (held && !sFullscreenPadHeld && !CaptureOn() && sFullscreenGeneration == sBound.generation)
+        ToggleFullscreen();
+    sFullscreenPadHeld = held;
+    sFullscreenGeneration = sBound.generation;
     return sQuit;
 }
 
@@ -463,11 +753,18 @@ uint16_t Platform_ReadKeys(void)
 {
     const bool *state = SDL_GetKeyboardState(NULL);
     uint16_t keys = 0;
-    unsigned i, j;
+    unsigned i;
+    int a;
 
+    ResolveBindings();
+    for (a = 0; a < CTL_GBA_KEYS; a++)
+        if (ActionHeld(state, a))
+            keys |= (uint16_t)(PLATFORM_KEY_A << a);
+#ifdef FE8PC_TESTBUILD
     for (i = 0; i < SDL_arraysize(sKeyMap); i++)
         if (state[sKeyMap[i].scancode])
             keys |= sKeyMap[i].key;
+#endif
 
     for (i = 0; i < MAX_PADS; i++)
     {
@@ -476,17 +773,6 @@ uint16_t Platform_ReadKeys(void)
 
         if (pad == NULL)
             continue;
-        for (j = 0; j < SDL_arraysize(sPadMap); j++)
-            if (SDL_GetGamepadButton(pad, sPadMap[j].button))
-                keys |= sPadMap[j].key;
-        if (SDL_GetGamepadButton(pad, sPads[i].buttonA))
-            keys |= PLATFORM_KEY_A;
-        if (SDL_GetGamepadButton(pad, sPads[i].buttonB))
-            keys |= PLATFORM_KEY_B;
-        if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > TRIGGER_THRESHOLD)
-            keys |= PLATFORM_KEY_L;
-        if (SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > TRIGGER_THRESHOLD)
-            keys |= PLATFORM_KEY_R;
         x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
         y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
         if (x > STICK_THRESHOLD)
@@ -504,13 +790,9 @@ uint16_t Platform_ReadKeys(void)
 #ifdef PLATFORM_FAST_FORWARD
     {
         /* Once per frame step (frame.c UpdateLiveKeys, after the pacer). */
-        int ffHeld = state[SDL_SCANCODE_SPACE];
-
-        for (i = 0; i < MAX_PADS; i++)
-            /* the right stick's click: the left stick moves the cursor (the
-               D-pad above), so pressing it in could also tilt it */
-            if (sPads[i].pad != NULL && SDL_GetGamepadButton(sPads[i].pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK))
-                ffHeld = 1;
+        /* (the right stick's click by default: the left stick moves the cursor,
+           so pressing it in could also tilt it) */
+        int ffHeld = ActionHeld(state, CTL_FAST_FORWARD);
         int bytes = sAudio != NULL ? SDL_GetAudioStreamQueued(sAudio) : 0;
 
         if (Reforged_FastForwardFrame(ffHeld, bytes > 0 ? (unsigned)bytes / (2 * sizeof(int16_t)) : 0,
@@ -707,7 +989,7 @@ int Platform_SaveFileAtomic(const char *path, const char *tmp, const void *data,
  * no HOME), never the current folder in its place. Platform_MakeUserDir makes
  * it as SDL_GetPrefPath does (mode 0700 on Linux, each missing folder of the
  * path; CreateDirectory on Windows) when the save file goes there
- * (port/save/savefile_pc.c).
+ * (port/save/savefile_pc.c). FE8PC_USER_DIR, when set, names it instead (a test switch).
  */
 static char sUserDir[4096];
 
@@ -719,6 +1001,28 @@ const char *Platform_UserDir(void)
     if (sAsked)
         return sDir;
     sAsked = 1;
+    {
+        /* FE8PC_USER_DIR (a test switch, as in the headless build): that folder in place of the
+           per-user one, so a scripted run (port/test/tools/savechk.sh) has its own settings file
+           and never reads or writes the player's. Logged. */
+        const char *env = getenv("FE8PC_USER_DIR");
+        size_t n = env != NULL ? strlen(env) : 0;
+
+        if (n > 0 && n + 2 <= sizeof(sUserDir))
+        {
+            SDL_memcpy(sUserDir, env, n);
+            if (sUserDir[n - 1] != '/' && sUserDir[n - 1] != '\\')
+#ifdef _WIN32
+                sUserDir[n++] = '\\';
+#else
+                sUserDir[n++] = '/';
+#endif
+            sUserDir[n] = '\0';
+            Log("[sdl] per-user folder from FE8PC_USER_DIR: %s\n", sUserDir);
+            sDir = sUserDir;
+            return sDir;
+        }
+    }
 #ifdef _WIN32
     {
         char roaming[sizeof(sUserDir) - 8];

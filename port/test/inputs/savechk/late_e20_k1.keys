@@ -1,0 +1,60 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh). Hand-made from frame dumps
+# of the played build, not from a TAS.
+# Late-game save check, session 1. Start: e20_start.sav (~/fe8-chapsaves, the end save of route_e19.keys: Eirika's Chapter 20, Darkling Woods, a game save in slot 1 at the chapter's start; 31 units, supports, convoy). Title menu Restart Chapter, slot 1; the world map: L three times (the cursor to the Black Temple), A: the chapter's opening; the preparations' Save into game slot 2 (a full game block with the real army), Fight!; turn 1's player phase: the unit under the cursor (Eirika) waits, the map menu Suspend, Yes (suspend saves).
+# 8600 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu (Restart Chapter first)
+000*198
+001*2      # 1500: A, Restart Chapter: the slot list
+000*198
+001*2      # 1700: A, slot 1 (Ch. 20: Darkling Woods): the world map
+000*1398
+200*2      # 3100: L, the cursor to the next node (Lagdou Ruins)
+000*148
+200*2      # 3250: L, the next (Melkaen Coast)
+000*148
+200*2      # 3400: L, the next: the Black Temple (Chapter 20's flag)
+000*198
+001*2      # 3600: A, select it: the chapter's world-map narration
+000*698
+008*2      # 4300: Start, skip the narration
+000*898
+008*2      # 5200: Start, skip the talk: the preparations
+000*298
+040*2      # 5500: Up, wraps to Save
+000*98
+001*2      # 5600: A, Save: the save menu (slot 1)
+000*298
+080*2      # 5900: Down, slot 2 (NO DATA)
+000*98
+001*2      # 6000: A, slot 2 (Save / Cancel)
+000*198
+001*2      # 6200: A, Save: the Chapter 20 game save in slot 2
+000*298
+008*2      # 6500: Start, Fight!: turn 1's player phase
+000*398
+001*2      # 6900: A, select the unit under the cursor (Eirika)
+000*148
+001*2      # 7050: A, her own tile: the action menu
+000*148
+040*2      # 7200: Up, wraps to Wait (the last entry)
+000*98
+001*2      # 7300: A, Wait (a suspend save)
+000*198
+001*2      # 7500: A on the grey unit: the map menu
+000*98
+040*2      # 7600: Up, wraps to End
+000*98
+040*2      # 7700: Up, Suspend
+000*98
+001*2      # 7800: A, Suspend: 'Do you want to quit?'
+000*248
+001*2      # 8050: A, Yes (a suspend save)
+000*548

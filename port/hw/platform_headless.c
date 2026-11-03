@@ -52,6 +52,53 @@ uint16_t Platform_ReadKeys(void)
     return 0;
 }
 
+/* Rebindable controls: no keys to bind, any name is kept as written; nothing is
+   ever pressed. */
+int Platform_BindingValid(int pad, const char *name)
+{
+    (void)pad;
+    return name != NULL;
+}
+
+void Platform_CaptureBegin(void)
+{
+}
+
+int Platform_CaptureInput(int *pad, char *name, size_t size)
+{
+    (void)pad;
+    (void)name;
+    (void)size;
+    return 0;
+}
+
+void Platform_CaptureEnd(void)
+{
+}
+
+/* Display: no window. */
+void Platform_SetWindowScale(int scale)
+{
+    (void)scale;
+}
+
+void Platform_SetScaling(int mode, int smooth)
+{
+    (void)mode;
+    (void)smooth;
+}
+
+void Platform_SetFullscreen(int on)
+{
+    (void)on;
+}
+
+void Platform_CanonicalName(int pad, const char *name, char *out, size_t size)
+{
+    (void)pad;
+    snprintf(out, size, "%s", name != NULL ? name : "");
+}
+
 /* Audio: no device. The samples are still made every VBlank; FE8PC_AUDIO_DUMP
    writes them to files (port/audio/fifo_pc.c). */
 int Platform_OpenAudio(uint32_t rateHz, uint32_t channels)

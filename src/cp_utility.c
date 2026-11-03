@@ -1581,7 +1581,7 @@ int AiCountAlliedUnitsSeekingHealingInRange(void) {
                 continue;
             }
 
-            if (GetUnit(gBmMapUnit[iy][ix])->aiFlags & AI_UNIT_FLAG_0) {
+            if (RFO_AI_HEAL_WANTS(GetUnit(gBmMapUnit[iy][ix]), GetUnit(gBmMapUnit[iy][ix])->aiFlags & AI_UNIT_FLAG_0)) {
                 count++;
             }
         }

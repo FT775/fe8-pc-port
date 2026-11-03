@@ -257,10 +257,49 @@ static void OnFault(int sig, siginfo_t *info, void *ctx)
 }
 
 /*
- * The command line: fe8pc [--save PATH | --save=PATH | --no-save] [--] [ROM].
+ * The command line: fe8pc [--save PATH | --save=PATH | --no-save] [settings] [--] [ROM].
  * ROM defaults to baserom.gba (port/win32 also looks next to the exe). The
  * save options choose the player's save file (port/save/savefile_pc.c).
+ * Settings, for this run over the settings file (the played builds' Reforged
+ * Options, port/reforged/reforged_settings.c; a test build has none):
+ *   --set KEY=VALUE (or --set=KEY=VALUE) any line of reforged-options.txt
+ *   --scale N        window_size=N (1-8; 0 auto)
+ *   --fullscreen     fullscreen=1;  --windowed: fullscreen=0
+ *   --seed X         randomizer_seed=X (the next New Game's)
+ *   --randomizer     randomizer=1
  */
+static char sArgSetBuf[PORT_ARG_SETS][64];
+static struct PortArgs sKeptArgs;
+
+int PortArgSettingCount(void)
+{
+    return sKeptArgs.setCount;
+}
+
+const char *PortArgSetting(int i)
+{
+    return i >= 0 && i < sKeptArgs.setCount ? sKeptArgs.sets[i] : NULL;
+}
+
+/* A setting for args: as given, or made from a short form (fmt with value). */
+static int AddArgSet(struct PortArgs *args, const char *fmt, const char *value, const char **error)
+{
+    if (args->setCount >= PORT_ARG_SETS)
+    {
+        *error = "too many settings on the command line";
+        return -1;
+    }
+    if (fmt == NULL)
+        args->sets[args->setCount] = value;
+    else
+    {
+        snprintf(sArgSetBuf[args->setCount], sizeof(sArgSetBuf[0]), fmt, value != NULL ? value : "");
+        args->sets[args->setCount] = sArgSetBuf[args->setCount];
+    }
+    args->setCount++;
+    return 0;
+}
+
 int PortParseArgs(int argc, char **argv, struct PortArgs *args, const char **error)
 {
     int i, options = 1;
@@ -273,6 +312,41 @@ int PortParseArgs(int argc, char **argv, struct PortArgs *args, const char **err
 
         if (options && strcmp(a, "--") == 0)
             options = 0;
+        else if (options && (strcmp(a, "--set") == 0 || strcmp(a, "--scale") == 0 || strcmp(a, "--seed") == 0))
+        {
+            int isSet = strcmp(a, "--set") == 0, isScale = strcmp(a, "--scale") == 0;
+
+            if (i + 1 >= argc || argv[i + 1][0] == '\0' || (isSet && strchr(argv[i + 1], '=') == NULL))
+            {
+                *error = isSet ? "--set needs KEY=VALUE" : isScale ? "--scale needs a number" : "--seed needs a seed";
+                return -1;
+            }
+            i++;
+            if (AddArgSet(args, isSet ? NULL : isScale ? "window_size=%s" : "randomizer_seed=%s", argv[i], error) != 0)
+                return -1;
+        }
+        else if (options && strncmp(a, "--set=", 6) == 0)
+        {
+            if (strchr(a + 6, '=') == NULL)
+            {
+                *error = "--set= needs KEY=VALUE";
+                return -1;
+            }
+            if (AddArgSet(args, NULL, a + 6, error) != 0)
+                return -1;
+        }
+        else if (options && (strncmp(a, "--scale=", 8) == 0 || strncmp(a, "--seed=", 7) == 0))
+        {
+            if (AddArgSet(args, a[3] == 'c' ? "window_size=%s" : "randomizer_seed=%s", strchr(a, '=') + 1, error) != 0)
+                return -1;
+        }
+        else if (options && (strcmp(a, "--fullscreen") == 0 || strcmp(a, "--windowed") == 0 ||
+                             strcmp(a, "--randomizer") == 0))
+        {
+            if (AddArgSet(args, a[2] == 'f' ? "fullscreen=1" : a[2] == 'w' ? "fullscreen=0" : "randomizer=1", NULL,
+                    error) != 0)
+                return -1;
+        }
         else if (options && strcmp(a, "--save") == 0)
         {
             if (i + 1 >= argc || argv[i + 1][0] == '\0')
@@ -316,10 +390,11 @@ int PortParseArgs(int argc, char **argv, struct PortArgs *args, const char **err
 
 /* The Windows window build also takes --console (port/win32/gui/gui_win32.c
    takes it off the command line before main). */
+#define USAGE_SETTINGS "[--set KEY=VALUE]... [--scale N] [--fullscreen | --windowed] [--seed X] [--randomizer]"
 #ifdef FE8PC_WINGUI
-#define USAGE_OPTIONS "[--save PATH | --no-save] [--console] [ROM]"
+#define USAGE_OPTIONS "[--save PATH | --no-save] [--console] " USAGE_SETTINGS " [ROM]"
 #else
-#define USAGE_OPTIONS "[--save PATH | --no-save] [ROM]"
+#define USAGE_OPTIONS "[--save PATH | --no-save] " USAGE_SETTINGS " [ROM]"
 #endif
 
 int main(int argc, char **argv)
@@ -335,6 +410,7 @@ int main(int argc, char **argv)
         return 1;
     }
     romPath = args.rom != NULL ? args.rom : "baserom.gba";
+    sKeptArgs = args; /* the settings, for reforged_settings.c (sArgSetBuf stays put) */
 
     if (limit != NULL)
         gPortFrameLimit = (uint32_t)strtoul(limit, NULL, 0);

@@ -23,10 +23,13 @@
  * fixes'), then the submenus. Each option
  * acts through its own file in port/reforged (danger zone, items, fast-forward,
  * casual, growths, HP bars); at its default its hooks do nothing. "Cheats >"
- * opens the Cheats screen (reforged_cheats_menu.c). "Option sets >", a planned
- * submenu that opens nothing yet, is hidden for the first release
- * (RFO_SHOW_OPTION_SETS 0: 10 rows; port-rfo-polish, U6 in
- * port-plan/CHOICES-2026-10-30.md).
+ * opens the Cheats screen (reforged_cheats_menu.c), "Randomizer >" the
+ * Randomizer screen (reforged_randomizer_menu.c: the next New Game's seeded
+ * randomizer settings), "Game fixes >" the Game fixes screen
+ * (reforged_gamefixes_menu.c: optional changes to the original's rules), "Controls >" the Controls screen
+ * (reforged_controls_menu.c: keys and gamepad buttons), "Display >" the Display
+ * screen and "Option sets >" the Option sets screen (reforged_display_menu.c:
+ * window size and scaling; sets of options saved and loaded). 15 rows.
  * Keys: Up/Down move, Left/Right or A switch a row, B goes back (and writes
  * the settings file if a value changed). The frame shows 6 rows; with more,
  * the list scrolls one row at a time with the cursor (proc->top).
@@ -46,9 +49,10 @@
 
 #include "port_reforged.h"
 
-/* 1 shows the "Option sets >" row again, last on the screen (it opens
-   nothing: the bundles are not built); 0 hides it (port-rfo-polish, U6). */
-#define RFO_SHOW_OPTION_SETS 0
+/* 1 shows the "Option sets >" row, last on the screen (the Option sets screen,
+   reforged_display_menu.c); 0 hides it (as the first release did, port-rfo-polish,
+   U6, before the sets were built). */
+#define RFO_SHOW_OPTION_SETS 1
 
 enum {
     /* rows 0 to RFO_MAP_HPBARS are this screen's options, then the submenus; the
@@ -56,16 +60,22 @@ enum {
        the growth-rates and map HP bars rows, port-rfo-int5; the original-game
        bug fixes row, RFO_BUG_FIXES, before HP bars, port-retailfix) */
     RFO_ROW_SWITCHES = RFO_MAP_HPBARS + 1,
-    RFO_ROW_COUNT = RFO_ROW_SWITCHES + 1 + RFO_SHOW_OPTION_SETS,
+    RFO_ROW_COUNT = RFO_ROW_SWITCHES + 5 + RFO_SHOW_OPTION_SETS,
     RFO_ROWS_SHOWN = 6, /* the list frame holds 6 rows; more scroll (proc->top) */
     /* Text tiles (InitText, from VRAM 0x6001000): title 12x2, help 24x2, each
-       row's label 14x2 and each option's values 10x2, so 48 tiles per option
-       row (28 for a submenu row), but "HP bars & warnings", whose four values
-       take 13x2 (RFO_HPB_VALUE_W, port-rfo-int6): 538 tiles with the bug-fixes
-       row (port-retailfix), up to 0x6005340, below the BG0 map at 0x6006000
-       (102 tiles left: room for 2 more option rows); with RFO_SHOW_OPTION_SETS
-       566 tiles, up to 0x60056C0 (74 left). */
+       option row's label 14x2 and values 10x2 (48 tiles), but "HP bars &
+       warnings", whose four values take 13x2 (RFO_HPB_VALUE_W, port-rfo-int6);
+       a submenu row's label 9x2 (RFO_SUBMENU_W: 18 tiles; "Option sets >" is 56
+       pixels): 9 option rows and 6 submenu rows, 618 tiles, up to 0x6005D40,
+       below the BG0 map at 0x6006000 (22 tiles left: one more submenu row
+       fits, not an option row). */
+    RFO_SUBMENU_W = 9,
     RFO_ROW_CHEATS = RFO_ROW_SWITCHES, /* "Cheats >" (the Cheats block) */
+    RFO_ROW_RANDOMIZER = RFO_ROW_SWITCHES + 1, /* "Randomizer >" (the Randomizer block) */
+    RFO_ROW_GAME_FIXES = RFO_ROW_SWITCHES + 2, /* "Game fixes >" (reforged_gamefixes_menu.c) */
+    RFO_ROW_CONTROLS = RFO_ROW_SWITCHES + 3, /* "Controls >" (reforged_controls_menu.c) */
+    RFO_ROW_DISPLAY = RFO_ROW_SWITCHES + 4, /* "Display >" (reforged_display_menu.c) */
+    RFO_ROW_OPTION_SETS = RFO_ROW_SWITCHES + 5, /* "Option sets >" (reforged_display_menu.c) */
 
     RFO_LIST_TOP = 3,   /* tile row of the first entry */
     RFO_LABEL_X = 4,    /* tile column of the labels */
@@ -102,6 +112,10 @@ static const char *const sRowLabels[RFO_ROW_COUNT] = {
     "HP bars & warnings",
     /* the submenus stay last */
     "Cheats >",
+    "Randomizer >",
+    "Game fixes >",
+    "Controls >",
+    "Display >",
 #if RFO_SHOW_OPTION_SETS
     "Option sets >",
 #endif
@@ -122,8 +136,12 @@ static const char *const sRowHelp[RFO_ROW_COUNT] = {
     /* map HP bars block */
     "Bars: hurt units. Warnings: ! on threats.",
     "Gold, experience, growths.",
+    "Seeded shuffles for the next New Game.",
+    "Rule fixes for the next New Game.",
+    "Choose your keys and gamepad buttons.",
+    "Window size, scaling, fullscreen.",
 #if RFO_SHOW_OPTION_SETS
-    "Named bundles of options.",
+    "Save or load sets of options.",
 #endif
 };
 
@@ -272,7 +290,7 @@ static void ReforgedMenu_Init(struct ReforgedMenuProc *proc)
 
     for (i = 0; i < RFO_ROW_COUNT; i++)
     {
-        InitText(&sRowText[i], 14);
+        InitText(&sRowText[i], i < RFO_ROW_SWITCHES ? 14 : RFO_SUBMENU_W);
         ClearText(&sRowText[i]);
         Text_InsertDrawString(&sRowText[i], 0, TEXT_COLOR_SYSTEM_WHITE, sRowLabels[i]);
     }
@@ -341,6 +359,32 @@ static void ReforgedMenu_Loop(struct ReforgedMenuProc *proc)
     }
     /* --- end of the Cheats block --- */
 
+    /* --- Randomizer submenu: A opens it (reforged_randomizer_menu.c), as Cheats --- */
+    if (row == RFO_ROW_RANDOMIZER && (gKeyStatusPtr->newKeys & A_BUTTON))
+    {
+        PlaySoundEffect(SONG_SE_SYS_WINDOW_SELECT1);
+        StartReforgedRandomizerScreen(proc);
+        return;
+    }
+    /* --- end of the Randomizer block --- */
+
+    /* Game fixes, Controls, Display and Option sets submenus: A opens them, as Cheats */
+    if (row >= RFO_ROW_GAME_FIXES && (gKeyStatusPtr->newKeys & A_BUTTON))
+    {
+        PlaySoundEffect(SONG_SE_SYS_WINDOW_SELECT1);
+        if (row == RFO_ROW_GAME_FIXES)
+            StartReforgedGameFixesScreen(proc);
+        else if (row == RFO_ROW_CONTROLS)
+            StartReforgedControlsScreen(proc);
+        else if (row == RFO_ROW_DISPLAY)
+            StartReforgedDisplayScreen(proc);
+#if RFO_SHOW_OPTION_SETS
+        else if (row == RFO_ROW_OPTION_SETS)
+            StartReforgedOptionSetsScreen(proc);
+#endif
+        return;
+    }
+
     if (row < RFO_ROW_SWITCHES)
     {
         int want = -1, n, i, cur = Reforged_GetOption(row);
@@ -400,9 +444,9 @@ void *StartReforgedOptionsScreen(void *parent)
 }
 
 /* --- Cheats submenu (port-rfo-cheats) --- */
-/* Called by the Cheats screen (a blocking child of this proc) behind its fade
-   out: draws this screen again as it was (the child reused BG0/BG1 and the
-   text tiles), with the cursor kept on "Cheats >". */
+/* Called by the Cheats and Randomizer screens (blocking children of this proc)
+   behind their fade out: draws this screen again as it was (the child reused
+   BG0/BG1 and the text tiles), with the cursor kept on the submenu's row. */
 void Reforged_MenuRedraw(void *menuProc)
 {
     struct ReforgedMenuProc *proc = menuProc;

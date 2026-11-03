@@ -34,6 +34,26 @@ enum ReforgedOption {
     RFO_BUG_FIXES,          /* "Original-game bug fixes": 1 on (the default), 0 the original's hangs */
     /* map HP bars block (port/reforged/reforged_hpbars.c) */
     RFO_MAP_HPBARS,         /* "HP bars & warnings": RFO_HPBARS_* (0 off, the default); display-only */
+    /* --- Display submenu (port/reforged/reforged_display_menu.c), display-only --- */
+    RFO_WINDOW_SCALE,       /* "Window size": 0 auto [0] (FE8PC_SCALE, or 3x if it fits), 1-8 times 240x160 */
+    RFO_SCALE_MODE,         /* "Scaling": 0 pixel-perfect [0] (whole numbers, black bars), 1 fill (keeps the
+                               shape), 2 stretch */
+    RFO_SCALE_SMOOTH,       /* "Smoothing": 0 sharp [0], 1 smooth (filtered; only for fill and stretch) */
+    RFO_FULLSCREEN,         /* "Fullscreen": 0 [0], 1 (the window starts fullscreen; F11 still toggles) */
+    /* --- Game fixes submenu (port/reforged/reforged_gamefixes*.c): changes to the original's rules,
+       each OFF (0) by default. Like the Randomizer's, these are the settings for the NEXT new game:
+       a new game copies them into the run (Reforged_RunFix), each save records the run's values
+       (the save mark's block line) and loading a save puts back its own; a save that records none
+       plays with every fix off. --- */
+    RFO_FIX_EARLY_EXP,      /* "Early kill EXP": a stronger kill never gives less (Prologue-Ch8) */
+    RFO_FIX_PROMO_LEVELS,   /* "Promoted enemies": pre-promotion levels in the base class (harder) */
+    RFO_FIX_AI_HEAL,        /* "AI healing": enemy/NPC healers skip full-HP units */
+    RFO_FIX_CANTO,          /* "Canto after Trade": kept after backing out of Trade/Supply */
+    RFO_FIX_DEVIL,          /* "Devil at high Luck": Luck 32+ never backfires (not 100%) */
+    RFO_FIX_CH15_DROP,      /* "Ch15 staff drop": the Troubadour drops its status staff, not Mend */
+    RFO_FIX_FIRST = RFO_FIX_EARLY_EXP,
+    RFO_FIX_LAST = RFO_FIX_CH15_DROP,
+    /* --- end of the Game fixes block --- */
 
     /* --- Cheats submenu (port/reforged/reforged_cheats*.c), each OFF (0) by default --- */
     RFO_CHEAT_GOLD,         /* "Infinite gold": 0 off, 1 on */
@@ -41,8 +61,66 @@ enum ReforgedOption {
     RFO_CHEAT_EXP,          /* "EXP gained": 0 x1, 1 x2, 2 x3 */
     /* --- end of the Cheats block --- */
 
+    /* --- Randomizer submenu (port/reforged/reforged_rando*.c, reforged_randomizer_menu.c) ---
+       Modelled on the Universal FE Randomizer (UFER, MIT; ideas only, no code). These are the
+       settings for the NEXT new game: a new game copies them (and the seed, Reforged_GetRandoSeed)
+       into the run, and the run's copy is saved with each save block in the save mark
+       (<blk>_rando), so a run keeps its own randomization whatever the menu says later.
+       Every value is a u8. Defaults in brackets; "chance" rows are percents, 0 = off. */
+    RFO_RANDO_FIRST,
+    RFO_RANDO_ENABLE = RFO_RANDO_FIRST, /* "Randomizer": 0 off [0], 1 on */
+    /* Stats */
+    RFO_RANDO_GROWTHS,      /* "Growths": 0 off [0], 1 redistribute, 2 delta, 3 full random */
+    RFO_RANDO_GROWTH_VAR,   /* "Growth variance": redistribute's variance / delta's max delta, 0-100 step 5 [30] */
+    RFO_RANDO_GROWTH_MIN,   /* "Growth min": 0-100 step 5 [5] */
+    RFO_RANDO_GROWTH_MAX,   /* "Growth max": 0-255 step 5 [80] */
+    RFO_RANDO_GROWTH_HP,    /* "Adjust HP growths": 0 [0], 1 */
+    RFO_RANDO_BASES,        /* "Bases": 0 off [0], 1 redistribute, 2 delta */
+    RFO_RANDO_BASE_VAR,     /* "Base variance": 1-10 [5] (delta: max delta) */
+    RFO_RANDO_MOV,          /* "Class movement": 0 [0], 1 (4-8, promoted never lower) */
+    RFO_RANDO_CON,          /* "Constitution": 0 [0], 1 (variance 3, min 3) */
+    RFO_RANDO_AFFINITY,     /* "Affinity": 0 [0], 1 */
+    /* Classes */
+    RFO_RANDO_CLASSES,      /* "Player classes": 0 [0], 1 */
+    RFO_RANDO_LORDS,        /* "Include lords": 0 [0], 1 (Eirika keeps swords, Ephraim lances) */
+    RFO_RANDO_THIEVES,      /* "Include thieves": 0 [0], 1 */
+    RFO_RANDO_SPECIAL,      /* "Include dancer": 0 [0], 1 (Tethys; Myrrh never changes) */
+    RFO_RANDO_MONSTERS,     /* "Monster classes": 0 [0], 1 (players may become monsters) */
+    RFO_RANDO_EVENLY,       /* "Assign evenly": 0 [0], 1 */
+    RFO_RANDO_GENDER,       /* "Match gender": 0, 1 [1] (male/female class twins) */
+    RFO_RANDO_CLASS_GROWTHS,/* "Class growths": 0 keep [0], 1 transfer personal growths */
+    RFO_RANDO_CLASS_BASES,  /* "Class bases": 0 retain final [0], 1 retain personal */
+    RFO_RANDO_PALETTES,     /* "Keep colours": 0, 1 [1] (a character's battle colours on a new class) */
+    /* Recruitment */
+    RFO_RANDO_RECRUIT,      /* "Recruitment": 0 [0], 1 (who joins where is shuffled) */
+    RFO_RANDO_RECRUIT_CLASS,/* "Recruit class": 0 their own [0], 1 the slot's */
+    RFO_RANDO_RECRUIT_STATS,/* "Recruit stats": 0 autolevel [0], 1 the slot's */
+    RFO_RANDO_RECRUIT_GENDER,/* "Cross-gender": 0 [0], 1 */
+    /* Enemies */
+    RFO_RANDO_BOSSES,       /* "Boss classes": 0 [0], 1 */
+    RFO_RANDO_ENEMIES,      /* "Enemy classes": 0 [0], 1 (generic enemies) */
+    RFO_RANDO_ENEMY_GROWTH, /* "Enemy growths": 0 off [0], 1 flat buff, 2 scaling buff */
+    RFO_RANDO_ENEMY_GROWTH_AMT, /* "Enemy buff": 0-100 step 5 [10] */
+    RFO_RANDO_BOSS_BUFF,    /* "Boss stats": 0 off [0], 1 linear, 2 ease in/out */
+    RFO_RANDO_BOSS_BUFF_AMT,/* "Boss max boost": 1-20 [5] */
+    RFO_RANDO_ENEMY_WEAPONS,/* "Better enemy weapons": chance 0-100 step 5 [0] */
+    /* Items */
+    RFO_RANDO_W_MIGHT,      /* "Weapon might": 0 [0], 1 (+/-3, 0-23) */
+    RFO_RANDO_W_HIT,        /* "Weapon hit": 0 [0], 1 (+/-20, 55-100) */
+    RFO_RANDO_W_WEIGHT,     /* "Weapon weight": 0 [0], 1 (+/-5, 2-20) */
+    RFO_RANDO_W_USES,       /* "Weapon uses": 0 [0], 1 (+/-20, 15-60) */
+    RFO_RANDO_W_EFFECTS,    /* "Weapon traits": chance 0-100 step 5 [0] */
+    RFO_RANDO_REWARDS,      /* "Rewards": 0 [0], 1 (chests, villages, houses, gifts) */
+    RFO_RANDO_DROPS,        /* "Enemy drops": chance 0-100 step 5 [0] */
+    RFO_RANDO_SHOPS,        /* "Shops": 0 [0], 1 */
+    /* Challenge */
+    RFO_RANDO_NUZLOCKE,     /* "Nuzlocke": 0 [0], 1 (no casual retreat; a death stays through any reset) */
+    RFO_RANDO_LAST = RFO_RANDO_NUZLOCKE,
+    /* --- end of the Randomizer block --- */
+
     RFO_COUNT
 };
+#define RFO_RANDO_COUNT (RFO_RANDO_LAST - RFO_RANDO_FIRST + 1)
 
 /* A switch is 0 (off) or 1 (on); RFO_UNBREAKABLE: 0 off, 1 your units (blue),
    2 everyone; RFO_FF_SPEED 2, 3, 4 or 8; RFO_MAP_HPBARS 0 to 3 (RFO_HPBARS_*,
@@ -141,6 +219,8 @@ void Reforged_SaveBlockCopied(int from, int to);
 void Reforged_SaveBlockCleared(int block);
 void Reforged_SaveMarkLoad(const char *savPath, int loadedOther);
 void Reforged_SaveMarkWritten(const char *savPath);
+/* The .sav the game writes (the save mark's own writes between .sav writes go beside it). */
+void Reforged_SaveMarkSetWritePath(const char *savPath);
 
 /* --- Growth rates on Select (port/reforged/reforged_growths.c), called from
    src/statscreen.c: StartStatScreen (Reset), DisplayPage after the page is
@@ -231,9 +311,80 @@ void Reforged_MapHpBarsVBlank(void);
      for ever.
    - Reforged_FixPierceFreeze: Pierce's C07 branch in a battle animation (src/banim-main.c): act as Sure Shot's
      (the right-hand anims' state3 and state put back after the original's four statements), on every Pierce
-     strike, so it also paces hits that never hang (results, RNG and save the same apart from the play clock). */
+     strike, so it also paces hits that never hang (results, RNG and save the same apart from the play clock).
+   - Reforged_FixDancerWeaponBanim (port/reforged/reforged_gamefixes.c; include/anime.h
+     BANIM_DANCER_WEAPON_MAPANIM): a Dancer fighting with a weapon gets the map animation, as her dance
+     animation hangs when she has two rounds in a row (results, RNG and save the same). */
 int Reforged_FixEventUnitGone(int cmd, int pid);
 int Reforged_FixPierceFreeze(void);
 /* --- end of the original-game bug fixes block --- */
+
+/* --- Game fixes (port/reforged/reforged_gamefixes.c; RFO_FIX_*, each off by default) ---
+   The game calls them through same-line macros (include/bmbattle.h, bmunit.h, cp_common.h,
+   playerphase.h; their prototypes are there). The Game fixes screen
+   (reforged_gamefixes_menu.c) is a blocking child of the options screen. With FE8PC_RFO_CHECK,
+   Reforged_GameFixesSelfCheck checks each on scratch units (called with the cheats' check). */
+void *StartReforgedGameFixesScreen(void *parent);
+void Reforged_GameFixesSelfCheck(void);
+/* The run's game fixes: Reforged_RunFix(RFO_FIX_*) is the value the game being played was started
+   with (0 before any game is loaded). Reforged_GameFixesNewGame (src/bmsave.c WriteNewGameSave,
+   through Reforged_RandoNewGame): the screen's values become the run's. Reforged_SetRunFix: a loaded
+   save block's recorded value (reforged_savemark.c), or a test's. */
+int Reforged_RunFix(int id);
+void Reforged_SetRunFix(int id, int value);
+void Reforged_GameFixesNewGame(void);
+/* --- end of the Game fixes block --- */
+
+/* --- Randomizer (port/reforged/reforged_rando*.c; the options are RFO_RANDO_*, above) ---
+   The menu's settings are for the next new game. The seed is a u32 of its own in the settings
+   file (randomizer_seed); 0 means "pick one at New Game" (from the host clock, never the game's
+   RNG), which is then written back so the menu shows it. The game hooks are the RANDO_* macros
+   at the end of include/bmunit.h; the other entry points are here. */
+unsigned Reforged_GetRandoSeed(void);
+void Reforged_SetRandoSeed(unsigned seed);
+/* A seed from the host clock (never 0, never the game's RNG). */
+unsigned Reforged_NewRandoSeed(void);
+/* The Randomizer screen, a blocking child of the options screen (as the Cheats screen is). */
+void *StartReforgedRandomizerScreen(void *parent);
+/* The Controls screen (port/reforged/reforged_controls_menu.c; the bindings:
+   port/include/port_controls.h), a blocking child of the options screen. */
+void *StartReforgedControlsScreen(void *parent);
+/* The Display screen (port/reforged/reforged_display_menu.c), and the display options
+   applied to the window (option: the one that changed; -1 all, after the settings file). */
+void *StartReforgedDisplayScreen(void *parent);
+void Reforged_ApplyDisplay(int option);
+/* Option sets (reforged_settings.c; their screen: reforged_display_menu.c): the options
+   (not the controls or the Display options) saved to / loaded from option-set-N.txt
+   in the per-user folder, N 1-9. Load: 0 when there is no such set (nothing changes);
+   a loaded set is written to the settings file at once. */
+void *StartReforgedOptionSetsScreen(void *parent);
+int Reforged_OptionSetExists(int n);
+int Reforged_SaveOptionSet(int n);
+int Reforged_LoadOptionSet(int n);
+/* src/bmsave.c WriteNewGameSave, before the save mark: starts the run's randomization from the
+   menu's settings (or none), from the vanilla tables. */
+void Reforged_RandoNewGame(void);
+/* src/main.c, right after Reforged_LoadSettings: keeps the vanilla tables (the snapshot every
+   apply starts from). With FE8PC_RANDO_CHECK set it also runs the self-test (many seeds, every
+   option on, the results checked; logged), and exits when it is "exit". */
+void Reforged_RandoBoot(void);
+/* The run being played: 1 when it is randomized; its seed (0 when not). */
+int Reforged_RandoActive(void);
+unsigned Reforged_RandoActiveSeed(void);
+/* "Nuzlocke" (port/reforged/reforged_rando_nuzlocke.c): 1 when the run being played has
+   it (casual mode's retreat is then off). Reforged_RandoUnitDied: a unit is about to
+   die (casual mode's hooks, the arena); a blue one is put in the run's graveyard, written
+   to the save mark at once. Reforged_RandoBlockLoaded (Reforged_SaveBlockRead, after a
+   block's units are in): the run's dead are dead again. */
+int Reforged_RandoNuzlocke(void);
+void Reforged_RandoUnitDied(struct Unit *unit);
+void Reforged_RandoBlockLoaded(void);
+/* The save mark's Nuzlocke graveyards (reforged_savemark.c), one per run (seed and the
+   save's playthrough id): the dead pids (how many, in out); add one (the mark is
+   written again at once); clear one (a new game). */
+int Reforged_GraveGet(unsigned seed, int play, unsigned char *out, int max);
+void Reforged_GraveAdd(unsigned seed, int play, int pid);
+void Reforged_GraveClear(unsigned seed, int play);
+/* --- end of the Randomizer block --- */
 
 #endif /* GUARD_PORT_REFORGED_H */

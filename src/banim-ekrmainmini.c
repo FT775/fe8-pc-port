@@ -348,7 +348,7 @@ void InitMainMiniAnim(struct AnimBuffer * pAnimBuf)
     if (pAnimBuf->charPalId != -1)
     {
         struct BattleAnimCharaPal * cbap = &character_battle_animation_palette_table[pAnimBuf->charPalId];
-        LZ77UnCompWram(cbap->pal, pAnimBuf->unk_20);
+        LZ77UnCompWram(RANDO_CHARA_PAL(cbap->pal, pAnimBuf->charPalId), pAnimBuf->unk_20);
     }
 
     CpuFastSet(pAnimBuf->unk_20 + pAnimBuf->genericPalId * 0x20, pAnimBuf->oam2Pal * 0x10 + gPaletteBuffer + 0x100, 8);
@@ -464,7 +464,7 @@ void EkrMainMini_UpdateAnim(struct AnimBuffer * pAnimBuf)
     LZ77UnCompWram(ba[pAnimBuf->animId].pal, pAnimBuf->unk_20);
 
     if (pAnimBuf->charPalId != -1)
-        LZ77UnCompWram(cbapt[pAnimBuf->charPalId].pal, pAnimBuf->unk_20);
+        LZ77UnCompWram(RANDO_CHARA_PAL(cbapt[pAnimBuf->charPalId].pal, pAnimBuf->charPalId), pAnimBuf->unk_20);
 
     CpuFastCopy(pAnimBuf->unk_20 + pAnimBuf->genericPalId * 0x20, pAnimBuf->oam2Pal * 0x10 + gPaletteBuffer + 0x100, 0x20);
 

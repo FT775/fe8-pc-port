@@ -306,4 +306,18 @@ void AiMapFloodRangeFrom(int, int, struct Unit*);
 // ??? AiTryDKSummon(???);
 // ??? AiDecideDKSummon(???);
 
+/*
+ * PC played builds only: Reforged Options' "Game fixes" (port/reforged/reforged_gamefixes.c), OFF by default.
+ * RFO_AI_HEAL_WANTS, src/cp_staff.c AiStaffHealMendRecover / AiStaffPhysicRescue and src/cp_utility.c
+ * AiCountAlliedUnitsSeekingHealingInRange (Fortify): a unit at full HP is no healing target. The original
+ * flags every player unit with a usable tome as "seeking healing" (AI_UNIT_FLAG_0) and never checks its HP.
+ * Everywhere else, and in every other build, the condition itself.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_FixAiHealFullHp(struct Unit *unit, int wants);
+#define RFO_AI_HEAL_WANTS(unit, cond) Reforged_FixAiHealFullHp((unit), (cond))
+#else
+#define RFO_AI_HEAL_WANTS(unit, cond) (cond)
+#endif
+
 #endif // GUARD_CP_COMMON_H

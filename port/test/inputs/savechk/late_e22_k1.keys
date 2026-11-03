@@ -1,0 +1,40 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh). Hand-made from frame dumps
+# of the played build, not from a TAS.
+# Late-game save check, session 1. Start: e22_start.sav (~/fe8-chapsaves; mGBA, route_e21.keys
+# after 60,394 ticks: Eirika's route final chapter, turn 1, a player-phase suspend; the real army).
+# The title menu offers Resume Chapter; the suspend is past the preparations, so the game starts
+# straight on the map (no preparation Save). Resume (writes the resumed state back), Eirika waits
+# in place (a suspend save), the map menu on grey Eirika, Suspend, Yes (a suspend save).
+# 3800 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu
+000*198
+001*2      # 1500: A, Resume Chapter
+000*198
+001*2      # 1700: A, resume (the map from 1,800 on the PC)
+000*298
+001*2      # 2000: A, select Eirika (under the cursor)
+000*148
+001*2      # 2150: A, her own tile: the action menu (Item, Supply, Wait)
+000*148
+040*2      # 2300: Up, wraps to Wait
+000*148
+001*2      # 2450: A, Wait (a suspend save)
+000*198
+001*2      # 2650: A on grey Eirika: the map menu
+000*148
+040*2      # 2800: Up, wraps to End
+000*148
+040*2      # 2950: Up, Suspend
+000*148
+001*2      # 3100: A, Suspend: 'Do you want to quit?'
+000*248
+001*2      # 3350: A, Yes (a suspend save)
+000*448

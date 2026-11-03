@@ -239,4 +239,23 @@ int Reforged_FixPierceFreeze(void);
 #define BANIM_PIERCE_KEEP_RIGHT_END()
 #endif
 
+/*
+ * A Dancer that fights with a weapon (any tome: the dark monster tomes have no rank, so the enemy control
+ * glitch or a randomized gift can hand Tethys one) gets her class's only attack animation, the dance
+ * (danf_da1). None of its attack modes switches her animation to her next round (no C0D, 0x8500000D), so when
+ * she has two rounds in a row (she doubles a foe that does not counter) the battle waits for ever in her
+ * kneeling end pose; reproduced on the PC and on mGBA with the retail-built ROM (2026-11-03). In the PC played
+ * builds, src/banim-ekrbattleintro.c's battle-animation check (the PC branch, after SetBattleUnscripted)
+ * then plays the map animation instead, with Reforged Options "Original-game bug fixes" on (the default):
+ * the battle's results are the same (no animation draws a game random number). Empty in every other build.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+struct Unit;
+int Reforged_FixDancerWeaponBanim(struct Unit *unit1, int weapon1, struct Unit *unit2, int weapon2);
+#define BANIM_DANCER_WEAPON_MAPANIM(unit1, weapon1, unit2, weapon2) \
+    if (Reforged_FixDancerWeaponBanim((unit1), (weapon1), (unit2), (weapon2))) return false;
+#else
+#define BANIM_DANCER_WEAPON_MAPANIM(unit1, weapon1, unit2, weapon2)
+#endif
+
 #endif // GUARD_ANIME_H

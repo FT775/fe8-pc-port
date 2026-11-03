@@ -294,7 +294,7 @@ void StartShopScreen(struct Unit * unit, const u16 * inventory, u8 shopType, Pro
     proc->shopType = shopType;
     proc->unit = unit;
 
-    shopItems = gDefaultShopInventory;
+    RANDO_HOOK_SHOP(inventory, shopType) shopItems = gDefaultShopInventory;
     if (inventory != 0)
         shopItems = inventory;
 

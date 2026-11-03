@@ -1,0 +1,96 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh). Hand-made from frame dumps
+# of the played build, not from a TAS.
+# Late-game save check, session 1. Start: i_clear.sav (Ephraim's REAL clear save, game slot 1 'Epilogue'; first 32 KiB FNV-1a 5e8e92c8). The title menu (Restart Chapter): Extras, Map, slot 1: the post-game world map (Ephraim at the Black Temple); the cursor nudged off the node, A: the world map menu, Save, slot 2 (a game save: 'Creature Campaign'); L 14 times: the cursor to the Tower of Valni, A: Ephraim walks there; its preparations, Start: floor 1 (index 36), the first player phase; A on an empty square: the map menu, Suspend, Yes (a suspend save).
+# 7000 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu (Restart Chapter)
+000*198
+040*2      # 1500: Up, wraps to Extras
+000*98
+001*2      # 1600: A, Extras
+000*98
+080*2      # 1700: Down, Extras: the second entry
+000*98
+080*2      # 1800: Down, the third
+000*98
+080*2      # 1900: Down, Map (the last)
+000*98
+001*2      # 2000: A, Map: the slot list
+000*148
+001*2      # 2150: A, slot 1 (Epilogue): the post-game world map
+000*348
+040*2      # 2500: Up, the cursor off the Black Temple node
+000*1
+040*2      # 2503: Up
+000*1
+040*2      # 2506: Up
+000*1
+040*2      # 2509: Up
+000*1
+040*2      # 2512: Up
+000*1
+040*2      # 2515: Up
+000*83
+001*2      # 2600: A, off the node: the world map menu
+000*98
+040*2      # 2700: Up, wraps to Save
+000*98
+001*2      # 2800: A, Save: the slot list
+000*198
+080*2      # 3000: Down, slot 1 -> slot 2
+000*98
+001*2      # 3100: A, slot 2 (Save / Cancel)
+000*148
+001*2      # 3250: A, Save: the world map's game save in slot 2
+000*198
+200*2      # 3450: L, the cursor to the next node (1: the Black Temple)
+000*38
+200*2      # 3490: L
+000*38
+200*2      # 3530: L
+000*38
+200*2      # 3570: L
+000*38
+200*2      # 3610: L
+000*38
+200*2      # 3650: L
+000*38
+200*2      # 3690: L
+000*38
+200*2      # 3730: L
+000*38
+200*2      # 3770: L
+000*38
+200*2      # 3810: L
+000*38
+200*2      # 3850: L
+000*38
+200*2      # 3890: L
+000*38
+200*2      # 3930: L
+000*38
+200*2      # 3970: L, 14: the Tower of Valni
+000*128
+001*2      # 4100: A, Ephraim walks to the Tower of Valni: floor 1's preparations
+000*1398
+008*2      # 5500: Start, Fight: floor 1
+000*348
+040*2      # 5850: Up, the cursor off Ephraim to an empty square
+000*98
+001*2      # 5950: A, the map menu
+000*98
+040*2      # 6050: Up, wraps to End
+000*98
+040*2      # 6150: Up, Suspend
+000*98
+001*2      # 6250: A, Suspend: 'Do you want to quit?'
+000*298
+001*2      # 6550: A, Yes (a suspend save)
+000*448

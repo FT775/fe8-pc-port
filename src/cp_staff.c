@@ -200,7 +200,7 @@ void AiStaffHealMendRecover(int itemIdx, s8 (*isEnemy)(struct Unit* unit)) {
 
             if ((gAiState.flags & AI_FLAG_BERSERKED) || (isEnemy == 0) || (isEnemy(unit) != 1)) {
 
-                if ((gAiState.unk7C != 0) || (unit->aiFlags & AI_UNIT_FLAG_0)) {
+                if (RFO_AI_HEAL_WANTS(unit, (gAiState.unk7C != 0) || (unit->aiFlags & AI_UNIT_FLAG_0))) {
 
                     tmpHpPerc = Div(GetUnitCurrentHp(unit) * 100, GetUnitMaxHp(unit));
 
@@ -274,7 +274,7 @@ void AiStaffPhysicRescue(int itemIdx, s8 (*isEnemy)(struct Unit* unit)) {
         }
 
         if ((gAiState.flags & AI_FLAG_BERSERKED) || (isEnemy == 0) || (isEnemy(unit) != 1)) {
-            if ((gAiState.unk7C != 0) || (unit->aiFlags & AI_UNIT_FLAG_0)) {
+            if (RFO_AI_HEAL_WANTS(unit, (gAiState.unk7C != 0) || (unit->aiFlags & AI_UNIT_FLAG_0))) {
                 u8 tmpHpPerc;
 
                 if (AiIsWithinRectDistance(gActiveUnit->xPos, gActiveUnit->yPos, unit->xPos, unit->yPos, GetUnitMagBy2Range(gActiveUnit) + UNIT_MOV(gActiveUnit)) == 0) {

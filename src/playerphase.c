@@ -298,7 +298,7 @@ static bool PortTest_OpenDebugMenu(ProcPtr proc, u16 newKeysAsRead)
         ShowUnitSprite(unit);
     }
 
-    menu = StartOrphanMenuAdjusted(&gMapMenuDef, gBmSt.cursorTarget.x - gBmSt.camera.x, 1, 0x17);
+    menu = StartOrphanMenuAdjusted(RFO_MAP_MENU_DEF(&gMapMenuDef), gBmSt.cursorTarget.x - gBmSt.camera.x, 1, 0x17);
     StartAvailableMapMenuEvent();
 
     Proc_Goto(proc, 9);
@@ -372,7 +372,7 @@ void PlayerPhase_MainIdle(ProcPtr proc)
                         ShowUnitSprite(unit);
                     }
 
-                    StartOrphanMenuAdjusted(&gMapMenuDef, gBmSt.cursorTarget.x - gBmSt.camera.x, 1, 0x17);
+                    StartOrphanMenuAdjusted(RFO_MAP_MENU_DEF(&gMapMenuDef), gBmSt.cursorTarget.x - gBmSt.camera.x, 1, 0x17);
                     StartAvailableMapMenuEvent();
 
                     Proc_Goto(proc, 9);
@@ -1065,7 +1065,7 @@ void PlayerPhase_ApplyUnitMovement(ProcPtr proc)
 
     if ((!(gActiveUnit->state & US_HAS_MOVED) && (gActionData.unitActionType == 0)) && (gBmSt.taken_action == 0))
     {
-        gActionData.moveCount = gBmMapMovement[gActionData.yMove][gActionData.xMove];
+        gActionData.moveCount = RFO_CANTO_MOVECOUNT(gBmMapMovement[gActionData.yMove][gActionData.xMove]);
     }
 
     ResetTextFont();

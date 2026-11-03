@@ -110,4 +110,33 @@ int Platform_MakeUserDir(void);
    headless backend has no title; its log has the same lines. */
 void Platform_SetTitleNote(const char *note);
 
+/* Rebindable controls (port/include/port_controls.h, port/hw/controls.c: the
+   bindings, as names; Platform_ReadKeys and fullscreen follow them).
+   Platform_BindingValid: 1 when the backend knows name as a keyboard key
+   (pad 0) or a gamepad button (pad 1); the headless backend takes any name.
+   Platform_CaptureBegin, then Platform_CaptureInput once a frame: 1 with the
+   first key or pad button pressed since the last call (a key held at the
+   begin does not count until it is pressed again), *pad 0 for the keyboard,
+   1 for a gamepad, and its binding name; 0 when there is none (always, in
+   the headless backend). */
+int Platform_BindingValid(int pad, const char *name);
+void Platform_CaptureBegin(void);
+int Platform_CaptureInput(int *pad, char *name, size_t size);
+/* The capture is over (it also ends by itself when Platform_CaptureInput is
+   not called for a few frames: the screen that asked was closed). */
+void Platform_CaptureEnd(void);
+/* Display (Reforged Options' Display screen; nothing in the headless backend).
+   Platform_SetWindowScale: the window becomes scale x 240x160 (0: the start-up
+   size, 3x or less; lowered to fit the display; a usable FE8PC_SCALE wins; in
+   fullscreen, the size it gets when it leaves fullscreen). Platform_SetScaling:
+   mode 0 whole-number scaling with black bars, 1 the largest that keeps the shape,
+   2 stretched to the window; smooth 1 filters (for modes 1 and 2), 0 keeps sharp
+   pixels. Platform_SetFullscreen: 1 fullscreen, 0 a window (F11 still toggles). */
+void Platform_SetWindowScale(int scale);
+void Platform_SetScaling(int mode, int smooth);
+void Platform_SetFullscreen(int on);
+/* A valid binding name in the backend's own spelling ("return" -> "Return",
+   "DPUP" -> "dpup"), in out; the headless backend copies it. */
+void Platform_CanonicalName(int pad, const char *name, char *out, size_t size);
+
 #endif /* GUARD_PORT_PLATFORM_H */

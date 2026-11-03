@@ -444,9 +444,9 @@ void GetChapterSkirmishLeaderClasses(u8 chapterId, u8 * list)
 {
     const struct ChapterEventGroup* evGroup = GetChapterEventDataPointer(chapterId);
 
-    list[0] = ((struct UnitDefinition *)(evGroup->enemyUnitsChoice1InEncounter))->classIndex;
-    list[1] = ((struct UnitDefinition *)(evGroup->enemyUnitsChoice2InEncounter))->classIndex;
-    list[2] = ((struct UnitDefinition *)(evGroup->enemyUnitsChoice3InEncounter))->classIndex;
+    list[0] = RANDO_SKIRMISH_LEADER_CLASS(chapterId, evGroup->enemyUnitsChoice1InEncounter, ((struct UnitDefinition *)(evGroup->enemyUnitsChoice1InEncounter))->classIndex); // PC played builds: the class of the run (include/bmunit.h)
+    list[1] = RANDO_SKIRMISH_LEADER_CLASS(chapterId, evGroup->enemyUnitsChoice2InEncounter, ((struct UnitDefinition *)(evGroup->enemyUnitsChoice2InEncounter))->classIndex);
+    list[2] = RANDO_SKIRMISH_LEADER_CLASS(chapterId, evGroup->enemyUnitsChoice3InEncounter, ((struct UnitDefinition *)(evGroup->enemyUnitsChoice3InEncounter))->classIndex);
 }
 
 //! FE8U = 0x08083424
@@ -1576,7 +1576,7 @@ void StartAvailableTileEvent(s8 x, s8 y) {
                 CallChestOpeningEvent(GetMapChangeIdAt(info.xPos, info.yPos), info.givenItem);
             } else {
                 if (info.givenItem != ITEM_GOLD) {
-                    info.givenItem = SubstituteDuplicateMemberCard(info.givenItem);
+                    RANDO_HOOK_CHEST(info) info.givenItem = SubstituteDuplicateMemberCard(info.givenItem);
                     CallChestOpeningEvent(GetMapChangeIdAt(info.xPos, info.yPos), info.givenItem);
                 } else {
                     CallChestOpeningEvent(GetMapChangeIdAt(info.xPos, info.yPos), info.givenMoney);

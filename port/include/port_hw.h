@@ -61,17 +61,28 @@ int PortNullProbe_OnDivFault(void *ucontext);             /* SIGFPE; 1: handled,
 void PortNullProbe_NoteDroppedWrite(uint32_t eip, uint32_t eipAfter, uint32_t addr);
 void PortNullProbe_Dump(const char *why);
 
-/* The command line: fe8pc [--save PATH | --save=PATH | --no-save] [--] [ROM].
+/* The command line: fe8pc [--save PATH | --save=PATH | --no-save] [settings] [--] [ROM]
+   (main_pc.c lists the settings options).
    PortParseArgs fills args (rom and save NULL when not given) and returns 0,
    or returns -1 with *error set for a bad command line. port/win32 uses it to
    tell whether a ROM path was given. */
+#define PORT_ARG_SETS 32
 struct PortArgs
 {
     const char *rom;
     const char *save;
     int noSave;
+    /* --set KEY=VALUE and its short forms (--scale N, --fullscreen, --windowed,
+       --seed X, --randomizer): settings-file lines for this run, applied over
+       the settings file (port/reforged/reforged_settings.c, played builds) */
+    const char *sets[PORT_ARG_SETS];
+    int setCount;
 };
 int PortParseArgs(int argc, char **argv, struct PortArgs *args, const char **error);
+/* The command line's settings (main_pc.c keeps them from PortParseArgs): how many,
+   and each "KEY=VALUE". */
+int PortArgSettingCount(void);
+const char *PortArgSetting(int i);
 
 /* save/savefile_pc.c: the player's save file (raw 32 KiB SRAM image, as mGBA's
    .sav). Init loads it into SRAM before AgbMain (0, or -1: stop the run);

@@ -77,7 +77,7 @@ void AgbMain()
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
     /* PC played builds only: the Reforged Options settings file (every option
        OFF when it is missing or bad; port/reforged/reforged_settings.c). */
-    Reforged_LoadSettings();
+    Reforged_LoadSettings(); Reforged_RandoBoot(); /* the randomizer: the vanilla tables kept */
 #endif
     StartGame();
 

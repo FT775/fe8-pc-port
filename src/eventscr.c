@@ -3298,7 +3298,7 @@ u8 Event37_GiveItem(struct EventEngineProc * proc)
 
     switch (subcmd) {
     case EVSUBCMD_GIVEITEMTO:
-        NewPopup_ItemGot(proc, target, gEventSlots[3]);
+        NewPopup_ItemGot(proc, target, RANDO_GIFT_ITEM(gEventSlots[3], target));
 
         break;
 
@@ -3772,8 +3772,8 @@ u8 Event40_PromoteUnit(struct EventEngineProc * proc)
     struct Unit * unit;
 
     s16 pid = EVT_CMD_ARGV(proc->pEventCurrent)[0];
-    u16 jid = EVT_CMD_ARGV(proc->pEventCurrent)[1];
-    u16 itemId = EVT_CMD_ARGV(proc->pEventCurrent)[2];
+    u16 jid = RANDO_PROMOTE_JID(GetUnitStructFromEventParameter(pid), EVT_CMD_ARGV(proc->pEventCurrent)[1]);
+    u16 itemId = EVT_CMD_ARGV(proc->pEventCurrent)[2]; RANDO_PROMOTE_SKIP(jid)
 
     struct ProcEventPromote * childProc = Proc_StartBlocking(ProcScr_EventPromoteUnit, proc);
     childProc->event_engine = proc;

@@ -1,0 +1,26 @@
+# FE8 Gate 0 key file (format: port/test/README.md, "Input file"). Save checks P5.3 and P5.4
+# (port/test/README.md, "Save checks"; port/test/tools/savechk.sh). Hand-made from frame dumps
+# of the played build, not from a TAS.
+# Late-game save check, session 2. Start: late_e20_k1.keys's end save (Chapter 20, turn 1, Eirika has waited; game slot 2 the preparations' save). Title menu Resume Chapter, the slot list opens on slot 2 (the suspend's); the map menu on grey Eirika, End: the end-of-phase talk (skipped), the enemy phase (the enemies move, no battle this turn), turn 2's player phase from about tick 3,600 on the PC, where the game writes the turn's suspend saves.
+# 5000 ticks; each press is held 2 ticks. The played builds take it as FE8PC_KEYSCRIPT
+# (port/test/tools/keys_to_keyscript.py; frame N is tick N on the lag-free PC).
+#
+000*250
+001*2      # 250: A, health and safety
+000*748
+008*2      # 1000: Start, skip the opening
+000*298
+001*2      # 1300: A, title: the title menu
+000*198
+001*2      # 1500: A, Resume Chapter: the slot list (slot 2)
+000*198
+001*2      # 1700: A, resume
+000*148
+001*2      # 1850: A on grey Eirika: the map menu
+000*98
+040*2      # 1950: Up, wraps to End
+000*98
+001*2      # 2050: A, End: the end-of-phase talk
+000*248
+008*2      # 2300: Start, skip the talk: the enemy phase
+000*2698
