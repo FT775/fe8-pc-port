@@ -17,7 +17,9 @@
 #include "constants/video-global.h"
 
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
-#include "port_reforged.h" /* PC played builds: Reforged Options, HP bars & warnings */
+#include "port_reforged.h"
+#include "port_hw.h"
+#include <stdlib.h> /* PC played builds: Reforged Options, HP bars & warnings */
 #endif
 
 /**
@@ -347,6 +349,61 @@ u16 CONST_DATA sSprite_32x32_Window[] = {
 };
 
 #define GetInfo(id) (unit_icon_wait_table[(id) & ((1<<7)-1)])
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/*
+ * PC played builds, Pair Up (port/reforged/reforged_pairup.c; the user's request of 2026-11-07:
+ * "the pairing should have a shaded unit standing behind the other to show they're still on the
+ * board"): a pair's partner is drawn in the grey palette, 4 pixels up and 8 to the right of its
+ * lead, behind it (the list is drawn bottom row first: a smaller y is behind). It hides and shows
+ * with the lead's sprite (the lead's move, menus). Nothing on the GBA.
+ */
+static struct SMSHandle * sPairHandle[0x40];
+struct SMSHandle * AddUnitSprite(int y);
+
+static void PairSpriteReset(void)
+{
+    int k;
+
+    for (k = 0; k < 0x40; k++)
+        sPairHandle[k] = NULL;
+}
+
+static void PairSprite(struct Unit * unit)
+{
+    struct Unit * p;
+    struct SMSHandle * h;
+
+    if (unit->index <= 0 || unit->index >= 0x40 || !(unit->state & US_RESCUING) || !Reforged_PairOn(unit))
+        return;
+    p = GetUnit(unit->rescue);
+    h = AddUnitSprite(unit->yPos * 16 - 4);
+    h->yDisplay = unit->yPos * 16 - 4;
+    h->xDisplay = unit->xPos * 16 + 8;
+    h->oam2Base = UseUnitSprite(GetUnitSMSId(p)) + 0x80 + 0xF * 0x1000; /* the grey palette */
+    h->config = GetInfo(GetUnitSMSId(p)).size;
+    if (unit->state & 0x100)
+        h->config += 3;
+    sPairHandle[unit->index] = h;
+}
+
+static void PairSpriteHide(struct Unit * unit, int hide)
+{
+    if (unit->index <= 0 || unit->index >= 0x40 || sPairHandle[unit->index] == NULL)
+        return;
+    if (hide)
+        sPairHandle[unit->index]->config |= 0x80;
+    else
+        sPairHandle[unit->index]->config &= ~(0x80);
+}
+#define RFO_PAIR_SPRITE_RESET() PairSpriteReset();
+#define RFO_PAIR_SPRITE(unit) PairSprite(unit);
+#define RFO_PAIR_SPRITE_HIDE(unit, hide) PairSpriteHide((unit), (hide));
+#else
+#define RFO_PAIR_SPRITE_RESET()
+#define RFO_PAIR_SPRITE(unit)
+#define RFO_PAIR_SPRITE_HIDE(unit, hide)
+#endif
 
 void RequestUnitSpriteSheetSync(void)
 {
@@ -830,7 +887,7 @@ void RefreshUnitSprites(void)
     gSMSHandleIt->pNext = nullHandle;
     gSMSHandleIt->yDisplay = 0x400;
 
-    gSMSHandleIt = &gSMSHandleArray[1];
+    gSMSHandleIt = &gSMSHandleArray[1]; RFO_PAIR_SPRITE_RESET()
 
     for (i = 1; i < FACTION_PURPLE + 6; i++)
     {
@@ -881,7 +938,7 @@ void RefreshUnitSprites(void)
             smsHandle->config += 0x40;
         }
 
-        unit->pMapSpriteHandle = smsHandle;
+        unit->pMapSpriteHandle = smsHandle; RFO_PAIR_SPRITE(unit)
     }
 
     for (trap = GetTrap(0); trap->type != 0; trap++)
@@ -1477,7 +1534,7 @@ void HideUnitSprite(struct Unit * unit)
     if (!unit->pMapSpriteHandle)
         return;
 
-    unit->pMapSpriteHandle->config |= 0x80;
+    unit->pMapSpriteHandle->config |= 0x80; RFO_PAIR_SPRITE_HIDE(unit, 1)
 }
 
 //! FE8U = 0x08028130
@@ -1486,7 +1543,7 @@ void ShowUnitSprite(struct Unit * unit)
     if (!unit->pMapSpriteHandle)
         return;
 
-    unit->pMapSpriteHandle->config &= ~(0x80);
+    unit->pMapSpriteHandle->config &= ~(0x80); RFO_PAIR_SPRITE_HIDE(unit, 0)
 }
 
 u8 GetUnitSpriteHideFlag(struct Unit * unit)

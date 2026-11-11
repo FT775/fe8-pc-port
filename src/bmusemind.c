@@ -74,7 +74,7 @@ void ExecStandardHeal(ProcPtr proc) {
 
     gBattleHitIterator->hpChange = gBattleTarget.unit.curHP - GetUnitCurrentHp(GetUnit(gActionData.targetIndex));
 
-    gBattleTarget.unit.curHP = GetUnitCurrentHp(GetUnit(gActionData.targetIndex));
+    gBattleTarget.unit.curHP = GetUnitCurrentHp(GetUnit(gActionData.targetIndex)); RFO_SKILL_LTS_HEAL()
 
     BattleApplyItemEffect(proc);
     BeginBattleAnimations();
@@ -349,11 +349,11 @@ void ExecFortify(ProcPtr proc) {
         GetUnit(gActionData.subjectIndex)->items[gActionData.itemSlotIndex]
     );
 
-    targetCount = GetSelectTargetCount();
+    targetCount = GetSelectTargetCount(); RFO_SKILL_LTS_FORTIFY_BEGIN()
 
     for (i = 0; i < targetCount; i++) {
         AddUnitHp(GetUnit(GetTarget(i)->uid), amount);
-    }
+    } RFO_SKILL_LTS_FORTIFY_END()
 
     BattleApplyItemEffect(proc);
     BeginBattleAnimations();

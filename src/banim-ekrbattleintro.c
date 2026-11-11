@@ -1039,6 +1039,11 @@ bool PrepareBattleGraphicsMaybe(void)
     {
         gBanimIdx[POS_L] = gBanimIdx_bak[POS_L] = GetBattleAnimationId(unit_bu1, animdef1, bu1->weapon, &animid1);
         gBanimIdx[POS_R] = gBanimIdx_bak[POS_R] = GetBattleAnimationId(unit_bu2, animdef2, bu2->weapon, &animid2);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        /* a class with no animation for the weapon shown (Random promotions; include/bmunit.h) */
+        gBanimIdx[POS_L] = gBanimIdx_bak[POS_L] = RANDO_BANIM_FALLBACK(animdef1, gBanimIdx[POS_L], &animid1);
+        gBanimIdx[POS_R] = gBanimIdx_bak[POS_R] = RANDO_BANIM_FALLBACK(animdef2, gBanimIdx[POS_R], &animid2);
+#endif
     }
     else
     {
@@ -1055,7 +1060,7 @@ bool PrepareBattleGraphicsMaybe(void)
 
 #ifdef PC_PORT
     pid = BANIM_UNIT_PID(unit_bu1) - 1;
-    jid = BANIM_UNIT_JID(unit_bu1);
+    jid = BANIM_UNIT_JID(unit_bu1); RANDO_CHARA_ENSURE(valid_l, pid, jid, gBanimIdx[POS_L], unit_bu1)
 #else
     pid = unit_bu1->pCharacterData->number - 1;
     jid = unit_bu1->pClassData->number;
@@ -1068,14 +1073,14 @@ bool PrepareBattleGraphicsMaybe(void)
     {
         if (gAnimCharaPalConfig[pid][i] == jid && valid_l)
         {
-            gBanimUniquePal[POS_L] = gAnimCharaPalIt[pid][i] - 1;
+            gBanimUniquePal[POS_L] = gAnimCharaPalIt[pid][i] - 1; RANDO_UNIQUE_PAL_FITS(gBanimUniquePal[POS_L], gBanimIdx[POS_L], jid)
             break;
         }
     }
 
 #ifdef PC_PORT
     pid = BANIM_UNIT_PID(unit_bu2) - 1;
-    jid = BANIM_UNIT_JID(unit_bu2);
+    jid = BANIM_UNIT_JID(unit_bu2); RANDO_CHARA_ENSURE(valid_r, pid, jid, gBanimIdx[POS_R], unit_bu2)
 #else
     pid = unit_bu2->pCharacterData->number - 1;
     jid = unit_bu2->pClassData->number;
@@ -1088,7 +1093,7 @@ bool PrepareBattleGraphicsMaybe(void)
     {
         if (gAnimCharaPalConfig[pid][i] == jid && valid_r)
         {
-            gBanimUniquePal[POS_R] = gAnimCharaPalIt[pid][i] - 1;
+            gBanimUniquePal[POS_R] = gAnimCharaPalIt[pid][i] - 1; RANDO_UNIQUE_PAL_FITS(gBanimUniquePal[POS_R], gBanimIdx[POS_R], jid)
             break;
         }
     }
@@ -1191,7 +1196,7 @@ bool PrepareBattleGraphicsMaybe(void)
 
         if (gBattleStats.config & BATTLE_CONFIG_REFRESH)
             if (!IsItemDisplayedInBattle(bu2->weaponBefore))
-                if (unit_bu2->pClassData->number == CLASS_DANCER)
+                if (unit_bu2->pClassData->number == CLASS_DANCER BANIM_BARD_REFRESH(unit_bu2))
                     gEkrSpellAnimIndex[POS_R] = 0xF;
     }
 

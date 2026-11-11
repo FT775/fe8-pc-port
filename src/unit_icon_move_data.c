@@ -130,4 +130,12 @@ UnitIconMove unit_icon_move_table[] = {
 	{unit_icon_move_Elder_Bael_sheet, unit_icon_move_Elder_Bael_motion}, // 124
 	{unit_icon_move_Journeyman_T2_sheet, unit_icon_move_Journeyman_T2_motion}, // 125
 	{unit_icon_move_Pupil_T2_sheet, unit_icon_move_Pupil_T2_motion}, // 126
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+	/* 127-135 (classes 0x80-0x88): the FE7 classes' moving sprites, 136-139 (0x89-0x8C, v1.19.0) and
+	   140-142 (0x8D-0x8F, v1.20.0): the FE6 classes', filled by port/reforged/reforged_fe7.c when the ROM is
+	   loaded (empty and unused otherwise) */
+	{0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0},
+	{0}, {0}, {0}, {0},
+	{0}, {0}, {0},
+#endif
 };

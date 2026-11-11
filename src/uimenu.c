@@ -179,7 +179,7 @@ struct MenuProc* StartMenuCore(
     int i, itemCount;
 
     int xTileInner = rect.x + 1;
-    int yTileInner = rect.y + 1;
+    int yTileInner = rect.y + 1; RFO_MENU_DEF(def)
 
     BG_SetPosition(frontBg, 0, 0);
     BG_SetPosition(backBg, 0, 0);
@@ -209,7 +209,7 @@ struct MenuProc* StartMenuCore(
         if (!availability)
             availability = def->menuItems[i].isAvailable(&def->menuItems[i], i);
 
-        if (availability != MENU_NOTSHOWN)
+        if (availability != MENU_NOTSHOWN RFO_MENU_FITS(def, i, itemCount))
         {
             struct MenuItemProc* item = Proc_Start(sProc_MenuItem, proc);
             proc->menuItems[itemCount++] = item;

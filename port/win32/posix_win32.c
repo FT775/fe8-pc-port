@@ -771,6 +771,25 @@ int PortWin32RoamingDir(char *out, size_t outSize)
  * FE8 (USA) header (baserom.gba first), so memory.c says what is wrong with
  * it (a dump cut short, a changed ROM) rather than "no ROM found".
  *
+ * v1.22.0: then the "roms" folder next to the exe (the release zip has one, with
+ * "PUT YOUR ROMS HERE.txt"), by the same rules. The order: the original ROM next
+ * to the exe, then the original ROM in roms\, then a file with only the FE8
+ * header next to the exe, then one in roms\. Every place looked at before
+ * v1.22.0 comes first, so a setup that started the game then still picks the
+ * same ROM; only a setup that found no original ROM can find one in roms\ (a
+ * hack next to the exe used to stop with an error). The window build then asks
+ * (port/win32/gui/gui_win32.c PortWinGui_FindRom: the path remembered from an
+ * earlier choice, else an Open dialog) whenever no original ROM was found: the
+ * original ROM by SHA-1 wins over a file with only the FE8 header wherever it
+ * is, and that file is used (memory.c then says what is wrong with it) only
+ * when there is none (Cancel, or nobody to ask). The save, window build: for a
+ * ROM found in roms\ or chosen (or remembered), exactly as if that ROM file sat
+ * next to the exe: same file name, the exe's folder, savefile_pc.c's per-user
+ * rules (SaveAsNextToExe). Every other ROM (next to the exe, baserom.gba, given
+ * on the command line or dropped onto the exe) keeps v1.21.0's save, the one
+ * next to it; the headless build keeps a save only when its command line says
+ * --save, as before.
+ *
  * The window build (FE8PC_WINGUI) also sets up its log first (a log file, or
  * the console with --console, which it takes off the command line), says in
  * a message box when no ROM is found, and when the game stops before it
@@ -784,35 +803,41 @@ int __real_main(int argc, char **argv);
 void PortWinGui_Start(int *argc, char ***argv);
 int PortWinGui_NoRom(void);
 void PortWinGui_StartFailed(int code);
+int PortWinGui_FindRom(char *out, size_t outSize, const char *notOriginal);
 #endif
 
-/* 1: out is the original FE8 (USA) ROM next to the exe; 2: out has only the
-   FE8 (USA) header (the best there is); 0: none. */
-static int FindRomNextToExe(char *out, size_t outSize)
+/* The exe's folder (no last backslash); 0 when it is not known. */
+static int ExeDirA(char *dir, size_t dirSize)
 {
-    static char fallback[MAX_PATH * 8];
-    char dir[MAX_PATH * 4], pattern[MAX_PATH * 4 + 8]; /* UTF-8 paths in the window build (its manifest) */
-    char sha1[41];
-    WIN32_FIND_DATAA fd;
-    HANDLE h;
+    DWORD n = GetModuleFileNameA(NULL, dir, (DWORD)dirSize);
     char *slash;
-    DWORD n = GetModuleFileNameA(NULL, dir, sizeof(dir));
-    int kind;
 
-    if (n == 0 || n >= sizeof(dir))
+    if (n == 0 || n >= dirSize)
         return 0;
     slash = strrchr(dir, '\\');
     if (slash == NULL)
         return 0;
     *slash = '\0';
+    return 1;
+}
 
-    fallback[0] = '\0';
+/* In dir: 1: out is the original FE8 (USA) ROM (baserom.gba first, then any
+   .gba file); else fallback gets the first file with only the FE8 (USA)
+   header, when it is still empty; 0. */
+static int FindRomIn(const char *dir, char *out, size_t outSize, char *fallback, size_t fallbackSize)
+{
+    char pattern[MAX_PATH * 4 + 8]; /* UTF-8 paths in the window build (its manifest) */
+    char sha1[41];
+    WIN32_FIND_DATAA fd;
+    HANDLE h;
+    int kind;
+
     snprintf(out, outSize, "%s\\baserom.gba", dir);
     kind = PortRomFileKind(out, sha1);
     if (kind == PORT_ROM_FE8)
         return 1;
-    if (kind != PORT_ROM_NOT_FE8)
-        snprintf(fallback, sizeof(fallback), "%s", out);
+    if (kind != PORT_ROM_NOT_FE8 && fallback[0] == '\0')
+        snprintf(fallback, fallbackSize, "%s", out);
     snprintf(pattern, sizeof(pattern), "%s\\*.gba", dir);
     h = FindFirstFileA(pattern, &fd);
     if (h != INVALID_HANDLE_VALUE)
@@ -829,21 +854,64 @@ static int FindRomNextToExe(char *out, size_t outSize)
                 return 1;
             }
             if (kind != PORT_ROM_NOT_FE8 && fallback[0] == '\0')
-                snprintf(fallback, sizeof(fallback), "%s", out);
+                snprintf(fallback, fallbackSize, "%s", out);
         } while (FindNextFileA(h, &fd));
         FindClose(h);
     }
-    if (fallback[0] == '\0')
+    return 0;
+}
+
+/* 1: out is the original FE8 (USA) ROM next to the exe, or (v1.22.0) in its
+   roms folder; 2: out has only the FE8 (USA) header (the best there is; next
+   to the exe first); 0: none. *where: "next to the exe" or "in the roms folder". */
+static int FindRomNextToExe(char *out, size_t outSize, const char **where)
+{
+    static char fallback[MAX_PATH * 8], fallbackRoms[MAX_PATH * 8];
+    char dir[MAX_PATH * 4], roms[MAX_PATH * 4 + 8];
+
+    if (!ExeDirA(dir, sizeof(dir)))
         return 0;
-    snprintf(out, outSize, "%s", fallback);
+    snprintf(roms, sizeof(roms), "%s\\roms", dir);
+    fallback[0] = fallbackRoms[0] = '\0';
+    *where = "next to the exe";
+    if (FindRomIn(dir, out, outSize, fallback, sizeof(fallback)))
+        return 1;
+    *where = "in the roms folder";
+    if (FindRomIn(roms, out, outSize, fallbackRoms, sizeof(fallbackRoms)))
+        return 1;
+    if (fallback[0] == '\0' && fallbackRoms[0] == '\0')
+        return 0;
+    *where = fallback[0] != '\0' ? "next to the exe" : "in the roms folder";
+    snprintf(out, outSize, "%s", fallback[0] != '\0' ? fallback : fallbackRoms);
     return 2;
 }
+
+#ifdef FE8PC_WINGUI
+/* v1.22.0: for a ROM found in the roms folder or chosen with the picker, the save is chosen as for a ROM of
+   that file name next to the exe (savefile_pc.c PortSave_SetSaveBase): the save stays next to the game. */
+static void SaveAsNextToExe(const char *romPath)
+{
+    static char base[MAX_PATH * 12 + 8];
+    char dir[MAX_PATH * 4];
+    const char *name = strrchr(romPath, '\\'), *slash2 = strrchr(romPath, '/');
+
+    if (slash2 != NULL && (name == NULL || slash2 > name))
+        name = slash2;
+    name = name != NULL ? name + 1 : romPath;
+    if (!ExeDirA(dir, sizeof(dir)))
+        return;
+    snprintf(base, sizeof(base), "%s\\%s", dir, name);
+    PortSave_SetSaveBase(base);
+    printf("[win32] the save is kept as for '%s' (next to the exe, where it always was)\n", base);
+    fflush(stdout);
+}
+#endif
 
 int __wrap_main(int argc, char **argv)
 {
     static char romPath[MAX_PATH * 8];
     struct PortArgs args;
-    const char *error;
+    const char *error, *where = "";
     char **newArgv;
     int i, rc, found;
 
@@ -851,16 +919,39 @@ int __wrap_main(int argc, char **argv)
     PortWinGui_Start(&argc, &argv);
 #endif
     /* No ROM among the arguments (the save options may be there: main_pc.c's
-       own parser says): the ROM found next to the exe goes last. */
+       own parser says): the ROM found next to the exe or in its roms folder (or,
+       in the window build, the one remembered or chosen) goes last. */
     if (PortParseArgs(argc, argv, &args, &error) == 0 && args.rom == NULL &&
         GetFileAttributesA("baserom.gba") == INVALID_FILE_ATTRIBUTES)
     {
-        if ((found = FindRomNextToExe(romPath, sizeof(romPath))) != 0 &&
-            (newArgv = calloc((size_t)argc + 2, sizeof(*newArgv))) != NULL)
+        found = FindRomNextToExe(romPath, sizeof(romPath), &where);
+#ifdef FE8PC_WINGUI
+        if (found != 1)
         {
-            printf("[win32] no ROM path given and no baserom.gba here: using '%s' (next to the exe)%s\n", romPath,
+            /* no original ROM there: the one remembered or chosen; a file found with only the FE8 header (a
+               hack, a cut-short copy) is used only without one (Cancel), so memory.c says what is wrong with
+               it, as before v1.22.0 (it never started the game) */
+            static char headerOnly[MAX_PATH * 8];
+
+            snprintf(headerOnly, sizeof(headerOnly), "%s", found == 2 ? romPath : "");
+            if (PortWinGui_FindRom(romPath, sizeof(romPath), found == 2 ? headerOnly : NULL))
+            {
+                found = 1;
+                where = "chosen in the Open dialog (or remembered from that choice)";
+            }
+            else if (found == 2)
+                snprintf(romPath, sizeof(romPath), "%s", headerOnly);
+        }
+#endif
+        if (found != 0 && (newArgv = calloc((size_t)argc + 2, sizeof(*newArgv))) != NULL)
+        {
+            printf("[win32] no ROM path given and no baserom.gba here: using '%s' (%s)%s\n", romPath, where,
                 found == 2 ? ": it has the FE8 (USA) header, but no file there is the original ROM (see below)" : "");
             fflush(stdout);
+#ifdef FE8PC_WINGUI
+            if (strcmp(where, "next to the exe") != 0) /* in roms\, or chosen */
+                SaveAsNextToExe(romPath);
+#endif
             for (i = 0; i < argc; i++)
                 newArgv[i] = argv[i];
             newArgv[argc] = romPath;

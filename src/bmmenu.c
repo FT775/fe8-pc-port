@@ -1657,7 +1657,7 @@ u8 SupplyUsability(const struct MenuItemDef * def, int number)
         return MENU_ENABLED;
     }
 
-    return MENU_NOTSHOWN;
+    RFO_SUPPLY_ANYWHERE return MENU_NOTSHOWN;
 }
 
 u8 SupplyCommandEffect(struct MenuProc* menu, struct MenuItemProc* menuItem) {
@@ -1856,7 +1856,7 @@ int StealItemMenuCommand_Draw(struct MenuProc* menu, struct MenuItemProc* menuIt
     int item = GetUnit(gActionData.targetIndex)->items[menuItem->itemNumber];
     s8 isStealable = IsItemStealable(item);
 
-    DrawItemMenuLine(&menuItem->text, item, isStealable, gBG0TilemapBuffer + TILEMAP_INDEX(menuItem->xTile, menuItem->yTile));
+    RFO_ITEM_OWNER(GetUnit(gActionData.targetIndex)) DrawItemMenuLine(&menuItem->text, item, isStealable, gBG0TilemapBuffer + TILEMAP_INDEX(menuItem->xTile, menuItem->yTile)); RFO_ITEM_OWNER(NULL)
 
     return;
 }

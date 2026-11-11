@@ -87,18 +87,18 @@ inline int GetItemIndex(int item) {
 inline char* GetItemName(int item) {
     char* result;
 
-    result = GetStringFromIndex(GetItemData(ITEM_INDEX(item))->nameTextId);
+    result = GetStringFromIndex(RFO_ITEM_TEXT(item, GetItemData(ITEM_INDEX(item))->nameTextId, 0));
     result = StrInsertTact();
 
     return result;
 }
 
 inline int GetItemDescId(int item) {
-    return GetItemData(ITEM_INDEX(item))->descTextId;
+    return RFO_ITEM_TEXT(item, GetItemData(ITEM_INDEX(item))->descTextId, 1);
 }
 
 inline int GetItemUseDescId(int item) {
-    return GetItemData(ITEM_INDEX(item))->useDescTextId;
+    return RFO_ITEM_TEXT(item, GetItemData(ITEM_INDEX(item))->useDescTextId, 2);
 }
 
 inline int GetItemType(int item) {
@@ -454,7 +454,7 @@ void DrawItemMenuLine(struct Text* text, int item, s8 isUsable, u16* mapOut) {
 
     PutText(text, mapOut + 2);
 
-    PutNumberOrBlank(mapOut + 11, isUsable ? TEXT_COLOR_SYSTEM_BLUE : TEXT_COLOR_SYSTEM_GRAY, GetItemUses(item));
+    PutNumberOrBlank(mapOut + 11, isUsable ? TEXT_COLOR_SYSTEM_BLUE : TEXT_COLOR_SYSTEM_GRAY, RFO_SHOWN_USES(item, RFO_SHOWN_OWNER));
 
     DrawIcon(mapOut, GetItemIconId(item), 0x4000);
 }
@@ -478,7 +478,7 @@ void DrawItemMenuLineNoColor(struct Text* text, int item, u16* mapOut) {
 
     PutText(text, mapOut + 2);
 
-    PutNumberOrBlank(mapOut + 11, Text_GetColor(text), GetItemUses(item));
+    PutNumberOrBlank(mapOut + 11, Text_GetColor(text), RFO_SHOWN_USES(item, RFO_SHOWN_OWNER));
 
     DrawIcon(mapOut, GetItemIconId(item), 0x4000);
 }
@@ -497,8 +497,8 @@ void DrawItemStatScreenLine(struct Text* text, int item, int nameColor, u16* map
     PutSpecialChar(mapOut + 12, color, TEXT_SPECIAL_SLASH);
 
     color = (nameColor != TEXT_COLOR_SYSTEM_GRAY) ? TEXT_COLOR_SYSTEM_BLUE : TEXT_COLOR_SYSTEM_GRAY;
-    PutNumberOrBlank(mapOut + 11, color, GetItemUses(item));
-    PutNumberOrBlank(mapOut + 14, color, GetItemMaxUses(item));
+    PutNumberOrBlank(mapOut + 11, color, RFO_SHOWN_USES(item, RFO_SHOWN_OWNER));
+    PutNumberOrBlank(mapOut + 14, color, RFO_SHOWN_MAX_USES(item, RFO_SHOWN_OWNER));
 
     PutText(text, mapOut + 2);
 

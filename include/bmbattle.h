@@ -4,11 +4,23 @@
 #include "constants/terrains.h"
 #include "bmunit.h"
 
+/* PC played builds: the battle's hit array holds 9 strikes and the end mark, for the Astra skill
+   (port/reforged/reforged_skills_battle.c: 5 + 2 + 2 at most); everywhere else the original's 7 (6 + 1). */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#define RFO_BATTLE_HIT_MAX 10
+/* the host link places GBA symbols at their GBA addresses by name (port/tools/gen_host_link.py), and
+   7 entries on from gBattleHitArray's slot come gBattleHitIterator and two more variables: the bigger
+   array gets a name of its own, in host memory */
+#define gBattleHitArray gBattleHitArrayPc
+#else
+#define RFO_BATTLE_HIT_MAX 7
+#endif
+
 enum {
     // Battle-related magic constants
 
     // Maximum amount of hits that can happen in a battle (-1, because of the terminating "hit")
-    BATTLE_HIT_MAX = 7,
+    BATTLE_HIT_MAX = RFO_BATTLE_HIT_MAX,
 
     // Followup attack (double attack) attack speed difference threshold
     BATTLE_FOLLOWUP_SPEED_THRESHOLD = 4,
@@ -304,6 +316,108 @@ int Reforged_FixDevilChance(int threshold);
 #else
 #define RFO_EARLY_KILL_EXP(orig, actor) (orig)
 #define RFO_DEVIL_CHANCE(t) (t)
+#endif
+
+/* Pair Up (port/reforged/reforged_pairup.c): src/bmbattle.c, Dual Guard. A blocked hit carries
+   BATTLE_HIT_ATTR_GREATSHLD (the shield flash) and BATTLE_HIT_ATTR_17 (no effects, no gauge). */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_PairDualGuard(struct BattleUnit *attacker, struct BattleUnit *defender);
+void Reforged_PairGaugeFill(struct BattleUnit *attacker, struct BattleUnit *defender);
+#define RFO_DUALGUARD_ATTR | BATTLE_HIT_ATTR_17
+#define RFO_PAIR_GAUGE_FILL(attacker, defender) Reforged_PairGaugeFill((attacker), (defender));
+#else
+#define RFO_DUALGUARD_ATTR
+#define RFO_PAIR_GAUGE_FILL(attacker, defender)
+#endif
+
+/*
+ * Class skills, the battle side (port/reforged/reforged_skills_battle.c; game fixes RFO_FIX_SKILLS and
+ * RFO_FIX_ENEMY_SKILLS, port/reforged/reforged_skills.h). Same-line hooks in src/bmbattle.c; in every
+ * other build each expands to nothing (RFO_SKILL_ARMSTHRIFT: to its weapon).
+ *   RFO_SKILL_BATTLE_MODS()      BattleGenerate, after both ComputeBattleUnitStats: Wrath, Patience,
+ *                                Underdog, Breakers, Charm, Hex, Tantivy, Anathema (Hit/Avoid/Crit)
+ *   RFO_SKILL_NO_FOLLOWUP()      BattleGetFollowUpOrder: Wary Fighter, nobody doubles
+ *   RFO_SKILL_ASTRA(a, n, attrs) BattleGenerateRoundHits: Astra, the round becomes 5 strikes (BATTLE_HIT_ATTR_5)
+ *   RFO_SKILL_ASTRA_HALF()       BattleGenerateHitAttributes: an Astra strike does half damage
+ *   RFO_SKILL_ASTRA_ANIM         src/banim-battleparse.c: an Astra strike plays the critical-hit animation
+ *   RFO_ASTRA_HITS(hits)         ParseBattleHitToBanimCmd: the Astra strikes of one side become one animation
+ *                                round with one HP drop (port/reforged/reforged_astra_anim.c); GBA: (hits)
+ *   RFO_ASTRA_COPIES()           MainUpdateEkrBattle, after BattleAIS_ExecCommands: the skill banners
+ *                                (port/reforged/reforged_skillbanner.c, Reforged_SkillBannerTick) and the faded copies of the
+ *                                attacker during that merged round
+ *   RFO_SKILL_NIHIL_OFF(bu)      BattleCheckSureShot / Pierce / GreatShield: the foe's Nihil, FE8's own skill off
+ *   RFO_SKILL_NIHIL_SILENCER(bu) ComputeBattleUnitSilencerRate: the foe's Nihil, no Silencer
+ *   RFO_SKILL_VANTAGE(pa, pd)    BattleUnwind: Vantage, the attacked unit strikes first
+ *   RFO_VANTAGE_TA(attacker)     BattleGenerateHitTriangleAttack: the opening-hit test under Vantage
+ *   RFO_SKILL_LUNA(a, defense)   BattleGenerateHitAttributes, after damage = attack - defense
+ *   RFO_SKILL_PAVISE(a, d)       BattleGenerateHitAttributes, before the damage clamp: Pavise, Aegis
+ *   RFO_SKILL_MIRACLE(d)         BattleGenerateHitEffects, before the defender loses HP
+ *   RFO_SKILL_SOL(a, d)          BattleGenerateHitEffects, after the HP-drain block
+ *   RFO_SKILL_ARMSTHRIFT(a, w)   BattleGenerateHitEffects, the weapon's use (inside its PC block)
+ *   RFO_SKILL_LIFETAKER(a, d)    BattleGenerateHit, the target falls
+ *   Reforged_SkillAfterUnwind()  BattleGenerate, after the unwind (a PC block): Poison Strike, Despoil
+ *   RFO_SKILL_APPLY()            BattleApplyUnitUpdates: Despoil's gold
+ *   RFO_SKILL_WEXP_MUL(bu)       GetBattleUnitUpdatedWeaponExp: Discipline, weapon EXP x2
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+void Reforged_SkillBattleMods(void);
+int Reforged_SkillWary(void);
+void Reforged_SkillVantage(struct BattleUnit **attacker, struct BattleUnit **defender);
+int Reforged_SkillVantageTAFlip(struct BattleUnit *attacker);
+void Reforged_SkillLuna(struct BattleUnit *attacker, int defense);
+void Reforged_SkillPavise(struct BattleUnit *attacker, struct BattleUnit *defender);
+void Reforged_SkillMiracle(struct BattleUnit *defender);
+void Reforged_SkillSol(struct BattleUnit *attacker, struct BattleUnit *defender);
+u16 Reforged_SkillArmsthrift(struct BattleUnit *attacker, int after);
+void Reforged_SkillLifetaker(struct BattleUnit *attacker, struct BattleUnit *defender);
+void Reforged_SkillAfterUnwind(void);
+void Reforged_SkillApply(void);
+int Reforged_SkillWexpMul(struct BattleUnit *bu);
+#define RFO_SKILL_BATTLE_MODS() Reforged_SkillBattleMods();
+#define RFO_SKILL_NO_FOLLOWUP() if (Reforged_SkillWary()) return FALSE;
+int Reforged_SkillAstra(struct BattleUnit *attacker);
+void Reforged_SkillAstraHalf(void);
+int Reforged_SkillNegated(const struct BattleUnit *bu);
+#define RFO_SKILL_ASTRA(attacker, count, attrs) if (Reforged_SkillAstra(attacker)) { (count) = 5; (attrs) |= BATTLE_HIT_ATTR_5; }
+#define RFO_SKILL_ASTRA_HALF() Reforged_SkillAstraHalf();
+#define RFO_SKILL_ASTRA_ANIM | BATTLE_HIT_ATTR_5
+struct BattleHit *Reforged_AstraMergeHits(struct BattleHit *hits);
+void Reforged_AstraCopiesDraw(void);
+#define RFO_ASTRA_HITS(hits) Reforged_AstraMergeHits(hits)
+void Reforged_SkillBannerTick(void);
+#define RFO_ASTRA_COPIES() Reforged_AstraCopiesDraw(); Reforged_SkillBannerTick();
+#define RFO_SKILL_NIHIL_OFF(bu) if (Reforged_SkillNegated(bu)) return;
+#define RFO_SKILL_NIHIL_SILENCER(bu) if (Reforged_SkillNegated(bu)) { (bu)->battleSilencerRate = 0; return; }
+#define RFO_SKILL_VANTAGE(pa, pd) Reforged_SkillVantage((pa), (pd));
+#define RFO_VANTAGE_TA(attacker) ^ Reforged_SkillVantageTAFlip(attacker)
+#define RFO_SKILL_LUNA(attacker, defense) Reforged_SkillLuna((attacker), (defense));
+#define RFO_SKILL_PAVISE(attacker, defender) Reforged_SkillPavise((attacker), (defender));
+#define RFO_SKILL_MIRACLE(defender) Reforged_SkillMiracle(defender);
+#define RFO_SKILL_SOL(attacker, defender) Reforged_SkillSol((attacker), (defender));
+#define RFO_SKILL_ARMSTHRIFT(attacker, after) Reforged_SkillArmsthrift((attacker), (after))
+#define RFO_SKILL_LIFETAKER(attacker, defender) Reforged_SkillLifetaker((attacker), (defender));
+#define RFO_SKILL_APPLY() Reforged_SkillApply();
+#define RFO_SKILL_WEXP_MUL(bu) * Reforged_SkillWexpMul(bu)
+#else
+#define RFO_SKILL_BATTLE_MODS()
+#define RFO_SKILL_NO_FOLLOWUP()
+#define RFO_SKILL_ASTRA(attacker, count, attrs)
+#define RFO_SKILL_ASTRA_HALF()
+#define RFO_SKILL_ASTRA_ANIM
+#define RFO_ASTRA_HITS(hits) (hits)
+#define RFO_ASTRA_COPIES()
+#define RFO_SKILL_NIHIL_OFF(bu)
+#define RFO_SKILL_NIHIL_SILENCER(bu)
+#define RFO_SKILL_VANTAGE(pa, pd)
+#define RFO_VANTAGE_TA(attacker)
+#define RFO_SKILL_LUNA(attacker, defense)
+#define RFO_SKILL_PAVISE(attacker, defender)
+#define RFO_SKILL_MIRACLE(defender)
+#define RFO_SKILL_SOL(attacker, defender)
+#define RFO_SKILL_ARMSTHRIFT(attacker, after) (after)
+#define RFO_SKILL_LIFETAKER(attacker, defender)
+#define RFO_SKILL_APPLY()
+#define RFO_SKILL_WEXP_MUL(bu)
 #endif
 
 #endif // GUARD_BMBATTLE_H

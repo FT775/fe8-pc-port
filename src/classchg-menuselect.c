@@ -8,6 +8,9 @@
 #include "bmarch.h"
 #include "scene.h"
 #include "constants/classes.h"
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h" /* the FE7 classes (Reforged_Fe7ThirdPromo) */
+#endif
 
 u32 ClassChgMenuSelOnInit(struct MenuProc *proc)
 {
@@ -33,7 +36,7 @@ u8 ClassChgMenuItem_OnSelect(struct MenuProc *pmenu, struct MenuItemProc *pmitem
         struct Unit *unit = GetUnitFromCharId(ggparent->pid);
         u8 classnumber = unit->pClassData->number;
         if (pmitem->itemNumber <= 1) {
-            classnumber = gPromoJidLut[classnumber][pmitem->itemNumber];
+            classnumber = RFO_PROMO_SLOT(unit, pmitem->itemNumber, RANDO_PROMO_CHOICE(unit, gPromoJidLut[classnumber][pmitem->itemNumber])); // PC played builds: Match gender, three choices (include/bmunit.h)
             ggparent->jid = classnumber;
         } else {
             if (pmitem->itemNumber == 2) {
@@ -48,12 +51,24 @@ u8 ClassChgMenuItem_OnSelect(struct MenuProc *pmenu, struct MenuItemProc *pmitem
                     ggparent->jid = CLASS_RECRUIT_T1;
                     break;
                 default:
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+                    /* the FE7 classes: a Myrmidon's third choice is Blade Lord (port/reforged/reforged_fe7.c) */
+                    if (Reforged_Fe7ThirdPromo(classnumber) != 0) {
+                        ggparent->jid = Reforged_Fe7ThirdPromo(classnumber);
+                        break;
+                    }
+#endif
                     ggparent->jid = classnumber;
                     break;
                 }
             }
         }
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        /* a randomizer version 11-14 run: the third choice is the run's (a trainee's too) */
+        if (pmitem->itemNumber == 2)
+            ggparent->jid = Reforged_PromoSlot(unit, 2, ggparent->jid);
+#endif
         switch ((u8) ggparent->jid) {
         case CLASS_RANGER:
         case CLASS_RANGER_F:
@@ -82,7 +97,7 @@ u8 ClassChgMenuSelOnPressB(struct MenuProc *pmenu, struct MenuItemProc *pmitem) 
     gparent = parent->proc_parent;
     ggparent = gparent->proc_parent;
     gggparent = ggparent->proc_parent;
-    if (gggparent->bmtype == PROMO_HANDLER_TYPE_TRANINEE) 
+    if (gggparent->bmtype == PROMO_HANDLER_TYPE_TRANINEE RFO_PROMO_NO_CANCEL(gggparent)) 
         return 0;
 
     if (gggparent->bmtype == PROMO_HANDLER_TYPE_BM) {
@@ -147,6 +162,14 @@ u8 ClassChgMenuItem_3rdUsability(const struct MenuItemDef * _def, int _number)
     struct ProcClassChgMenuSel *proc = Proc_Find(ProcScr_ClassChgMenuSel);
     struct ProcPromoSel *parent = proc->proc_parent;
     struct ProcPromoMain *gparent = parent->proc_parent;
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* the FE7 classes: a Myrmidon's third choice, Blade Lord (port/reforged/reforged_fe7.c); a randomizer
+       version 11-14 run: the run's third, always (include/bmunit.h RFO_PROMO_SLOT) */
+    if (Reforged_PromoSlot(GetUnitFromCharId(gparent->pid), 2,
+            Reforged_Fe7ThirdPromo(GetUnitFromCharId(gparent->pid)->pClassData->number)) != 0)
+        return MENU_ENABLED;
+#endif
 
     if (Check3rdTraineeEnabled()) {
         switch (GetUnitFromCharId(gparent->pid)->pClassData->number) {

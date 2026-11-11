@@ -296,7 +296,7 @@ struct Unit* GetFreeBlueUnit(const struct UnitDefinition* uDef) {
 }
 
 inline int GetUnitMaxHp(struct Unit* unit) {
-    return unit->maxHP + GetItemHpBonus((u16) GetUnitEquippedWeapon(unit));
+    return unit->maxHP + GetItemHpBonus((u16) GetUnitEquippedWeapon(unit)) RFO_SKILL_HP(unit);
 }
 
 inline int GetUnitCurrentHp(struct Unit* unit) {
@@ -307,37 +307,37 @@ inline int GetUnitCurrentHp(struct Unit* unit) {
 }
 
 inline int GetUnitPower(struct Unit* unit) {
-    return unit->pow + GetItemPowBonus((u16) GetUnitEquippedWeapon(unit));
+    return unit->pow + GetItemPowBonus((u16) GetUnitEquippedWeapon(unit)) RFO_PAIR_BONUS(unit, 0) RFO_SKILL_STAT(unit, 0);
 }
 
 inline int GetUnitSkill(struct Unit* unit) {
     u16 item = GetUnitEquippedWeapon(unit);
 
-    if (unit->state & US_RESCUING)
-        return unit->skl / 2 + GetItemSklBonus(item);
+    if (RFO_RESCUE_HALVES(unit))
+        return unit->skl / 2 + GetItemSklBonus(item) RFO_SKILL_STAT(unit, 1);
 
-    return unit->skl + GetItemSklBonus(item);
+    return unit->skl + GetItemSklBonus(item) RFO_PAIR_BONUS(unit, 1) RFO_SKILL_STAT(unit, 1);
 }
 
 inline int GetUnitSpeed(struct Unit* unit) {
     u16 item = GetUnitEquippedWeapon(unit);
 
-    if (unit->state & US_RESCUING)
-        return unit->spd / 2 + GetItemSpdBonus(item);
+    if (RFO_RESCUE_HALVES(unit))
+        return unit->spd / 2 + GetItemSpdBonus(item) RFO_SKILL_STAT(unit, 2);
 
-    return unit->spd + GetItemSpdBonus(item);
+    return unit->spd + GetItemSpdBonus(item) RFO_PAIR_BONUS(unit, 2) RFO_SKILL_STAT(unit, 2);
 }
 
 inline int GetUnitDefense(struct Unit* unit) {
-    return unit->def + GetItemDefBonus((u16) GetUnitEquippedWeapon(unit));
+    return unit->def + GetItemDefBonus((u16) GetUnitEquippedWeapon(unit)) RFO_PAIR_BONUS(unit, 4) RFO_SKILL_STAT(unit, 4);
 }
 
 inline int GetUnitResistance(struct Unit* unit) {
-    return unit->res + GetItemResBonus((u16) GetUnitEquippedWeapon(unit)) + unit->barrierDuration;
+    return unit->res + GetItemResBonus((u16) GetUnitEquippedWeapon(unit)) + unit->barrierDuration RFO_PAIR_BONUS(unit, 5) RFO_SKILL_STAT(unit, 5);
 }
 
 inline int GetUnitLuck(struct Unit* unit) {
-    return unit->lck + GetItemLckBonus((u16) GetUnitEquippedWeapon(unit));
+    return unit->lck + GetItemLckBonus((u16) GetUnitEquippedWeapon(unit)) RFO_PAIR_BONUS(unit, 3) RFO_SKILL_STAT(unit, 3);
 }
 
 inline int GetUnitPortraitId(struct Unit* unit) {
@@ -678,7 +678,7 @@ struct Unit* LoadUnit(const struct UnitDefinition* uDef) {
     if (uDef->itemDrop)
         unit->state |= US_DROP_ITEM;
 
-    RANDO_HOOK_UNITLOADED(unit, uDef) RFO_STAFF_DROP_ORDER(unit) UnitCheckStatCaps(unit);
+    RANDO_HOOK_UNITLOADED(unit, uDef) RFO_STAFF_DROP_ORDER(unit) RFO_JOIN_RANKS(unit) UnitCheckStatCaps(unit);
 
     unit->curHP = GetUnitMaxHp(unit);
 
@@ -933,11 +933,11 @@ s8 CanUnitRescue(struct Unit* actor, struct Unit* target) {
     int actorAid  = GetUnitAid(actor);
     int targetCon = UNIT_CON(target);
 
-    return (actorAid >= targetCon) ? TRUE : FALSE;
+    return (actorAid >= targetCon RFO_PAIR_ANY_RESCUE(actor, target)) ? TRUE : FALSE;
 }
 
 void UnitRescue(struct Unit* actor, struct Unit* target) {
-    actor->state  |= US_RESCUING;
+    actor->state  |= US_RESCUING; RFO_PAIR_RESET(actor)
     target->state |= US_RESCUED | US_HIDDEN;
 
     actor->rescue = target->index;
@@ -950,7 +950,7 @@ void UnitRescue(struct Unit* actor, struct Unit* target) {
 void UnitDrop(struct Unit* actor, int xTarget, int yTarget) {
     struct Unit* target = GetUnit(actor->rescue);
 
-    actor->state = actor->state &~ (US_RESCUING | US_RESCUED);
+    actor->state = actor->state &~ (US_RESCUING | US_RESCUED); RFO_PAIR_RESET(actor) RFO_PAIR_RESET(target)
     target->state = target->state &~ (US_RESCUING | US_RESCUED | US_HIDDEN);
 
     if (UNIT_FACTION(target) == gPlaySt.faction)
@@ -1010,7 +1010,7 @@ void UnitChangeFaction(struct Unit* unit, int faction) {
             newUnit->exp = UNIT_EXP_DISABLED;
     }
 
-    newUnit->state = newUnit->state &~ US_DROP_ITEM; RANDO_HOOK_JOINED(newUnit)
+    newUnit->state = newUnit->state &~ US_DROP_ITEM; RANDO_HOOK_JOINED(newUnit) RFO_JOIN_RANKS(newUnit)
 
     if (newUnit->rescue)
         GetUnit(newUnit->rescue)->rescue = newUnit->index;
@@ -1368,7 +1368,7 @@ s8 CanUnitMove(void) {
 
         int cost;
 
-        if (gBmMapUnit[yLocal][xLocal] & FACTION_RED)
+        if (gBmMapUnit[yLocal][xLocal] & FACTION_RED RFO_SKILL_PASS_ADJ(gActiveUnit))
             continue;
 
         cost = GetUnitMovementCost(gActiveUnit)[gBmMapTerrain[yLocal][xLocal]];

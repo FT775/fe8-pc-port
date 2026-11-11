@@ -41,10 +41,31 @@
  * file calls nothing in user32 or shell32 at start-up: user32 is loaded only
  * to show a box, and the per-user folder is %APPDATA%.
  *
- * Nothing here changes what the game does; it only routes the log.
+ * v1.22.0, the first-start ROM picker (PortWinGui_FindRom; posix_win32.c asks
+ * only when no original ROM was found in the usual places: the command line,
+ * the current folder's baserom.gba, next to the exe, the roms folder; a file
+ * there with only the FE8 header, a hack or a cut-short copy, is said in the
+ * log and in a box first, and is used, for memory.c's message, on Cancel): the path
+ * remembered from an earlier choice (rom-path.txt in the per-user folder,
+ * %APPDATA%\fe8pc, or FE8PC_USER_DIR's), when that file is still the original
+ * FE8 (USA) ROM; else, when nobody sees the log, an Open dialog ("Choose your
+ * Fire Emblem: The Sacred Stones ROM", *.gba, starting in the roms folder).
+ * The file chosen is checked as memory.c checks a ROM (header, size, SHA-1);
+ * a wrong one gets memory.c's words in a box and the dialog opens again;
+ * Cancel gives the "no ROM found" box. The path is remembered (rom-path.txt
+ * holds that one line), never the ROM: nothing is copied. The chosen ROM's
+ * save stays next to the exe (posix_win32.c). comdlg32 is loaded by name, as user32 for the boxes.
+ * Test switch FE8PC_TEST_PICK_ROM=answer[|answer...]: the dialog's answers
+ * (a path, or "cancel"), in order, without the dialog, for scripted runs.
+ *
+ * Nothing here changes what the game does; it only routes the log and finds
+ * the ROM.
  */
 
 #include <windows.h>
+#include <commdlg.h>
+
+#include "port_hw.h" /* PortRomFileKind (port/hw/memory.c) */
 
 #include <fcntl.h>
 #include <io.h>
@@ -310,18 +331,248 @@ int PortWinGui_NoRom(void)
     if (!GetCurrentDirectoryA(sizeof(cwd), cwd))
         cwd[0] = '\0';
     printf("[win32] no ROM found: no ROM path given, no baserom.gba in the current folder ('%s'), and no "
-           "Fire Emblem: The Sacred Stones (USA) .gba file next to the exe ('%s')\n", cwd, exeDir);
+           "Fire Emblem: The Sacred Stones (USA) .gba file next to the exe ('%s') or in its roms folder\n", cwd,
+        exeDir);
     fflush(stdout);
     if (sBoxes)
     {
         snprintf(text, sizeof(text),
             "No Fire Emblem: The Sacred Stones (USA) ROM was found.\n\n"
-            "Put your ROM file (.gba) in the same folder as fe8pc-sdl.exe:\n%s\n\n"
-            "or drop the ROM file onto fe8pc-sdl.exe.\n\n"
+            "Put your ROM file (.gba) in the roms folder next to fe8pc-sdl.exe:\n%s\\roms\n\n"
+            "(or in the same folder as fe8pc-sdl.exe), or drop the ROM file onto fe8pc-sdl.exe.\n\n"
             "The game is not included: the port runs the ROM of your own cartridge.", exeDir);
         Box(text);
     }
     return 1;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The first-start ROM picker (v1.22.0)                                      */
+
+/* A box that may come more than once (the picker's "wrong file"), unlike Box. */
+static void PickerBox(const char *text)
+{
+    typedef int(WINAPI * MessageBoxWFn)(HWND, LPCWSTR, LPCWSTR, UINT);
+    int n = MultiByteToWideChar(CP_UTF8, 0, text, -1, NULL, 0);
+    HMODULE user32 = LoadLibraryW(L"user32.dll");
+    MessageBoxWFn messageBox = user32 != NULL ? (MessageBoxWFn)(void *)GetProcAddress(user32, "MessageBoxW") : NULL;
+    wchar_t *w;
+
+    if (messageBox == NULL || n <= 0 || (w = malloc((size_t)n * sizeof(*w))) == NULL)
+        return;
+    MultiByteToWideChar(CP_UTF8, 0, text, -1, w, n);
+    messageBox(NULL, w, BOX_TITLE, MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+    free(w);
+}
+
+/* The file that remembers the chosen ROM: rom-path.txt in FE8PC_USER_DIR (a test switch), else in
+   %APPDATA%\fe8pc (the per-user folder of the settings, port/sdl3/platform_sdl3.c Platform_UserDir). mkdir:
+   make the folder. 0 when there is none. */
+static int RememberFile(wchar_t *out, size_t outLen, int mkdir)
+{
+    const wchar_t *env = _wgetenv(L"FE8PC_USER_DIR");
+    const wchar_t *appData = _wgetenv(L"APPDATA");
+    wchar_t dir[MAX_PATH * 2];
+    size_t n;
+
+    if (env != NULL && env[0] != L'\0')
+        _snwprintf(dir, sizeof(dir) / sizeof(dir[0]), L"%ls", env);
+    else if (appData != NULL && appData[0] != L'\0')
+        _snwprintf(dir, sizeof(dir) / sizeof(dir[0]), L"%ls\\fe8pc", appData);
+    else
+        return 0;
+    dir[sizeof(dir) / sizeof(dir[0]) - 1] = L'\0';
+    n = wcslen(dir);
+    while (n > 0 && (dir[n - 1] == L'\\' || dir[n - 1] == L'/'))
+        dir[--n] = L'\0';
+    if (mkdir)
+        CreateDirectoryW(dir, NULL); /* there already is fine */
+    _snwprintf(out, outLen, L"%ls\\rom-path.txt", dir);
+    out[outLen - 1] = L'\0';
+    return 1;
+}
+
+/* What is wrong with a chosen file, in memory.c's words; "" when it is the original FE8 (USA) ROM. */
+static void RomProblem(const char *path, char *out, size_t outSize)
+{
+    char sha1[41];
+
+    switch (PortRomFileKind(path, sha1))
+    {
+    case PORT_ROM_FE8:
+        out[0] = '\0';
+        break;
+    case PORT_ROM_WRONG_SIZE:
+        snprintf(out, outSize, "'%s' has the FE8 (USA) header but not its size, 16,777,216 bytes (16 MiB): an "
+                 "incomplete or damaged copy of the ROM. Copy (dump) the ROM from the cartridge again.", path);
+        break;
+    case PORT_ROM_WRONG_SHA1:
+        snprintf(out, outSize, "'%s' has the FE8 (USA) header and size, but not the original ROM's contents: its "
+                 "SHA-1 is %s, the original's c25b145e37456171ada4b0d440bf88a19f4d509f. It is a changed ROM (a hack, a "
+                 "translation or a patch) or a damaged copy; the port runs only the original FE8 (USA) ROM.", path, sha1);
+        break;
+    default:
+        snprintf(out, outSize, "'%s' is not FE8 (USA): header mismatch (it is not a Fire Emblem: The Sacred Stones "
+                 "(USA) ROM, or not a ROM at all).", path);
+        break;
+    }
+}
+
+/* One answer of the Open dialog (UTF-8), or of FE8PC_TEST_PICK_ROM. 0: Cancel. */
+static int AskForRom(char *out, size_t outSize)
+{
+    typedef BOOL(WINAPI * GetOpenFileNameWFn)(LPOPENFILENAMEW);
+    static int sTestAt;
+    const char *test = getenv("FE8PC_TEST_PICK_ROM");
+    wchar_t file[MAX_PATH * 2] = L"", dir[MAX_PATH * 2];
+    OPENFILENAMEW ofn;
+    HMODULE comdlg;
+    GetOpenFileNameWFn getOpen;
+
+    if (test != NULL)
+    {
+        const char *p = test;
+        int k;
+        size_t n;
+
+        for (k = 0; k < sTestAt && p != NULL; k++)
+            p = (p = strchr(p, '|')) != NULL ? p + 1 : NULL;
+        sTestAt++;
+        if (p == NULL)
+            p = "cancel";
+        n = strcspn(p, "|");
+        snprintf(out, outSize, "%.*s", (int)n, p);
+        printf("[win32] ROM picker (FE8PC_TEST_PICK_ROM answer %d): %s\n", sTestAt, out);
+        fflush(stdout);
+        return strcmp(out, "cancel") != 0;
+    }
+    if (!sBoxes)
+    {
+        printf("[win32] ROM picker not shown: the log is seen (a terminal or a redirect), so nobody may be at the "
+               "window to answer it\n");
+        fflush(stdout);
+        return 0;
+    }
+    comdlg = LoadLibraryW(L"comdlg32.dll"); /* not imported: see the top of this file */
+    getOpen = comdlg != NULL ? (GetOpenFileNameWFn)(void *)GetProcAddress(comdlg, "GetOpenFileNameW") : NULL;
+    if (getOpen == NULL)
+    {
+        printf("[win32] ROM picker: comdlg32's GetOpenFileNameW is not there\n");
+        return 0;
+    }
+    dir[0] = L'\0';
+    if (ExeDirW(dir, sizeof(dir) / sizeof(dir[0])))
+    {
+        size_t n = wcslen(dir);
+        DWORD at;
+
+        _snwprintf(dir + n, sizeof(dir) / sizeof(dir[0]) - n, L"\\roms");
+        dir[sizeof(dir) / sizeof(dir[0]) - 1] = L'\0';
+        at = GetFileAttributesW(dir);
+        if (at == INVALID_FILE_ATTRIBUTES || !(at & FILE_ATTRIBUTE_DIRECTORY))
+            dir[n] = L'\0'; /* no roms folder: the exe's */
+    }
+    memset(&ofn, 0, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.lpstrFilter = L"Game Boy Advance ROM (*.gba)\0*.gba\0All files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = sizeof(file) / sizeof(file[0]);
+    ofn.lpstrInitialDir = dir[0] != L'\0' ? dir : NULL;
+    ofn.lpstrTitle = L"Choose your Fire Emblem: The Sacred Stones ROM";
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_HIDEREADONLY;
+    printf("[win32] no ROM found: the ROM picker is open (\"Choose your Fire Emblem: The Sacred Stones ROM\")\n");
+    fflush(stdout);
+    if (!getOpen(&ofn))
+        return 0;
+    return WideCharToMultiByte(CP_UTF8, 0, file, -1, out, (int)outSize, NULL, NULL) != 0;
+}
+
+/* The path rom-path.txt remembers (its one line), checked or not; 0 when there is none. */
+static int RememberedRom(char *out, size_t outSize)
+{
+    char text[MAX_PATH * 8];
+    wchar_t memo[MAX_PATH * 2];
+    FILE *fp;
+    size_t n;
+
+    out[0] = '\0';
+    if (!RememberFile(memo, sizeof(memo) / sizeof(memo[0]), 0) || (fp = _wfopen(memo, L"rb")) == NULL)
+        return 0;
+    n = fread(text, 1, sizeof(text) - 1, fp);
+    fclose(fp);
+    text[n] = '\0';
+    n = strcspn(text, "\r\n");
+    if (n >= outSize)
+        return 0;
+    memcpy(out, text, n);
+    out[n] = '\0';
+    return out[0] != '\0';
+}
+
+/* posix_win32.c, when no original ROM is found in the usual places: the remembered ROM, else the one the
+   player chooses (remembered for the next start). notOriginal: the file found there with only the FE8 header
+   (NULL: none), said before asking. 1: out is the original FE8 (USA) ROM; 0: none (Cancel, or no dialog). */
+int PortWinGui_FindRom(char *out, size_t outSize, const char *notOriginal)
+{
+    wchar_t memo[MAX_PATH * 2];
+    char problem[MAX_PATH * 8 + 512];
+    FILE *fp;
+
+    if (RememberedRom(out, outSize))
+    {
+        RomProblem(out, problem, sizeof(problem));
+        if (problem[0] == '\0')
+        {
+            printf("[win32] the ROM chosen at an earlier start: '%s' (remembered in rom-path.txt)%s\n", out,
+                notOriginal != NULL ? ", not the hacked or cut-short FE8 file found next to the exe or in roms" : "");
+            fflush(stdout);
+            return 1;
+        }
+        printf("[win32] the remembered ROM '%s' is gone or no longer the original ROM: asking again\n", out);
+        fflush(stdout);
+    }
+    if (notOriginal != NULL) /* only a changed or cut-short FE8 file was found: say so, then ask */
+    {
+        RomProblem(notOriginal, problem, sizeof(problem));
+        printf("[win32] the only FE8 file found is not the original ROM (%s): asking for the original\n", problem);
+        fflush(stdout);
+        if (sBoxes && getenv("FE8PC_TEST_PICK_ROM") == NULL)
+        {
+            char text[sizeof(problem) + 160];
+
+            snprintf(text, sizeof(text), "%s\n\nChoose your original ROM in the next window, or Cancel to stop.",
+                problem);
+            PickerBox(text);
+        }
+    }
+    while (AskForRom(out, outSize))
+    {
+        RomProblem(out, problem, sizeof(problem));
+        if (problem[0] == '\0')
+        {
+            if (RememberFile(memo, sizeof(memo) / sizeof(memo[0]), 1) && (fp = _wfopen(memo, L"wb")) != NULL)
+            {
+                fprintf(fp, "%s\n", out);
+                fclose(fp);
+                printf("[win32] ROM chosen: '%s' (remembered for the next start; the ROM itself is not copied)\n", out);
+            }
+            else
+                printf("[win32] ROM chosen: '%s' (it could not be remembered)\n", out);
+            fflush(stdout);
+            return 1;
+        }
+        printf("[win32] ROM picker: refused: %s\n", problem);
+        fflush(stdout);
+        if (sBoxes && getenv("FE8PC_TEST_PICK_ROM") == NULL)
+        {
+            char text[sizeof(problem) + 128];
+
+            snprintf(text, sizeof(text), "%s\n\nChoose another file, or Cancel.", problem);
+            PickerBox(text);
+        }
+    }
+    return 0;
 }
 
 void PortWinGui_StartFailed(int code)

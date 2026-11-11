@@ -158,7 +158,8 @@ static int OwnClassFor(int S, int F, u32 h)
 
         c = (b != 0 && Rando_HashInt(h, 2)) ? b : a; /* Fighter / Pirate, Mage / Shaman, Knight F / Cavalier F */
     }
-    if (slotTier && !Rando_ClassIsPromoted(c) && (n = Rando_ClassPromotions(c, promos)) > 0)
+    if (slotTier && !Rando_ClassIsPromoted(c) &&
+        (n = Rando_ClassPromotionsFor(c, Rando_VanillaChar(F) != NULL && (Rando_VanillaChar(F)->attributes & CA_FEMALE), promos)) > 0)
         c = promos[Rando_HashInt(h >> 8, n)];
     else if (!slotTier && Rando_ClassIsPromoted(c) && UnitClass(Rando_ClassBase(c)))
         c = Rando_ClassBase(c); /* not the Gorgon's egg */
@@ -498,14 +499,17 @@ int RandoRecruit_SelfTest(void)
             PortLog("[rando] check: recruit: slot 0x%02X fill 0x%02X: crosses sex\n", pid, F);
             fails++;
         }
-        if (c->defaultClass != RandoClasses_PlayerClass(pid) || (k = Rando_Class(c->defaultClass)) == NULL ||
+        if (RandoClasses_PlayerFe8Class(pid) != 0 && c->defaultClass == RandoClasses_PlayerClass(pid) &&
+            (k = GetClassData(c->defaultClass)) != NULL && k->pBattleAnimDef != NULL)
+            ; /* versions 11-14: a foreign class of the run (reforged_rando_classes.c checks it) */
+        else if (c->defaultClass != RandoClasses_PlayerClass(pid) || (k = Rando_Class(c->defaultClass)) == NULL ||
             k->pBattleAnimDef == NULL)
         {
             PortLog("[rando] check: recruit: slot 0x%02X: class 0x%02X\n", pid, c->defaultClass);
             fails++;
             continue;
         }
-        if (SlotNeed(pid) == 1 && !Fits(pid, c->defaultClass))
+        if (SlotNeed(pid) == 1 && !Fits(pid, RandoClasses_PlayerFe8Class(pid) ? RandoClasses_PlayerFe8Class(pid) : c->defaultClass))
         {
             PortLog("[rando] check: recruit: slot 0x%02X: class 0x%02X misses the slot's need\n", pid,
                 c->defaultClass);

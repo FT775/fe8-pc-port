@@ -282,7 +282,7 @@ bool AiTryHealSelf(void)
 s8 AiTryMoveTowardsEscape(void) {
     const struct AiEscapePt* escapePoint;
 
-    GenerateUnitMovementMapExt(gActiveUnit, MAP_MOVEMENT_EXTENDED);
+    RFO_AI_ESCAPE_MARK() GenerateUnitMovementMapExt(gActiveUnit, MAP_MOVEMENT_EXTENDED);
     escapePoint = GetEscapePointStructThingMaybe();
 
     if (escapePoint != NULL) {

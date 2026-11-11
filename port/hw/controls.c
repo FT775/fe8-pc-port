@@ -13,7 +13,7 @@
 static const char *const sDefaults[CTL_COUNT][CTL_SLOTS] = {
     [CTL_A]            = { "Z",         "",             "a",       ""   },
     [CTL_B]            = { "X",         "",             "b",       ""   },
-    [CTL_SELECT]       = { "Backspace", "",             "back",    ""   },
+    [CTL_SELECT]       = { "Tab",       "",             "back",    ""   }, /* v1.3.0: was Backspace, now Rewind's */
     [CTL_START]        = { "Return",    "Keypad Enter", "start",   ""   },
     [CTL_RIGHT]        = { "Right",     "",             "dpright", ""   },
     [CTL_LEFT]         = { "Left",      "",             "dpleft",  ""   },
@@ -23,15 +23,16 @@ static const char *const sDefaults[CTL_COUNT][CTL_SLOTS] = {
     [CTL_L]            = { "Q",         "",             "l",       "zl" },
     [CTL_FAST_FORWARD] = { "Space",     "",             "rstick",  ""   },
     [CTL_FULLSCREEN]   = { "F11",       "",             "",        ""   },
+    [CTL_REWIND]       = { "Backspace", "",             "",        ""   }, /* held: Reforged "Rewind" */
 };
 
 static const char *const sKeys[CTL_COUNT] = {
     "control_a", "control_b", "control_select", "control_start", "control_right", "control_left",
-    "control_up", "control_down", "control_r", "control_l", "control_fast_forward", "control_fullscreen",
+    "control_up", "control_down", "control_r", "control_l", "control_fast_forward", "control_fullscreen", "control_rewind",
 };
 
 static const char *const sLabels[CTL_COUNT] = {
-    "A", "B", "Select", "Start", "Right", "Left", "Up", "Down", "R", "L", "Fast-forward", "Fullscreen",
+    "A", "B", "Select", "Start", "Right", "Left", "Up", "Down", "R", "L", "Fast-forward", "Fullscreen", "Rewind",
 };
 
 static char sBind[CTL_COUNT][CTL_SLOTS][CTL_NAME_MAX];

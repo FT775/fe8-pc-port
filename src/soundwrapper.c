@@ -326,7 +326,14 @@ void PlaySong(int songId, struct MusicPlayerInfo *player)
     if (songId < 128)
     {
         Sound_SetMaxNumChannelsForSong(songId);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        { /* Random music: the Sound Room gets the song the game would have played */
+            int Reforged_RandoSoundRoomSong(int song);
+            UnlockSoundRoomSong(0, Reforged_RandoSoundRoomSong(songId));
+        }
+#else
         UnlockSoundRoomSong(0, songId);
+#endif
     }
 
     if (player != NULL)

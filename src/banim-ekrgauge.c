@@ -90,11 +90,11 @@ void NewEkrGauge(void)
     EnablePaletteSync();
 
     /* decode value to number for display: 998 --> 9 9 8 */
-    ModDec(gEkrGaugeHit[0], &gEkrGaugeDecoder[0x0]);
+    ModDec(RFO_SHOWN_GAUGE_HIT(gEkrGaugeHit[0]), &gEkrGaugeDecoder[0x0]);
     ModDec(gEkrGaugeDmg[0], &gEkrGaugeDecoder[0x3]);
     ModDec(gEkrGaugeCrt[0], &gEkrGaugeDecoder[0x6]);
 
-    ModDec(gEkrGaugeHit[1], &gEkrGaugeDecoder[0x9]);
+    ModDec(RFO_SHOWN_GAUGE_HIT(gEkrGaugeHit[1]), &gEkrGaugeDecoder[0x9]);
     ModDec(gEkrGaugeDmg[1], &gEkrGaugeDecoder[0xC]);
     ModDec(gEkrGaugeCrt[1], &gEkrGaugeDecoder[0xF]);
 

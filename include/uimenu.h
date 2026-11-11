@@ -208,4 +208,16 @@ void AddMenuOverride(int cmdid, int kind, void* func);
 u8 OverriddenMenuAvailability(const struct MenuItemDef* def, int number);
 u8 OverriddenMenuSelected(struct MenuProc* proc, struct MenuItemProc* item);
 
+/* src/uimenu.c StartMenuCore: never more than MENU_ITEM_MAX rows (Pair Up's Swap can make a
+   twelfth; port/reforged/reforged_pairup.c). Nothing on the GBA. */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_MenuFits(const struct MenuDef *def, int i, int itemCount);
+const struct MenuDef *Reforged_MenuDef(const struct MenuDef *def);
+#define RFO_MENU_FITS(def, i, itemCount) && Reforged_MenuFits((def), (i), (itemCount))
+#define RFO_MENU_DEF(def) (def) = Reforged_MenuDef(def);
+#else
+#define RFO_MENU_FITS(def, i, itemCount)
+#define RFO_MENU_DEF(def)
+#endif
+
 #endif // GUARD_UI_MENU_H

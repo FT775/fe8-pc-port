@@ -673,6 +673,7 @@ void Reforged_MapHpBarsVBlank(void)
     if (sPending.count != 0)
         memcpy(gReforgedOverlay.owner, sPending.owner, sizeof(sPending.owner[0]) * sPending.count);
     sPending.count = 0;
+    Reforged_SkillBannerMapTick(); /* skill banners' map-animation popups (reforged_skillbanner.c) */
 }
 
 #endif /* PORT_PLAYED_BUILD */

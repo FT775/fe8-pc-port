@@ -21,6 +21,9 @@
 
 #include "constants/msg.h"
 #include "constants/songs.h"
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h" /* PC played builds: "Keep game Options" */
+#endif
 
 struct ConfigScreen * CONST_DATA gConfigUiState = (struct ConfigScreen *)gGenericBuffer;
 
@@ -1371,6 +1374,9 @@ void Config_Loop_KeyHandler(struct ConfigProc * proc)
 //! FE8U: 0x080B2464
 bool Config_HandleExit(struct ConfigProc * proc)
 {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_GameOptionsCapture(); /* "Keep game Options": remember the values chosen */
+#endif
     EndMenuScrollBar();
     EndMuralBackground();
 

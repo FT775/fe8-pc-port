@@ -32,7 +32,24 @@
  *     so saving such a game never erases its run. The RFO_RANDO_* options are not
  *     gameplay options of the generic line (Reforged_OptionIsGameplay is 0 for
  *     them): they are the menu's settings for the next new game, not the run's.
- * Loading a block (ReadGameSave, ReadSuspendSave) puts its fallen list back;
+ *   - Skills' kept skills (reforged_skills.c Reforged_SkillKept: the skill each
+ *     promoted character carried over from its previous class), "<block>_kept =
+ *     14:Wrath 20:Str_+2" (character id:skill name, spaces as '_'), only when one
+ *     is recorded; a file without the line (older ones) keeps nothing.
+ *   - "Ruin floor select" (reforged_ruins.c): the best Lagdou floor ever cleared, "<block>_ruins =
+ *     best=7" (" partial": the run being played started past floor 1), only when one is; none: 0.
+ *     v1.8.0's "<block>_ruins = 3 post run=..." reads as best=3. Stored data, not a mark: a block
+ *     with only this line gets an empty "<block> =" line and its fingerprint, and is never logged
+ *     as marked.
+ *   - The FE7 classes (reforged_fe7.c, v1.15.0): a block's units in an FE7 class, "<block>_fe7 =
+ *     1:0x82 2:0x83:bow=31" (unit index:class, then the weapon ranks the save wrote as 0 because the
+ *     stand-in class cannot use that kind, as kind=rank with ',' between). The save holds each one's FE8
+ *     fallback class (Reforged_Fe7Fallback: SRAM never gets an id past 0x7F) and no such rank, so a build
+ *     or a run without the FE7 classes reads a plain stand-in. Loading the block gives class and ranks
+ *     back when the FE7 classes are loaded (else the unit stays the stand-in, without those ranks). A
+ *     chapter save also keeps the class in the units' own flag bits (src/bmsave.c), so its class comes
+ *     back without this line, only the ranks do not. Stored data, not a mark, as "_ruins".
+ * Loading a block (ReadGameSave, ReadSuspendSave) puts its fallen list and kept skills back;
  * just before, Reforged_RandoWillRead takes its run (Rando_SaveMarkBlock).
  *
  * The file is (re)written just before a .sav write (savefile_pc.c Write, once
@@ -79,6 +96,7 @@
  *     suspend_check = 0x5E6F7081
  *     suspend_fallen = 4,3
  *     suspend_rando = v=1 seed=0x1234ABCD randomizer=1 randomizer_growths=1 ...
+ *     suspend_kept = 14:Wrath 20:Str_+2
  *
  * <block>_rando lists every RFO_RANDO_* key (Reforged_OptionKey) with its value; on
  * reading, an unknown key is skipped, a missing one is 0, and the entry counts only
@@ -99,12 +117,15 @@
 #include "port_hw.h"
 #include "port_reforged.h"
 #include "reforged_rando.h"
+#include "reforged_skills.h"
 #include "../platform.h"
 
 #define MARK_BLOCKS   (SAVE_ID_SUSPEND_ALT + 1)
 #define MARK_FALLEN   64
 #define MARK_TEXT_MAX 16384 /* 8192 before the randomizer's lines (five blocks of every RFO_RANDO_* key) */
 #define MARK_SUFFIX   ".reforged"
+#define MARK_KEPT     0x100 /* the kept skills by character id (reforged_skills.c SK_KEPT_PIDS) */
+#define MARK_FE7      REFORGED_FE7_MARKS /* units in an FE7 class per block (reforged_fe7.c) */
 
 struct MarkBlock {
     u8 values[RFO_COUNT]; /* the gameplay options' values when the block was written (others: their defaults) */
@@ -114,6 +135,10 @@ struct MarkBlock {
     u32 check;
     u8 hasRando;          /* the block was written by a randomized run: rando is that run */
     struct RandoConfig rando;
+    u8 kept[MARK_KEPT];   /* Skills' kept skill per character id (0: none) when the block was written */
+    u8 ruins;             /* Ruin floor select: the best Lagdou floor cleared, + 0x10 a part-way run (Reforged_RuinsGet) */
+    u8 fe7Count;          /* the FE7 classes: the block's units in one (class, ranks the save left out) */
+    struct Reforged_Fe7Mark fe7[MARK_FE7];
 };
 
 static const char *const sBlockNames[MARK_BLOCKS] = {
@@ -125,6 +150,30 @@ static const char *const sBlockNames[MARK_BLOCKS] = {
 };
 
 static struct MarkBlock sBlocks[MARK_BLOCKS];
+
+/* "<block>_fe7": the weapon kinds' names, by ITYPE_* */
+static const char *const sFe7Kinds[8] = { "sword", "lance", "axe", "bow", "staff", "anima", "light", "dark" };
+
+/* "Rewind" (reforged_rewind.c): the blocks as they are, and back. */
+typedef char MarkStateFits[sizeof(sBlocks) <= REFORGED_SAVEMARK_STATE_MAX ? 1 : -1];
+
+void Reforged_SaveMarkStateGet(void *out)
+{
+    memcpy(out, sBlocks, sizeof(sBlocks));
+}
+
+void Reforged_SaveMarkStateSet(const void *in)
+{
+    memcpy(sBlocks, in, sizeof(sBlocks));
+}
+
+void Reforged_SaveMarkStateSetSuspend(const void *in)
+{
+    const struct MarkBlock *b = (const struct MarkBlock *)in;
+
+    sBlocks[SAVE_ID_SUSPEND] = b[SAVE_ID_SUSPEND];
+    sBlocks[SAVE_ID_SUSPEND_ALT] = b[SAVE_ID_SUSPEND_ALT];
+}
 
 /* The Nuzlocke graveyards (reforged_rando_nuzlocke.c): not per block but per run, so a
    death stays whichever block is loaded later ("nuzlocke = <seed> <playthrough id>
@@ -172,10 +221,20 @@ static int BlockMarked(const struct MarkBlock *b)
 
     if (b->fallenCount != 0 || b->hasRando)
         return 1;
+    for (id = 0; id < MARK_KEPT; id++)
+        if (b->kept[id] != 0)
+            return 1;
     for (id = 0; id < RFO_COUNT; id++)
         if (ValueMarked(b, id))
             return 1;
     return 0;
+}
+
+/* The block has something to keep in the file: a mark, or Ruin floor select's best floor (stored data, not
+   a gameplay mark: it is counted with the option off too). */
+static int BlockHasData(const struct MarkBlock *b)
+{
+    return BlockMarked(b) || b->ruins != 0 || b->fe7Count != 0;
 }
 
 /* No mark: every option at its default, no fallen units, no fingerprint, no
@@ -217,6 +276,14 @@ void Reforged_SaveBlockWritten(int block)
     }
     else
         memset(&b->rando, 0, sizeof(b->rando));
+    /* Skills: the run's kept skills (all 0 when Skills is off) */
+    for (id = 0; id < MARK_KEPT; id++)
+        b->kept[id] = (u8)Reforged_SkillKept(id);
+    b->ruins = (u8)Reforged_RuinsGet(); /* Ruin floor select: the best Lagdou floor cleared */
+    /* the FE7 classes: the block's units in one (a game slot: as WriteGameSave packed them; none for a
+       new game, which packs no unit) */
+    b->fe7Count = (u8)(block >= SAVE_ID_SUSPEND ? Reforged_Fe7SuspendUnits(b->fe7, MARK_FE7)
+                                                : Reforged_Fe7TakePacked(b->fe7, MARK_FE7));
 }
 
 const struct RandoConfig *Rando_SaveMarkBlock(int block)
@@ -228,6 +295,7 @@ const struct RandoConfig *Rando_SaveMarkBlock(int block)
 
 void Reforged_SaveBlockRead(int block)
 {
+    Reforged_RewindForget(); /* "Rewind": a load other than a rewind's own forgets the kept turns */
     int i;
 
     if (block < 0 || block >= MARK_BLOCKS)
@@ -236,7 +304,19 @@ void Reforged_SaveBlockRead(int block)
        (a test switch, for scripted runs on saves with no save mark): the Game fixes screen's instead. */
     for (i = RFO_FIX_FIRST; i <= RFO_FIX_LAST; i++)
         Reforged_SetRunFix(i, getenv("FE8PC_FIXES_FORCE") != NULL ? Reforged_GetOption(i) : sBlocks[block].values[i]);
+    Reforged_Promo3Tables(); /* "Third promotion" (v1.23.0): the twins' prf locks as this block's fix says */
     Reforged_CasualSetFallen(sBlocks[block].fallen, sBlocks[block].fallenCount);
+    /* Skills: the block's kept skills (none recorded, an older file: nothing kept) */
+    Reforged_SkillKeptReset();
+    for (i = 1; i < MARK_KEPT; i++)
+        if (sBlocks[block].kept[i] != 0)
+            Reforged_SkillKeptSet(i, sBlocks[block].kept[i]);
+    Reforged_RuinsSet(sBlocks[block].ruins); /* Ruin floor select (none recorded: none cleared) */
+    if (sBlocks[block].fe7Count != 0)
+        Reforged_Fe7MarkRestore(sBlocks[block].fe7, sBlocks[block].fe7Count, block >= SAVE_ID_SUSPEND);
+    if (sBlocks[block].ruins != 0)
+        PortLog("[reforged] ruins: %s loaded: best Lagdou floor cleared %d%s\n", sBlockNames[block],
+            sBlocks[block].ruins & 0x0F, (sBlocks[block].ruins & 0x10) ? ", a run started part-way" : "");
     for (i = 0; i < sBlocks[block].fallenCount; i++)
         PortLog("[reforged] casual mode: %s loaded: pid 0x%02X is on the fallen list\n", sBlockNames[block],
             sBlocks[block].fallen[i]);
@@ -316,15 +396,44 @@ void Reforged_SaveBlockCleared(int block)
     ClearBlock(&sBlocks[block]);
 }
 
+/* "<block>_kept = 14:Wrath 20:Str_+2": Skills' kept skills by character id (decimal) and skill
+   name (spaces written as '_'), only when the block has one; len unchanged when it has none. */
+static int KeptLine(char *buf, size_t size, int len, int block)
+{
+    const struct MarkBlock *b = &sBlocks[block];
+    int pid, any = 0;
+    const char *name;
+
+    for (pid = 1; pid < MARK_KEPT && len < (int)size; pid++)
+    {
+        if (b->kept[pid] == 0 || (name = Reforged_SkillName(b->kept[pid]))[0] == 0)
+            continue;
+        if (!any)
+            len += snprintf(buf + len, size - len, "%s_kept =", sBlockNames[block]);
+        any = 1;
+        if (len < (int)size)
+            len += snprintf(buf + len, size - len, " %d:", pid);
+        for (; *name != 0 && len < (int)size - 1; name++)
+            buf[len++] = *name == ' ' ? '_' : *name;
+        if (len < (int)size)
+            buf[len] = 0;
+    }
+    if (any && len < (int)size)
+        len += snprintf(buf + len, size - len, "\n");
+    return len;
+}
+
 /* The file's text for sBlocks, or "" when no block is marked. */
 static int BuildText(char *buf, size_t size)
 {
-    int len = 0, block, id, i, any = 0, anyRando = 0;
+    int len = 0, block, id, i, any = 0, anyRando = 0, anyKept = 0;
 
     for (block = 0; block < MARK_BLOCKS; block++)
     {
-        any |= BlockMarked(&sBlocks[block]);
+        any |= BlockHasData(&sBlocks[block]);
         anyRando |= sBlocks[block].hasRando;
+        for (id = 1; id < MARK_KEPT; id++)
+            anyKept |= sBlocks[block].kept[id] != 0;
     }
     any |= sGraveCount != 0;
     buf[0] = 0;
@@ -340,16 +449,17 @@ static int BuildText(char *buf, size_t size)
         "# <block>_fallen: Casual mode's fallen units (character ids) that come back\n"
         "# at the next chapter change. <block>_check: the block's checksum in the .sav\n"
         "# this was written for; an entry that does not match the .sav is ignored.\n"
-        "%s"
+        "%s%s"
         "format = 2\n",
         anyRando ? "# <block>_rando: the randomized run the block was written by (randomizer\n"
                    "# version v, seed, its options); its tables are rebuilt when the block is loaded.\n"
-                 : "");
+                 : "",
+        anyKept ? "# <block>_kept: Skills' kept skills of promoted units (character id:skill).\n" : "");
     for (block = 0; block < MARK_BLOCKS && len < (int)size; block++)
     {
         const struct MarkBlock *b = &sBlocks[block];
 
-        if (!BlockMarked(b))
+        if (!BlockHasData(b))
             continue;
         len += snprintf(buf + len, size - len, "%s =", sBlockNames[block]);
         for (id = 0; id < RFO_COUNT && len < (int)size; id++)
@@ -382,6 +492,27 @@ static int BuildText(char *buf, size_t size)
                 if (Reforged_OptionKey(id) != NULL)
                     len += snprintf(buf + len, size - len, " %s=%d", Reforged_OptionKey(id),
                         b->rando.v[id - RFO_RANDO_FIRST]);
+            if (len < (int)size)
+                len += snprintf(buf + len, size - len, "\n");
+        }
+        if (len < (int)size)
+            len = KeptLine(buf, size, len, block);
+        if (b->ruins != 0 && len < (int)size)
+            len += snprintf(buf + len, size - len, "%s_ruins = best=%d%s\n", sBlockNames[block], b->ruins & 0x0F,
+                (b->ruins & 0x10) ? " partial" : "");
+        if (b->fe7Count != 0 && len < (int)size)
+        {
+            len += snprintf(buf + len, size - len, "%s_fe7 =", sBlockNames[block]);
+            for (i = 0; i < b->fe7Count && len < (int)size; i++)
+            {
+                int t, any = 0;
+
+                len += snprintf(buf + len, size - len, " %d:0x%02X", b->fe7[i].index, b->fe7[i].jid);
+                for (t = 0; t < 8 && len < (int)size; t++)
+                    if (b->fe7[i].mask & (1 << t))
+                        len += snprintf(buf + len, size - len, "%c%s=%d", any++ ? ',' : ':', sFe7Kinds[t],
+                            b->fe7[i].ranks[t]);
+            }
             if (len < (int)size)
                 len += snprintf(buf + len, size - len, "\n");
         }
@@ -453,7 +584,7 @@ static char *Trim(char *s)
     return s;
 }
 
-enum { LINE_VALUES, LINE_FALLEN, LINE_CHECK, LINE_RANDO };
+enum { LINE_VALUES, LINE_FALLEN, LINE_CHECK, LINE_RANDO, LINE_KEPT, LINE_RUINS, LINE_FE7 };
 
 static int FindBlock(const char *name, int *what)
 {
@@ -483,6 +614,21 @@ static int FindBlock(const char *name, int *what)
         if (strcmp(name + n, "_rando") == 0)
         {
             *what = LINE_RANDO;
+            return block;
+        }
+        if (strcmp(name + n, "_kept") == 0)
+        {
+            *what = LINE_KEPT;
+            return block;
+        }
+        if (strcmp(name + n, "_ruins") == 0)
+        {
+            *what = LINE_RUINS;
+            return block;
+        }
+        if (strcmp(name + n, "_fe7") == 0)
+        {
+            *what = LINE_FE7;
             return block;
         }
     }
@@ -596,6 +742,59 @@ static void ParseRando(struct MarkBlock *b, char *val, const char *path, int lin
     }
 }
 
+/* "14:Wrath 20:Str_+2" (a skill id number is taken too): a bad pair is skipped (logged). */
+static void ParseKept(struct MarkBlock *b, char *val, const char *path, int lineNo)
+{
+    char *tok, *p = val, *colon, *end, *q;
+    long pid, n;
+    int sk;
+    char name[32];
+
+    memset(b->kept, 0, sizeof(b->kept));
+    for (;;)
+    {
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (*p == 0)
+            break;
+        tok = p;
+        while (*p != 0 && *p != ' ' && *p != '\t')
+            p++;
+        if (*p != 0)
+            *p++ = 0;
+        colon = strchr(tok, ':');
+        end = tok;
+        pid = colon != NULL ? strtol(tok, &end, 0) : 0;
+        if (colon == NULL || end != colon || pid <= 0 || pid >= MARK_KEPT)
+        {
+            PortLog("[reforged] %s line %d: kept skill '%s' is not pid:skill: skipped\n", path, lineNo, tok);
+            continue;
+        }
+        colon++;
+        n = strtol(colon, &end, 0);
+        if (end != colon && *end == 0)
+            sk = n >= SK_FIRST_NEW && n < SK_COUNT ? (int)n : 0; /* FE8's own skills are never kept */
+        else
+        {
+            snprintf(name, sizeof(name), "%s", colon);
+            for (q = name; *q != 0; q++)
+                if (*q == '_')
+                    *q = ' ';
+            for (sk = SK_FIRST_NEW; sk < SK_COUNT; sk++)
+                if (strcasecmp(name, Reforged_SkillName(sk)) == 0)
+                    break;
+            if (sk == SK_COUNT)
+                sk = 0;
+        }
+        if (sk == 0)
+        {
+            PortLog("[reforged] %s line %d: unknown kept skill '%s': skipped\n", path, lineNo, colon);
+            continue;
+        }
+        b->kept[pid] = (u8)sk;
+    }
+}
+
 static void ParseFallen(struct MarkBlock *b, char *val)
 {
     char *p = val, *end;
@@ -613,6 +812,66 @@ static void ParseFallen(struct MarkBlock *b, char *val)
         if (pid > 0 && pid < 0x100)
             b->fallen[b->fallenCount++] = (u8)pid;
         p = end;
+    }
+}
+
+/* "1:0x82 2:0x83:bow=31": unit index:class, each an FE7 class (0x80-0x88) or, v1.19.0, an FE6 class (0x89-0x8C; v1.20.0: 0x8F)
+   (v1.15.0: 0x80-0x83, v1.16.0-v1.17.0: 0x80-0x87, v1.18.0: 0x80-0x88 and v1.19.0: 0x80-0x8C, which skip the later ones, so its
+   units stay their stand-ins there), and the weapon ranks the
+   save left out (kind=rank, ',' between; v1.15.0 test builds wrote none); anything else is skipped. */
+static void ParseFe7(struct MarkBlock *b, char *val)
+{
+    char *p = val, *end;
+    long idx, jid, v;
+    int t;
+
+    b->fe7Count = 0;
+    while (*p != 0 && b->fe7Count < MARK_FE7)
+    {
+        idx = strtol(p, &end, 0);
+        if (end == p || *end != ':')
+        {
+            p = end == p ? p + 1 : end;
+            continue;
+        }
+        p = end + 1;
+        jid = strtol(p, &end, 0);
+        if (end == p)
+            continue;
+        p = end;
+        memset(&b->fe7[b->fe7Count], 0, sizeof(b->fe7[0]));
+        while (*p == ':' || *p == ',')
+        {
+            size_t n = 0;
+
+            p++;
+            for (t = 0; t < 8; t++)
+            {
+                n = strlen(sFe7Kinds[t]);
+                if (strncmp(p, sFe7Kinds[t], n) == 0 && p[n] == '=')
+                    break;
+            }
+            if (t == 8)
+                break;
+            p += n + 1;
+            v = strtol(p, &end, 0);
+            if (end == p)
+                break;
+            p = end;
+            if (v > 0 && v < 0x100)
+            {
+                b->fe7[b->fe7Count].mask |= (u8)(1 << t);
+                b->fe7[b->fe7Count].ranks[t] = (u8)v;
+            }
+        }
+        while (*p != 0 && *p != ' ' && *p != '\t')
+            p++; /* the rest of a token not understood */
+        if (idx > 0 && idx < 0x100 && jid >= 0x80 && jid <= REFORGED_FOREIGN_LAST_JID)
+        {
+            b->fe7[b->fe7Count].index = (u8)idx;
+            b->fe7[b->fe7Count].jid = (u8)jid;
+            b->fe7Count++;
+        }
     }
 }
 
@@ -688,6 +947,19 @@ void Reforged_SaveMarkLoad(const char *savPath, int loadedOther)
             ParseCheck(&sBlocks[block], val);
         else if (what == LINE_RANDO)
             ParseRando(&sBlocks[block], val, path, lineNo);
+        else if (what == LINE_KEPT)
+            ParseKept(&sBlocks[block], val, path, lineNo);
+        else if (what == LINE_FE7)
+            ParseFe7(&sBlocks[block], val);
+        else if (what == LINE_RUINS)
+        {
+            /* "best=7" ("partial": a run started part-way); v1.8.0's "3" / "3 post run=..." (the run's
+               floors cleared) counts as best=3. A bad value is none. */
+            const char *best = strstr(val, "best=");
+            long n = strtol(best != NULL ? best + 5 : val, NULL, 10);
+
+            sBlocks[block].ruins = (u8)(n > 0 && n <= 10 ? n | (best != NULL && strstr(val, "partial") != NULL ? 0x10 : 0) : 0);
+        }
         else
             ParseValues(&sBlocks[block], val, path, lineNo);
     }
@@ -702,7 +974,7 @@ void Reforged_SaveMarkLoad(const char *savPath, int loadedOther)
         u32 now = 0;
         int valid;
 
-        if (!BlockMarked(b))
+        if (!BlockHasData(b))
             continue;
         valid = BlockFingerprint(block, &now);
         if (b->hasCheck && valid && b->check == now)

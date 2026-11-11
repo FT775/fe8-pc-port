@@ -1,5 +1,7 @@
 #include "global.h"
 
+#include <string.h>
+
 /*
  * Reforged Options, the Randomizer screen: opened by A on "Randomizer >" in the
  * options screen (reforged_menu.c). Played builds only; empty in every test build.
@@ -50,7 +52,7 @@
 #include "reforged_listmenu.h"
 
 enum {
-    RND_ROWS_SHOWN = 6, /* the list frame holds 6 rows; more scroll (proc->top) */
+    RND_ROWS_SHOWN = 5, /* the list frame holds 5 rows; more scroll (proc->top) */
 
     RND_LIST_TOP = 3,   /* tile row of the first entry shown */
     RND_LABEL_X = 4,    /* tile column of the labels */
@@ -60,9 +62,10 @@ enum {
     RND_HEADER_X = 9,   /* a section header's Text (RND_LABEL_W wide, text centred) */
     RND_VALUE_GAP = 7,  /* pixels between two values shown side by side */
     RND_ARROW_GAP = 3,  /* pixels between an arrow and the value */
-    /* Text tiles (InitText, from VRAM 0x6001000): title 18x2, help 24x2, 6 label
-       slots 13x2 and 6 value slots 11x2: 372 tiles, up to 0x6003E80, well below
-       the BG0 map at 0x6006000 (640), whatever the number of rows. */
+    /* Text tiles (InitText, from VRAM 0x6001000): title 18x2, two help lines
+       24x2 each, 5 label slots 13x2 and 5 value slots 11x2: 372 tiles, up to
+       0x6003E80, well below the BG0 map at 0x6006000 (640), whatever the number
+       of rows. */
 };
 
 /* (row kinds, number formats, struct RandoRow and the RR_* macros: reforged_listmenu.h) */
@@ -77,71 +80,81 @@ struct ReforgedRandoProc {
     /* 30 */ const struct ReforgedListScreen *screen;
 };
 
-/* The help lines are at most 192 pixels (the help Text's 24 tiles), printable
-   ASCII only; "UFER" gives the Universal FE Randomizer's own default. */
+/* A help text is one or two lines ('\n' between), each at most 192 pixels (a
+   help Text's 24 tiles), printable ASCII only; in plain words (no jargon), as
+   the user asked. "UFER" gives the Universal FE Randomizer's own default. */
 static const struct RandoRow sRandoRows[] = {
-    RR_SWITCH(RFO_RANDO_ENABLE, "Randomizer", "Applies to the next New Game."),
-    { RR_SEED, 0, 0, 0, 0, 0, "Seed", "A: edit. Select: new seed. L/R: Random.", { NULL }, { 0 } },
+    RR_SWITCH(RFO_RANDO_ENABLE, "Randomizer", "Shuffles the game when you start New Game.\nGames already started never change."),
+    { RR_SEED, 0, 0, 0, 0, 0, "Seed", "Same seed + same settings = same game.\nA: edit. Select: new seed. L/R: Random.", { NULL }, { 0 } },
 
     RR_HEAD("-- Stats --"),
-    { RR_CHOICE, RFO_RANDO_GROWTHS, 4, 0, 0, 0, "Growths", "Personal growths: shuffle, nudge or reroll.",
+    { RR_CHOICE, RFO_RANDO_GROWTHS, 4, 0, 0, 0, "Growths", "Level-up chances. Redistribute: similar\ntotal, new mix. Delta: nudge. Full: all new.",
       { "Off", "Redistribute", "Delta", "Full" }, { 0, 1, 2, 3 } },
-    RR_NUM(RFO_RANDO_GROWTH_VAR, RN_PERCENT, 0, 5, "Growth variance", "Redistribute: total +/-. Delta: max step."),
-    RR_NUM(RFO_RANDO_GROWTH_MIN, RN_PERCENT, 0, 5, "Growth min", "No growth below this (UFER: 5%)."),
-    RR_NUM(RFO_RANDO_GROWTH_MAX, RN_PERCENT, 0, 5, "Growth max", "No growth above this (UFER: 80%)."),
-    RR_SWITCH(RFO_RANDO_GROWTH_HP, "Adjust HP growths", "HP gets a bigger share of the growths."),
-    { RR_CHOICE, RFO_RANDO_BASES, 3, 0, 0, 0, "Bases", "Personal bases: shuffled or nudged.",
+    RR_NUM(RFO_RANDO_GROWTH_VAR, RN_PERCENT, 0, 5, "Growth variance", "Redistribute: how far the total moves.\nDelta: how far each chance moves."),
+    RR_NUM(RFO_RANDO_GROWTH_MIN, RN_PERCENT, 0, 5, "Growth min", "No level-up chance goes below this,\nso nobody is hopeless. (UFER: 5%)"),
+    RR_NUM(RFO_RANDO_GROWTH_MAX, RN_PERCENT, 0, 5, "Growth max", "No level-up chance goes above this,\nso nobody is too strong. (UFER: 80%)"),
+    RR_SWITCH(RFO_RANDO_GROWTH_HP, "Adjust HP growths", "HP gets a bigger share of the level-up\nchances, so units aren't too fragile."),
+    { RR_CHOICE, RFO_RANDO_BASES, 3, 0, 0, 0, "Bases", "Starting stats. Redistribute: similar\ntotal, new mix. Delta: nudge each a little.",
       { "Off", "Redistribute", "Delta" }, { 0, 1, 2 } },
-    RR_NUM(RFO_RANDO_BASE_VAR, RN_PLAIN, 1, 1, "Base variance", "How far the bases move (UFER: 5)."),
-    RR_SWITCH(RFO_RANDO_MOV, "Class movement", "Classes move 4-8; promotion never less."),
-    RR_SWITCH(RFO_RANDO_CON, "Constitution", "Each unit's Con moves a little (min 3)."),
-    RR_SWITCH(RFO_RANDO_AFFINITY, "Affinity", "Each unit gets a random affinity."),
+    RR_NUM(RFO_RANDO_BASE_VAR, RN_PLAIN, 1, 1, "Base variance", "Redistribute: how far the total moves.\nDelta: how far each stat moves. (UFER: 5)"),
+    RR_SWITCH(RFO_RANDO_MOV, "Class movement", "Each class walks 4 to 8 squares a turn.\nA promoted class never walks less."),
+    RR_SWITCH(RFO_RANDO_CON, "Constitution", "Nudges Con (body size: who heavy weapons\nslow, who can carry whom). Never below 3."),
+    RR_SWITCH(RFO_RANDO_AFFINITY, "Affinity", "Each unit gets a random support element\n(the bonus friends get standing close)."),
 
     RR_HEAD("-- Classes --"),
-    RR_SWITCH(RFO_RANDO_CLASSES, "Player classes", "Your units get new classes, same tier."),
-    RR_SWITCH(RFO_RANDO_LORDS, "Include lords", "Eirika and Ephraim too (keep weapons)."),
-    RR_SWITCH(RFO_RANDO_THIEVES, "Include thieves", "Colm and Rennac too."),
-    RR_SWITCH(RFO_RANDO_SPECIAL, "Include dancer", "Tethys too. Myrrh never changes."),
-    RR_SWITCH(RFO_RANDO_MONSTERS, "Monster classes", "Your units may become monsters."),
-    RR_SWITCH(RFO_RANDO_EVENLY, "Assign evenly", "Use every class before one repeats."),
-    RR_SWITCH(RFO_RANDO_GENDER, "Match gender", "Units keep classes of their gender."),
-    { RR_CHOICE, RFO_RANDO_CLASS_GROWTHS, 2, 0, 0, 0, "Class growths", "Transfer: growths follow the new class.",
+    RR_SWITCH(RFO_RANDO_CLASSES, "Player classes", "Your units get new jobs (a knight might\nbecome a mage). Promoted stay promoted."),
+    RR_SWITCH(RFO_RANDO_LORDS, "Include lords", "Eirika and Ephraim get new jobs too.\nEirika keeps swords, Ephraim lances."),
+    RR_SWITCH(RFO_RANDO_THIEVES, "Include thieves", "Colm and Rennac get new jobs and join\nRecruitment; others may become thieves."),
+    RR_SWITCH(RFO_RANDO_SPECIAL, "Include dancer", "Tethys gets a new job (no more dancing)\nand joins Recruitment. Myrrh never changes."),
+    RR_SWITCH(RFO_RANDO_MONSTERS, "Monster classes", "Your units may become monsters\n(skeletons, spiders, gargoyles and more)."),
+    RR_SWITCH(RFO_RANDO_EVENLY, "Assign evenly", "Every job is used once before any repeats,\nso you don't get five archers."),
+    RR_SWITCH(RFO_RANDO_GENDER, "Match gender", "Units get the male or female version of\na job to match them, where one exists."),
+    { RR_CHOICE, RFO_RANDO_CLASS_GROWTHS, 2, 0, 0, 0, "Class growths", "Keep: units level up as they always did.\nTransfer: level-ups suit the new job.",
       { "Keep", "Transfer" }, { 0, 1 } },
-    { RR_CHOICE, RFO_RANDO_CLASS_BASES, 2, 0, 0, 0, "Class bases", "Final: same stats. Personal: class bases.",
+    { RR_CHOICE, RFO_RANDO_CLASS_BASES, 2, 0, 0, 0, "Class bases", "Final: starting stats stay about the same.\nPersonal: own bonus plus the job's stats.",
       { "Final", "Personal" }, { 0, 1 } },
-    RR_SWITCH(RFO_RANDO_PALETTES, "Keep colours", "Units keep their colours in battle."),
+    RR_SWITCH(RFO_RANDO_PROMOTIONS, "Random promotions", "Each job promotes into three random jobs,\nmagic to magic (lords etc. keep theirs)."),
+    { RR_CHOICE, RFO_RANDO_PROMO_MONSTERS, 2, 0, 0, 0, "Monster promos", "Separate: monsters and others promote\napart. Mixed: either can become either.",
+      { "Separate", "Mixed" }, { 0, 1 } },
+    RR_SWITCH(RFO_RANDO_FE7, "FE7/FE6 classes", "Rare FE7/FE6 jobs: 3rd promotion picks,\nsome units, late bosses. Needs the ROMs."),
+    RR_SWITCH(RFO_RANDO_PALETTES, "Keep colours", "In battle scenes, units in a new job keep\ntheir own colours (monsters too)."),
 
     RR_HEAD("-- Recruitment --"),
-    RR_SWITCH(RFO_RANDO_RECRUIT, "Recruitment", "Shuffle who joins where (not the lords)."),
-    { RR_CHOICE, RFO_RANDO_RECRUIT_CLASS, 2, 0, 0, 0, "Recruit class", "Own: their class. Slot: who they replace.",
+    RR_SWITCH(RFO_RANDO_RECRUIT, "Recruitment", "Shuffles who joins and when. Lords and\nMyrrh stay; thieves/dancer if included."),
+    { RR_CHOICE, RFO_RANDO_RECRUIT_CLASS, 2, 0, 0, 0, "Recruit class", "Own: they keep their own job.\nSlot: they take the job of who they replace.",
       { "Own", "Slot" }, { 0, 1 } },
-    { RR_CHOICE, RFO_RANDO_RECRUIT_STATS, 2, 0, 0, 0, "Recruit stats", "Autolevel, or copy the slot's stats.",
+    { RR_CHOICE, RFO_RANDO_RECRUIT_STATS, 2, 0, 0, 0, "Recruit stats", "Autolevel: own stats, scaled to when they\njoin. Slot: the stats of who they replace.",
       { "Autolevel", "Slot" }, { 0, 1 } },
-    RR_SWITCH(RFO_RANDO_RECRUIT_GENDER, "Cross-gender", "A man may join in a woman's place."),
+    RR_SWITCH(RFO_RANDO_RECRUIT_GENDER, "Cross-gender", "A man may join in a woman's place and the\nreverse. (Text keeps he/she as written.)"),
 
     RR_HEAD("-- Enemies --"),
-    RR_SWITCH(RFO_RANDO_BOSSES, "Boss classes", "Bosses get new classes."),
-    RR_SWITCH(RFO_RANDO_ENEMIES, "Enemy classes", "Generic enemies get new classes."),
-    { RR_CHOICE, RFO_RANDO_ENEMY_GROWTH, 3, 0, 0, 0, "Enemy growths", "Raise class growths for enemies.",
+    RR_SWITCH(RFO_RANDO_BOSSES, "Boss classes", "Bosses get new jobs (never one that would\nbe stuck where they stand)."),
+    RR_SWITCH(RFO_RANDO_ENEMIES, "Enemy classes", "Regular enemies get new jobs (never one\nstuck or slowed to a crawl by its terrain)."),
+    { RR_CHOICE, RFO_RANDO_ENEMY_GROWTH, 3, 0, 0, 0, "Enemy growths", "Enemies level up stronger. Flat: same bonus\nfor all stats. Scaling: more for strong ones.",
       { "Off", "Flat", "Scaling" }, { 0, 1, 2 } },
-    RR_NUM(RFO_RANDO_ENEMY_GROWTH_AMT, RN_PERCENT, 0, 5, "Enemy buff", "How much Enemy growths adds (UFER: 10)."),
-    { RR_CHOICE, RFO_RANDO_BOSS_BUFF, 3, 0, 0, 0, "Boss stats", "Bosses gain stats as the story goes on.",
+    RR_NUM(RFO_RANDO_ENEMY_GROWTH_AMT, RN_PERCENT, 0, 5, "Enemy buff", "How big the Enemy growths bonus is.\n(UFER: 10)"),
+    { RR_CHOICE, RFO_RANDO_BOSS_BUFF, 3, 0, 0, 0, "Boss stats", "Bosses gain stats later in the story.\nLinear: steady. Ease: slow, fast, then slow.",
       { "Off", "Linear", "Ease" }, { 0, 1, 2 } },
-    RR_NUM(RFO_RANDO_BOSS_BUFF_AMT, RN_PLUS, 1, 1, "Boss max boost", "The most a boss stat gains (UFER: 5)."),
-    RR_NUM(RFO_RANDO_ENEMY_WEAPONS, RN_CHANCE, 0, 5, "Better enemy weapons", "Chance an enemy gets a better weapon."),
+    RR_NUM(RFO_RANDO_BOSS_BUFF_AMT, RN_PLUS, 1, 1, "Boss max boost", "The most any one boss stat can gain.\n(UFER: 5)"),
+    RR_NUM(RFO_RANDO_ENEMY_WEAPONS, RN_CHANCE, 0, 5, "Better enemy weapons", "Chance an enemy's weapons go up a rank\n(for example Iron to Steel)."),
+    RR_SWITCH(RFO_RANDO_FLOOR_MONSTERS, "Tower & Ruins", "Tower, Ruins and skirmish monsters become\nothers of the same rank (no dragons)."),
 
     RR_HEAD("-- Items --"),
-    RR_SWITCH(RFO_RANDO_W_MIGHT, "Weapon might", "Might +/-3, kept within 0-23."),
-    RR_SWITCH(RFO_RANDO_W_HIT, "Weapon hit", "Hit +/-20, kept within 55-100."),
-    RR_SWITCH(RFO_RANDO_W_WEIGHT, "Weapon weight", "Weight +/-5, kept within 2-20."),
-    RR_SWITCH(RFO_RANDO_W_USES, "Weapon uses", "Uses +/-20, kept within 15-60."),
-    RR_NUM(RFO_RANDO_W_EFFECTS, RN_CHANCE, 0, 5, "Weapon traits", "Chance a weapon gains a trait (UFER: 25)."),
-    RR_SWITCH(RFO_RANDO_REWARDS, "Rewards", "New items in chests, villages and gifts."),
-    RR_NUM(RFO_RANDO_DROPS, RN_CHANCE, 0, 5, "Enemy drops", "Chance an enemy drops an item (UFER: 10)."),
-    RR_SWITCH(RFO_RANDO_SHOPS, "Shops", "Shops and armories sell random items."),
+    RR_SWITCH(RFO_RANDO_W_MIGHT, "Weapon might", "Each weapon's damage moves by up to 3\n(kept between 0 and 23)."),
+    RR_SWITCH(RFO_RANDO_W_HIT, "Weapon hit", "Each weapon's accuracy moves by up to 20\n(kept between 55 and 100)."),
+    RR_SWITCH(RFO_RANDO_W_WEIGHT, "Weapon weight", "Each weapon's heaviness moves by up to 5\n(kept between 2 and 20)."),
+    RR_SWITCH(RFO_RANDO_W_USES, "Weapon uses", "Each weapon's uses move by up to 20\n(15-60; long-range tomes may go lower)."),
+    RR_NUM(RFO_RANDO_W_EFFECTS, RN_CHANCE, 0, 5, "Weapon traits", "Chance a weapon gets a bonus power: +5 to\na stat, hits twice, poison... (UFER: 25)"),
+    RR_SWITCH(RFO_RANDO_REWARDS, "Rewards", "Chests, villages, houses and gifts give\ndifferent items, none twice in a chapter."),
+    RR_NUM(RFO_RANDO_DROPS, RN_CHANCE, 0, 5, "Enemy drops", "Chance an enemy drops an item when\ndefeated. (UFER: 10)"),
+    RR_SWITCH(RFO_RANDO_SHOPS, "Shops", "Shops and armories sell different things."),
+    RR_SWITCH(RFO_RANDO_MASTER_SEALS, "Master Seals only", "Every promotion item is a Master Seal,\nwhich promotes any class."),
+
+    RR_HEAD("-- Music --"),
+    RR_SWITCH(RFO_RANDO_MUSIC, "Random music", "Each chapter gets random map themes and\nbattle themes from the game's own songs."),
 
     RR_HEAD("-- Challenge --"),
-    RR_SWITCH(RFO_RANDO_NUZLOCKE, "Nuzlocke", "Deaths are final, even after a reset."),
+    RR_SWITCH(RFO_RANDO_NUZLOCKE, "Nuzlocke", "A unit who dies is gone for good, even if\nyou reset. A lord dying is still game over."),
 };
 
 static const struct ReforgedListScreen sRandoScreen = {
@@ -151,8 +164,33 @@ static const struct ReforgedListScreen sRandoScreen = {
 
 static const char sSeedEditHelp[] = "Left/Right: digit. Up/Down: change. A: done.";
 
+/* "FE7/FE6 classes" (v1.21.0; "FE7 classes" before) needs the player's own FE7 (USA) or FE6 ROM (reforged_fe7.c):
+   with neither the row is shown grey (still editable, as the rows of a randomizer turned off) with this help
+   instead, and New Game records it off (reforged_rando.c RomsAtNewGame, which records the ROMs loaded). */
+static const char sFe7MissingHelp[] = "Needs your own FE7 or FE6 ROM (see the\nguide). None found: New Game skips it.";
+int Rando_RomsLoaded(void); /* reforged_rando.c */
+/* v1.20.0: "Myrrh look" (Helpers and the in-chapter screen) needs the player's own FE6 ROM (reforged_fe7.c): without
+   it the row is grey (still editable: the value is kept for a run with the ROM) and its help says so; the look
+   stays FE8's. */
+static const char sFe6MissingHelp[] = "Needs your own FE6 ROM (see the\nguide). None found: FE8's look stays.";
+
+/* The help shown instead of a row's own when the row needs a ROM that is not loaded, else NULL. */
+static const char *RowMissingHelp(const struct RandoRow *r)
+{
+    if (r->kind == RR_CHOICE && r->option == RFO_RANDO_FE7 && Rando_RomsLoaded() == 0)
+        return sFe7MissingHelp;
+    if (r->kind == RR_CHOICE && r->option == RFO_MYRRH_LOOK && !Reforged_MyrrhLookAvailable())
+        return sFe6MissingHelp;
+    return NULL;
+}
+
+static int RowUnavailable(const struct RandoRow *r)
+{
+    return RowMissingHelp(r) != NULL;
+}
+
 static struct Text sRandoTitleText;
-static struct Text sRandoHelpText;
+static struct Text sRandoHelpText[2]; /* the help box's two lines */
 static struct Text sRandoLabelText[RND_ROWS_SHOWN]; /* slot i: row top + i */
 static struct Text sRandoValueText[RND_ROWS_SHOWN];
 
@@ -307,7 +345,8 @@ static void DrawRandoRow(struct ReforgedRandoProc *proc, int row)
     {
         /* (the Randomizer screen: with the randomizer off, the rows below Seed are
            shown grey, still editable) */
-        int grey = screen->greyOption >= 0 && row >= screen->greyFrom && !Reforged_GetOption(screen->greyOption);
+        int grey = (screen->greyOption >= 0 && row >= screen->greyFrom && !Reforged_GetOption(screen->greyOption)) ||
+                   RowUnavailable(r);
 
         Text_InsertDrawString(label, 0, grey ? TEXT_COLOR_SYSTEM_GRAY : TEXT_COLOR_SYSTEM_WHITE, r->label);
         PutText(label, TILEMAP_LOCATED(gBG0TilemapBuffer, RND_LABEL_X, y));
@@ -330,18 +369,36 @@ static void DrawRandoList(struct ReforgedRandoProc *proc)
     BG_EnableSyncByMask(BG0_SYNC_BIT);
 }
 
+/* The help box (tile rows 14-19): line 1 at row 15, line 2 (after a '\n') at row 17. */
 static void DrawRandoHelpText(const char *str)
 {
-    ClearText(&sRandoHelpText);
+    char line[64];
+    const char *nl = str != NULL ? strchr(str, '\n') : NULL;
+    int n;
+
+    ClearText(&sRandoHelpText[0]);
+    ClearText(&sRandoHelpText[1]);
     if (str != NULL)
-        Text_InsertDrawString(&sRandoHelpText, 0, TEXT_COLOR_SYSTEM_WHITE, str);
-    PutText(&sRandoHelpText, TILEMAP_LOCATED(gBG0TilemapBuffer, 3, 17));
+    {
+        n = nl != NULL ? (int)(nl - str) : (int)strlen(str);
+        if (n > (int)sizeof(line) - 1)
+            n = sizeof(line) - 1;
+        memcpy(line, str, n);
+        line[n] = '\0';
+        Text_InsertDrawString(&sRandoHelpText[0], 0, TEXT_COLOR_SYSTEM_WHITE, line);
+        if (nl != NULL)
+            Text_InsertDrawString(&sRandoHelpText[1], 0, TEXT_COLOR_SYSTEM_WHITE, nl + 1);
+    }
+    PutText(&sRandoHelpText[0], TILEMAP_LOCATED(gBG0TilemapBuffer, 3, 15));
+    PutText(&sRandoHelpText[1], TILEMAP_LOCATED(gBG0TilemapBuffer, 3, 17));
     BG_EnableSyncByMask(BG0_SYNC_BIT);
 }
 
 static void DrawRandoHelp(struct ReforgedRandoProc *proc, int row)
 {
-    DrawRandoHelpText(proc->screen->rows[row].help);
+    const struct RandoRow *r = &proc->screen->rows[row];
+
+    DrawRandoHelpText(RowUnavailable(r) ? RowMissingHelp(r) : r->help);
 }
 
 static void RandoMenu_Init(struct ReforgedRandoProc *proc)
@@ -369,8 +426,8 @@ static void RandoMenu_Init(struct ReforgedRandoProc *proc)
     proc->editing = 0;
     proc->digit = 0;
 
-    DrawUiFrame2(1, 2, 28, 14, 0); /* list: tile rows 2-15 */
-    DrawUiFrame2(1, 16, 28, 4, 0); /* help line: rows 16-19 */
+    DrawUiFrame2(1, 2, 28, 12, 0); /* list: tile rows 2-13 */
+    DrawUiFrame2(1, 14, 28, 6, 0); /* help: rows 14-19, two lines */
 
     InitText(&sRandoTitleText, 18);
     PutDrawText(&sRandoTitleText, TILEMAP_LOCATED(gBG0TilemapBuffer, 2, 0), TEXT_COLOR_SYSTEM_WHITE, 0, 18,
@@ -383,7 +440,8 @@ static void RandoMenu_Init(struct ReforgedRandoProc *proc)
     }
     DrawRandoList(proc);
 
-    InitText(&sRandoHelpText, 24);
+    InitText(&sRandoHelpText[0], 24);
+    InitText(&sRandoHelpText[1], 24);
     DrawRandoHelp(proc, proc->cursor);
 
     /* BG3 too: the mural's tilemap (from the map, nothing else has put it on screen) */

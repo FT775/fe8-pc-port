@@ -60,7 +60,7 @@ enum {
        the growth-rates and map HP bars rows, port-rfo-int5; the original-game
        bug fixes row, RFO_BUG_FIXES, before HP bars, port-retailfix) */
     RFO_ROW_SWITCHES = RFO_MAP_HPBARS + 1,
-    RFO_ROW_COUNT = RFO_ROW_SWITCHES + 5 + RFO_SHOW_OPTION_SETS,
+    RFO_ROW_COUNT = RFO_ROW_SWITCHES + 6 + RFO_SHOW_OPTION_SETS,
     RFO_ROWS_SHOWN = 6, /* the list frame holds 6 rows; more scroll (proc->top) */
     /* Text tiles (InitText, from VRAM 0x6001000): title 12x2, help 24x2, each
        option row's label 14x2 and values 10x2 (48 tiles), but "HP bars &
@@ -75,7 +75,9 @@ enum {
     RFO_ROW_GAME_FIXES = RFO_ROW_SWITCHES + 2, /* "Game fixes >" (reforged_gamefixes_menu.c) */
     RFO_ROW_CONTROLS = RFO_ROW_SWITCHES + 3, /* "Controls >" (reforged_controls_menu.c) */
     RFO_ROW_DISPLAY = RFO_ROW_SWITCHES + 4, /* "Display >" (reforged_display_menu.c) */
-    RFO_ROW_OPTION_SETS = RFO_ROW_SWITCHES + 5, /* "Option sets >" (reforged_display_menu.c) */
+    RFO_ROW_HELPERS = RFO_ROW_SWITCHES + 5, /* "Helpers >" (reforged_helpers_menu.c; v1.3.0: the
+                                               last submenu row the text tiles have room for) */
+    RFO_ROW_OPTION_SETS = RFO_ROW_SWITCHES + 6, /* "Option sets >" (reforged_display_menu.c) */
 
     RFO_LIST_TOP = 3,   /* tile row of the first entry */
     RFO_LABEL_X = 4,    /* tile column of the labels */
@@ -116,13 +118,14 @@ static const char *const sRowLabels[RFO_ROW_COUNT] = {
     "Game fixes >",
     "Controls >",
     "Display >",
+    "Helpers >",
 #if RFO_SHOW_OPTION_SETS
     "Option sets >",
 #endif
 };
 
 static const char *const sRowHelp[RFO_ROW_COUNT] = {
-    "Select shows the enemy range.",
+    "Select shows enemy ranges.",
     "Hold Space or right stick: go faster.",
     "Off, your units only, or everyone.",
     "Fallen units come back.",
@@ -140,6 +143,7 @@ static const char *const sRowHelp[RFO_ROW_COUNT] = {
     "Rule fixes for the next New Game.",
     "Choose your keys and gamepad buttons.",
     "Window size, scaling, fullscreen.",
+    "Enemy phase, true hit, convoy and more.",
 #if RFO_SHOW_OPTION_SETS
     "Save or load sets of options.",
 #endif
@@ -378,6 +382,8 @@ static void ReforgedMenu_Loop(struct ReforgedMenuProc *proc)
             StartReforgedControlsScreen(proc);
         else if (row == RFO_ROW_DISPLAY)
             StartReforgedDisplayScreen(proc);
+        else if (row == RFO_ROW_HELPERS)
+            StartReforgedHelpersScreen(proc);
 #if RFO_SHOW_OPTION_SETS
         else if (row == RFO_ROW_OPTION_SETS)
             StartReforgedOptionSetsScreen(proc);

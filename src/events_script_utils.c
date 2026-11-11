@@ -807,7 +807,7 @@ void InitTowerDungeon()
 
 void InitRuinsDungeon()
 {
-    InitDungeon(1);
+    InitDungeon(1); RFO_RUINS_FRESH()
 }
 
 /* Display the "Map Clear!"" Effect (From the Tower of Valni and Lagdou Ruins) */

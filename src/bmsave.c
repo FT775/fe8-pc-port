@@ -128,6 +128,9 @@ void WriteNewGameSave(int index, int isDifficult, int mode, int isTutorial)
 
     SetGameTime(0);
     InitPlayConfig(isDifficult, isTutorial);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_GameOptionsApply(); /* "Keep game Options": the Options last chosen */
+#endif
     InitUnits();
     ClearSupplyItems();
     ResetPermanentFlags();
@@ -199,6 +202,9 @@ void WriteGameSave(int slot)
     struct Dungeon dungeon[2];
 
     struct GameSaveBlock *dest = GetSaveWriteAddr(slot);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_Fe7PackReset(); /* FE7 classes (port/reforged/reforged_fe7.c): only this save's units */
+#endif
     InvalidateSuspendSave(SAVE_ID_SUSPEND);
     gPlaySt.gameSaveSlot = slot;
     gPlaySt.time_saved = GetGameClock();
@@ -415,6 +421,18 @@ void WriteGameSavePackedUnit(struct Unit *unit, void *sram_dest)
     for (i = 0; i < UNIT_SUPPORT_MAX_COUNT; i++)
         unitp.supports[i] = unit->supports[i];
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* the FE7 classes (port/reforged/reforged_fe7.c): an FE8 class in the 7-bit jid, the FE7 class's
+       slot in flag bits 8-11 or 12 (never an id past 0x7F, which jid cannot hold) */
+    {
+        unsigned jid = unitp.jid, flag = unitp.flag;
+
+        Reforged_Fe7PackUnit(unit, &jid, &flag, unitp.wpnRanks); /* and no foreign weapon rank */
+        unitp.jid = jid;
+        unitp.flag = flag;
+    }
+#endif
+
     WriteAndVerifySramFast(&unitp, sram_dest, sizeof(unitp));
 }
 
@@ -427,6 +445,9 @@ void LoadSavedUnit(const void *sram_src, struct Unit *unit)
 
     unit->pCharacterData = GetCharacterData(unitp.pid);
     unit->pClassData = GetClassData(unitp.jid);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_Fe7UnpackUnit(unit, unitp.flag); /* an FE7 class back, when it is loaded (reforged_fe7.c) */
+#endif
     unit->level = unitp.level;
     unit->exp = unitp.exp;
     unit->xPos = unitp.xPos;
@@ -543,6 +564,9 @@ void WriteSuspendSave(int slot)
     if (!IsSramWorking())
         return;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_ArenaTestSuspend(1); /* test switch FE8PC_TEST_ARENA_CLASS: the fighter's own class (reforged_arena.c) */
+#endif
     slot += GetNextSuspendSaveId();
     dest = GetSaveWriteAddr(slot);
     gPlaySt.time_saved = GetGameClock();
@@ -597,6 +621,7 @@ void WriteSuspendSave(int slot)
     WriteSwappedSuspendSaveId();
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
     Reforged_SaveBlockWritten(slot); /* Reforged Options: the save mark and the fallen list */
+    Reforged_ArenaTestSuspend(0);
 #endif
 }
 
@@ -687,7 +712,12 @@ void EncodeSuspendSavePackedUnit(struct Unit *unit, void *buf)
     }
     
     unit_su->pid = UNIT_CHAR_ID(unit);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* an FE7 class: its FE8 fallback here, the class itself in the save mark (reforged_fe7.c) */
+    unit_su->jid = Reforged_Fe7SuspendJid(unit);
+#else
     unit_su->jid = unit->pClassData->number;
+#endif
     unit_su->level = unit->level;
     unit_su->exp = unit->exp;
     unit_su->state = unit->state;
@@ -719,6 +749,9 @@ void EncodeSuspendSavePackedUnit(struct Unit *unit, void *buf)
 
     for (i = 0; i < 8; i++)
         unit_su->ranks[i] = unit->ranks[i];
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_Fe7StripRanks(unit, unit_su->ranks); /* an FE7 class: none its fallback cannot use (reforged_fe7.c) */
+#endif
     
     for (i = 0; i < UNIT_SUPPORT_MAX_COUNT; i++)
         unit_su->supports[i] = unit->supports[i];

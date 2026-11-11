@@ -111,4 +111,30 @@ extern CONST_DATA struct SupportData SupportData_Myrrh;
 extern CONST_DATA struct SupportData SupportData_Knoll;
 extern CONST_DATA struct SupportData SupportData_Syrene;
 
+/* Pair Up (port/reforged/reforged_pairup.c): src/bmreliance.c, a pair's partner counts as next to the
+   lead for support bonuses; a pair gains support points twice as fast. Nothing on the GBA. */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_PairPartnerOf(const struct Unit *unit, const struct Unit *other);
+void Reforged_PairSupportExtra(struct Unit *unit, int num, struct Unit *other);
+#define RFO_PAIR_SUPPORT_NEAR(unit, other) && !Reforged_PairPartnerOf((unit), (other))
+#define RFO_PAIR_SUPPORT_EXTRA(unit, num, other) Reforged_PairSupportExtra((unit), (num), (other));
+#else
+#define RFO_PAIR_SUPPORT_NEAR(unit, other)
+#define RFO_PAIR_SUPPORT_EXTRA(unit, num, other)
+#endif
+
+/* "Faster supports" (port/reforged/reforged_supports.c): src/bmreliance.c ProcessTurnSupportExp, units
+   within 3 squares gain support points too (RFO_SUPPORT_FAR, the distance test's default case) and
+   each gain is made 2 or 3 times (RFO_SUPPORT_EXTRA). Nothing on the GBA. */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_SupportNear(const struct Unit *unit, const struct Unit *other);
+void Reforged_SupportExtra(struct Unit *unit, int num, struct Unit *other);
+int Reforged_SupportMultiplier(void);
+#define RFO_SUPPORT_FAR(unit, other) if (Reforged_SupportNear((unit), (other))) break;
+#define RFO_SUPPORT_EXTRA(unit, num, other) Reforged_SupportExtra((unit), (num), (other));
+#else
+#define RFO_SUPPORT_FAR(unit, other)
+#define RFO_SUPPORT_EXTRA(unit, num, other)
+#endif
+
 #endif // GUARD_BM_RELIANCE_H

@@ -154,7 +154,7 @@ u32 PromoHandler_SetupAndStartUI(struct ProcPromoHandler *proc)
                     proc->sel_en = 0;
                 }
 
-                if (trainees[i].charId != terrain)
+                RFO_PROMO_THREE(proc, unit) if (trainees[i].charId != terrain)
                     MakePromotionScreen(proc, trainees[i].charId, terrain);
                 else
                     MakePromotionScreen(proc, trainees[i].charId, TERRAIN_ROAD);
@@ -184,7 +184,7 @@ u32 PromoHandler_SetupAndStartUI(struct ProcPromoHandler *proc)
             proc->sel_en = 0;
         }
 
-        MakePromotionScreen(proc, proc->pid, TERRAIN_PLAINS);
+        RFO_PROMO_THREE(proc, unit) MakePromotionScreen(proc, proc->pid, TERRAIN_PLAINS);
         return PROMO_HANDLER_STAT_IDLE;
     } else if (proc->bmtype == PROMO_HANDLER_TYPE_PREP) {
         proc->bmtype = PROMO_HANDLER_TYPE_PREP;
@@ -204,7 +204,7 @@ u32 PromoHandler_SetupAndStartUI(struct ProcPromoHandler *proc)
             proc->jid = gPromoJidLut[classNumber][1];
             proc->sel_en = 0;
         }
-        MakePromotionScreen(proc, proc->pid, TERRAIN_PLAINS);
+        RFO_PROMO_THREE(proc, unit) MakePromotionScreen(proc, proc->pid, TERRAIN_PLAINS);
         return PROMO_HANDLER_STAT_IDLE;
     }
     else

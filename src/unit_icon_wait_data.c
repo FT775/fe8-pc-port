@@ -110,4 +110,12 @@ UnitIconWait unit_icon_wait_table[] = {
 	{2, UNIT_ICON_SIZE_16x32, unit_icon_wait_Tent_sheet}, // 104
 	{2, UNIT_ICON_SIZE_16x32, unit_icon_wait_Pontifex_sheet}, // 105
 	{0, UNIT_ICON_SIZE_16x16, unit_icon_wait_Fallen_Peer_sheet} // 106
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+	/* 107-115 (0x6B-0x73): the FE7 classes' standing sprites, 116-119 (0x74-0x77, v1.19.0) and 120-122
+	   (0x78-0x7A, v1.20.0): the FE6 classes', filled by port/reforged/reforged_fe7.c when the ROM is loaded
+	   (empty and unused otherwise; the Divine Dragon's, 0x7A, stays empty: it shows an FE8 sprite) */
+	, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}
+	, {0}, {0}, {0}, {0}
+	, {0}, {0}, {0}
+#endif
 };

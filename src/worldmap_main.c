@@ -204,7 +204,7 @@ void WorldMap_MuWalkLoop(struct WorldMapMainProc * proc)
         }
         else
         {
-            if (GetGmSkirmishUnitAtNode(GetGmPathNode(proc->unk_40 + 1)) >= 0)
+            if (GetGmSkirmishUnitAtNode(GetGmPathNode(proc->unk_40 + 1)) >= 0 RFO_SKIRMISH_BLOCKS)
             {
                 Proc_Goto(proc, 17);
                 return;
@@ -905,7 +905,7 @@ PROC_LABEL(13),
 
 PROC_LABEL(14),
     PROC_CALL(EndGMapPlayerInterface),
-    PROC_CALL(EndWorldmapMinimap),
+    PROC_CALL(EndWorldmapMinimap), RFO_RUINS_PICK_CMD
 
     // fallthrough
 
@@ -1421,7 +1421,7 @@ void WorldMap_CallIntroEvent(struct WorldMapMainProc * proc)
         gPlaySt.chapterIndex = WMLoc_GetChapterId(gGMData.units[0].location);
     }
 
-    CallChapterWMIntroEvents(proc);
+    CallChapterWMIntroEvents(proc); RFO_RUINS_ENTER()
 
     gGMData.sprite_disp = 0;
 

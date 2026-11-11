@@ -96,6 +96,19 @@ int GetCurrentPromotedLevelBonus(void);
 s8 CanUnitSeize(struct Unit * unit);
 void DungeonRecordUi_InitText(void);
 void InitDungeon(u8 type);
+/* PC played builds: Reforged Options "Skip ruin floors" (port/reforged/reforged_ruins.c). RFO_RUINS_FRESH:
+   src/events_script_utils.c InitRuinsDungeon, floor 1's beginning (a run of the Ruins from floor 1).
+   RFO_RUINS_RECORDS: src/bmdifficulty.c UpdateDungeonRecordStats, a run started part-way only adds
+   its kills (the best records and clear counts stay). Elsewhere: nothing. */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+void Reforged_RuinsFresh(void);
+int Reforged_RuinsPartialRecords(void);
+#define RFO_RUINS_FRESH() Reforged_RuinsFresh();
+#define RFO_RUINS_RECORDS() if (Reforged_RuinsPartialRecords()) return;
+#else
+#define RFO_RUINS_FRESH()
+#define RFO_RUINS_RECORDS()
+#endif
 void UnlockPostgameAllyByEnemyCount(void);
 void UnlockPostgameAllyByClearCount(void);
 void StartRetreatProcessing(void);

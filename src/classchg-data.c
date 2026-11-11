@@ -46,6 +46,26 @@ CONST_DATA u8 gPromoJidLut[][2] = {
     [CLASS_GARGOYLE]        = {CLASS_DEATHGOYLE},
     [CLASS_JOURNEYMAN_T1]   = {CLASS_HERO,                  CLASS_JOURNEYMAN_T2},
     [CLASS_PUPIL_T1]        = {CLASS_SAGE,                  CLASS_PUPIL_T2},
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* the FE7 classes (port/reforged/reforged_fe7.c; reachable only when the FE7 ROM is loaded): a
+       Nomad becomes a Ranger (one choice: no menu). Eirika's Lord row gets Blade Lord (0x83) as its
+       second choice at boot, and a Myrmidon Blade Lord (0x82) as the third (Reforged_Fe7ThirdPromo);
+       Ephraim's Lord row Great Lord (0x85), a Knight Great Lord (0x84) as the third. 0x82-0x87 are
+       promoted classes (no row); 0x88 (Bard) never promotes. The randomizer reads at most 0x80 rows
+       (reforged_rando_classes.c JID_MAX). v1.19.0, the FE6 classes: Thief F promotes to Assassin F
+       or Rogue (the Thief's choices; Rogue has no female twin); with the FE6 ROM too, the Nomads' rows
+       get the Nomad Trooper (0x8A / 0x8B, promoted) as their second choice at boot; 0x8C (King) never
+       promotes. v1.20.0: Lion Lord (0x8D) promotes to Master Lord (0x8E, promoted; one choice: no menu);
+       0x8F (Divine Dragon) never promotes. */
+    [0x80]                  = {CLASS_RANGER},
+    [0x81]                  = {CLASS_RANGER_F},
+    [0x88]                  = {0},
+    [0x89]                  = {CLASS_ASSASSIN_F,            CLASS_ROGUE},
+    [0x8C]                  = {0},
+    [0x8D]                  = {0x8E},
+    [0x8E]                  = {0},
+    [0x8F]                  = {0},
+#endif
 };
 
 CONST_DATA u8 gAnimCharaPalConfig[0x100][7] = {
@@ -586,6 +606,11 @@ CONST_DATA u8 gAnimCharaPalConfigUnused[0x100][7] = {0};
         [3] = 0x59,
     },
 };
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/* The rows gPromoJidLut has (Reforged randomizer "Random promotions", reforged_rando_classes.c). */
+const int gPromoJidLutCount = (int)(sizeof(gPromoJidLut) / sizeof(gPromoJidLut[0]));
+#endif
 
 CONST_DATA u8 gSummonConfig[4][2] = {
     {

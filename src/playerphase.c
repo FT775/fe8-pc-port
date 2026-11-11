@@ -353,6 +353,17 @@ void PlayerPhase_MainIdle(ProcPtr proc)
             }
         }
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        /* PC played builds, "Danger zone on Select" (off by default): Select
+           here shows every enemy's range (port/reforged/reforged_dangerzone.c) */
+        if (Reforged_DangerZoneFreeMap(proc))
+            return;
+        /* "Rewind" (off by default): the Rewind key held goes back to the start of the turn
+           (port/reforged/reforged_rewind.c) */
+        if (Reforged_RewindIdle(proc))
+            return;
+#endif
+
         if (gKeyStatusPtr->newKeys & A_BUTTON)
         {
             struct Unit * unit = GetUnit(gBmMapUnit[gBmSt.playerCursor.y][gBmSt.playerCursor.x]);
@@ -564,7 +575,11 @@ void PlayerPhase_RangeDisplayIdle(ProcPtr proc)
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
     /* PC played builds only, Reforged Options "Danger zone on Select" (off by
        default; port/reforged/reforged_dangerzone.c): Select shows or hides the
-       enemies' danger zone; A, B, R or L first bring the unit's range back. */
+       enemies' danger zone; A, B, R or L first bring the unit's range back.
+       Opened from the free map with no unit, B, Select, R and the closing A
+       are handled there. */
+    if (Reforged_DangerZoneFreeMapIdle(proc))
+        return;
     Reforged_DangerZoneSelect();
 #endif
 

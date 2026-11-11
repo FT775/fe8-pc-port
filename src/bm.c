@@ -462,6 +462,9 @@ bool BmMain_CheckLegacyEvent(void)
 //! FE8U = 0x08015450
 void BmMain_StartPhase(ProcPtr proc)
 {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_TestUnitClass(); /* test switch FE8PC_TEST_UNIT_CLASS (port/reforged/reforged_fe7.c) */
+#endif
     switch (gPlaySt.faction) {
     case FACTION_BLUE:
         Proc_StartBlocking(gProcScr_PlayerPhase, proc);
@@ -482,6 +485,9 @@ void BmMain_StartPhase(ProcPtr proc)
 //! FE8U = 0x080154A4
 void BmMain_ResumePlayerPhase(ProcPtr proc)
 {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_TestUnitClass(); /* test switch FE8PC_TEST_UNIT_CLASS: also a resumed suspend */
+#endif
     Proc_Goto(Proc_StartBlocking(gProcScr_PlayerPhase, proc), 7);
     Proc_Break(proc);
 }
@@ -503,6 +509,9 @@ void BmMain_SuspendBeforePhase(void)
 {
     gActionData.suspendPointType = SUSPEND_POINT_PHASECHANGE;
     WriteSuspendSave(SAVE_ID_SUSPEND);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_RewindSnapshot(); /* "Rewind": a player phase's start kept (reforged_rewind.c) */
+#endif
 }
 
 //! FE8U = 0x0801550C
@@ -1238,7 +1247,7 @@ int GetCurrentMapMusicIndex(void) {
 
 //! FE8U = 0x080160D0
 void StartMapSongBgm(void) {
-    StartBgm(GetCurrentMapMusicIndex(), NULL);
+    StartBgm(RANDO_MAP_SONG(GetCurrentMapMusicIndex()), NULL);
     return;
 }
 

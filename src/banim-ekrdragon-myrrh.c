@@ -29,11 +29,11 @@ void EkrMyr_PrepareBanimfx(struct ProcEkrDragon * proc)
 {
     struct BattleAnim * banim = banim_data;
     struct Anim * anim = proc->anim;
-    proc->timer = 0;
+    proc->timer = 0; RFO_MYRRH_START(anim)
 
-    EkrPrepareBanimfx(anim, BANIM_INDEX_MYRRH_INTRO - 1);
+    EkrPrepareBanimfx(anim, RFO_MYRRH_BANIM(anim, BANIM_INDEX_MYRRH_INTRO - 1));
     SwitchAISFrameDataFromBARoundType(anim, 0);
-    LZ77UnCompWram(banim[BANIM_INDEX_MYRRH_INTRO - 1].pal, gPal_Banim);
+    LZ77UnCompWram(banim[BANIM_INDEX_MYRRH_INTRO - 1].pal, gPal_Banim); RFO_MYRRH_PAL(anim, gPal_Banim)
 
     if (GetAnimPosition(anim) == EKR_POS_L)
         CpuFastCopy(gPal_Banim, PAL_OBJ(0x7), 0x40);
@@ -56,7 +56,7 @@ void EkrMyr_WaitForTransform(struct ProcEkrDragon *proc)
     if (ANINS_GET_TYPE(*anim->pScrCurrent) == ANIM_INS_TYPE_STOP) {
         EfxPlaySE(SONG_DE, 0x100);
         M4aPlayWithPostionCtrl(SONG_DE, anim->xPosition, 1);
-        EkrPrepareBanimfx(anim, BANIM_INDEX_MYRRH_MAIN - 1);
+        EkrPrepareBanimfx(anim, RFO_MYRRH_BANIM(anim, BANIM_INDEX_MYRRH_MAIN - 1));
         Proc_Break(proc);
     }
 }
@@ -94,10 +94,10 @@ void EkrMyr_ReturnToLoli(struct ProcEkrDragon * proc)
 
     EfxPlaySE(SONG_DD, 0x100);
     M4aPlayWithPostionCtrl(SONG_DD, anim->xPosition, 1);
-    EkrPrepareBanimfx(anim, BANIM_INDEX_MYRRH_EXIT - 1);
+    EkrPrepareBanimfx(anim, RFO_MYRRH_BANIM(anim, BANIM_INDEX_MYRRH_EXIT - 1));
     SwitchAISFrameDataFromBARoundType(anim, 0);
     Proc_Break(proc);
-    LZ77UnCompWram(banim[BANIM_INDEX_MYRRH_INTRO - 1].pal, gPal_Banim);
+    LZ77UnCompWram(banim[BANIM_INDEX_MYRRH_INTRO - 1].pal, gPal_Banim); RFO_MYRRH_PAL(anim, gPal_Banim)
 
     if (GetAnimPosition(anim) == EKR_POS_L)
         CpuFastCopy(gPal_Banim, PAL_OBJ(0x7), 0x40);

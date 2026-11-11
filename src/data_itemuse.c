@@ -47,6 +47,10 @@ CONST_DATA u8 ItemEffectiveness_ArmorAndHorse[] = {
     CLASS_MAGE_KNIGHT_F,
     CLASS_TARVOS,
     CLASS_MAELDUIN,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x80, 0x81, /* the FE7 Nomads (port/reforged/reforged_fe7.c), mounted */
+    0x8A, 0x8B, /* the FE6 Nomad Troopers (v1.19.0), mounted */
+#endif
     CLASS_NONE,
 };
 
@@ -79,6 +83,10 @@ CONST_DATA u8 ItemEffectiveness_Horse[] = {
     CLASS_MAELDUIN,
     CLASS_EPHRAIM_MASTER_LORD,
     CLASS_EIRIKA_MASTER_LORD,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x80, 0x81, /* the FE7 Nomads (port/reforged/reforged_fe7.c), mounted */
+    0x8A, 0x8B, /* the FE6 Nomad Troopers (v1.19.0), mounted */
+#endif
     CLASS_NONE,
 };
 
@@ -131,6 +139,9 @@ CONST_DATA u8 ItemEffectiveness_Dragon[] = {
     CLASS_DRACO_ZOMBIE,
     CLASS_MANAKETE_2,
     CLASS_MANAKETE_MYRRH,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x8F, /* the FE6 Divine Dragon (port/reforged/reforged_fe7.c, v1.20.0), as Myrrh */
+#endif
     CLASS_NONE,
 };
 
@@ -163,6 +174,9 @@ CONST_DATA u8 ItemEffectiveness_Flier[] = {
     CLASS_MANAKETE_2,
     CLASS_MANAKETE_MYRRH,
     CLASS_DRACO_ZOMBIE,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x8F, /* the FE6 Divine Dragon (port/reforged/reforged_fe7.c, v1.20.0): flies as Myrrh, so bows hit it as her */
+#endif
     CLASS_NONE,
 };
 
@@ -209,6 +223,9 @@ CONST_DATA u8 gItemUseJidList_HeroCrest[] = {
     CLASS_MYRMIDON_F,
     CLASS_FIGHTER,
     CLASS_JOURNEYMAN_T1,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x8D, /* the FE6 Lion Lord (port/reforged/reforged_fe7.c, v1.20.0): Master Lord, as the sword infantry */
+#endif
     CLASS_NONE,
 };
 
@@ -224,6 +241,9 @@ CONST_DATA u8 gItemUseJidList_KnightCrest[] = {
 CONST_DATA u8 gItemUseJidList_OrionsBolt[] = {
     CLASS_ARCHER,
     CLASS_ARCHER_F,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x80, 0x81, /* the FE7 Nomads (port/reforged/reforged_fe7.c): Ranger */
+#endif
     CLASS_NONE,
 };
 
@@ -283,6 +303,11 @@ CONST_DATA u8 gItemUseJidList_MasterSeal[] = {
     CLASS_PUPIL_T1,
     CLASS_RECRUIT_T1,
     CLASS_MONK,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x80, 0x81, /* the FE7 Nomads (port/reforged/reforged_fe7.c): Ranger */
+    0x89,       /* the FE6 Thief F (v1.19.0): Assassin F or Rogue */
+    0x8D,       /* the FE6 Lion Lord (v1.20.0): Master Lord */
+#endif
     CLASS_NONE,
 };
 
@@ -310,6 +335,9 @@ CONST_DATA u8 gItemUseJidList_OceanSeal[] = {
     CLASS_BRIGAND,
     CLASS_PIRATE,
     CLASS_THIEF,
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    0x89, /* the FE6 Thief F (port/reforged/reforged_fe7.c, v1.19.0) */
+#endif
     CLASS_NONE,
 };
 

@@ -604,8 +604,8 @@ void MakeTerrainHealTargetList(int faction) {
 
         terrainId = gBmMapTerrain[unit->yPos][unit->xPos];
 
-        if (GetTerrainHealAmount(terrainId) != 0 && (GetUnitCurrentHp(unit) != GetUnitMaxHp(unit))) {
-            amount = (GetTerrainHealAmount(terrainId) * GetUnitMaxHp(unit)) / 100;
+        if ((GetTerrainHealAmount(terrainId) RFO_SKILL_RENEWAL(unit)) != 0 && (GetUnitCurrentHp(unit) != GetUnitMaxHp(unit))) {
+            amount = ((GetTerrainHealAmount(terrainId) RFO_SKILL_RENEWAL(unit)) * GetUnitMaxHp(unit)) / 100;
             AddTarget(unit->xPos, unit->yPos, unit->index, amount);
         }
 

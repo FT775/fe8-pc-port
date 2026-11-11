@@ -90,9 +90,9 @@ void SetMsgTerminator(signed char * str)
 
 char * GetStringFromIndex(int index)
 {
-    if (index == sActiveMsg)
+    if (index == sActiveMsg RFO_VMSG_CACHEABLE(index))
         return sMsgString.buffer1;
-    CallARM_DecompText(gMsgTable[index], sMsgString.buffer1);
+    RFO_VMSG(index, sMsgString.buffer1) CallARM_DecompText(gMsgTable[index], sMsgString.buffer1);
     SetMsgTerminator(sMsgString.buffer1); RANDO_HOOK_TEXT(sMsgString.buffer1, sizeof(sMsgString.buffer1))
     sActiveMsg = index;
     return sMsgString.buffer1;
@@ -100,7 +100,7 @@ char * GetStringFromIndex(int index)
 
 char * GetStringFromIndexInBuffer(int index, char *buffer)
 {
-    CallARM_DecompText(gMsgTable[index], buffer);
+    RFO_VMSG(index, buffer) CallARM_DecompText(gMsgTable[index], buffer);
     SetMsgTerminator(buffer);
     return buffer;
 }

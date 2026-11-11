@@ -139,7 +139,7 @@ void PhaseIntroText_PutText(struct PhaseIntroSubProc *proc)
 
 void PhaseIntroInitText(struct PhaseIntroSubProc *proc)
 {
-    if (GetCurrentBgmSong() != GetCurrentMapMusicIndex())
+    if (GetCurrentBgmSong() != RANDO_MAP_SONG_PEEK(GetCurrentMapMusicIndex())) // PC played builds: Random music (include/bmunit.h)
         Sound_FadeOutBGM(4);
 
     PlaySoundEffect(SONG_73);

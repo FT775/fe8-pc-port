@@ -30,7 +30,11 @@ struct ProcPromoHandler {
     /* 32 */ s8 u32;
     /* 33 */ u8 pid;
     /* 34 */ u8 sel_en;
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* 35 */ u8 jid; /* PC played builds: the FE7 / FE6 classes' ids are 0x80-0x8F (port/reforged/reforged_fe7.c) */
+#else
     /* 35 */ s8 jid;
+#endif
     /* 38 */ struct Unit *unit;
     /* 3C */ s32 item_slot;
     /* 40 */ u32 game_lock;
@@ -67,7 +71,11 @@ struct ProcPromoMain {
     u8 pid;
     u8 terrain;
     s8 _u3a;
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    u8 jid; /* PC played builds: the FE7 / FE6 classes' ids are 0x80-0x8F (port/reforged/reforged_fe7.c) */
+#else
     s8 jid;
+#endif
 };
 
 enum classchg_proc_label {

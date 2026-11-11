@@ -22,6 +22,18 @@
 #include "bmitem.h"
 #include "prepscreen.h"
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/* Skills (port/reforged/reforged_skills.c; the user's requirement of 2026-11-07: see what a
+   promotion does to skills before choosing it): with skills on for the unit, each choice's
+   description is its "Gains / Keeps / Loses" against the unit's current skills (a virtual text
+   id, 0x7F50 + the choice); else the class's own description, as on the GBA. */
+int Reforged_SkillPromoDesc(struct Unit *unit, int slot, int jid, int desc);
+#define RFO_SKILL_PROMO_DESC(unit, slot, jid, desc) Reforged_SkillPromoDesc((unit), (slot), (jid), (desc))
+int Reforged_Fe7ThirdPromo(int jid); /* the FE7 classes (port/reforged/reforged_fe7.c) */
+#else
+#define RFO_SKILL_PROMO_DESC(unit, slot, jid, desc) (desc)
+#endif
+
 void EndEkrTerrainfx(void *);
 void NewEkrTerrainfx(void *);
 void EkrTerrainfx_SetPosition(void *, s16, s16, s16, s16);
@@ -226,9 +238,9 @@ void Make6C_PromotionMenuSelect(struct ProcPromoSel* proc) {
         weapon = GetUnitEquippedWeapon(unit);
 
         for (j = 0; j < 2; j++) {
-            proc->jid[j] = gPromoJidLut[pid][j];
-            proc->use_wpn[j] = LoadClassBattleSprite(&proc->sprite[j], gPromoJidLut[pid][j], weapon);
-            proc->msg_desc[j] = GetClassData(gPromoJidLut[pid][j])->descTextId;
+            proc->jid[j] = RFO_PROMO_SLOT(unit, j, RANDO_PROMO_CHOICE(unit, gPromoJidLut[pid][j])); // PC played builds: Match gender, three choices (include/bmunit.h)
+            proc->use_wpn[j] = LoadClassBattleSprite(&proc->sprite[j], RFO_PROMO_SLOT(unit, j, RANDO_PROMO_CHOICE(unit, gPromoJidLut[pid][j])), weapon);
+            proc->msg_desc[j] = RFO_SKILL_PROMO_DESC(unit, j, proc->jid[j], GetClassData(RFO_PROMO_SLOT(unit, j, RANDO_PROMO_CHOICE(unit, gPromoJidLut[pid][j])))->descTextId);
         }
 
         proc->weapon = weapon;
@@ -239,22 +251,36 @@ void Make6C_PromotionMenuSelect(struct ProcPromoSel* proc) {
             case CLASS_JOURNEYMAN:
                 proc->jid[2] = CLASS_JOURNEYMAN_T1;
                 proc->use_wpn[2] = LoadClassBattleSprite(&proc->sprite[2], CLASS_JOURNEYMAN_T1, weapon);
-                proc->msg_desc[2] = GetClassData(CLASS_JOURNEYMAN_T1)->descTextId;
+                proc->msg_desc[2] = RFO_SKILL_PROMO_DESC(unit, 2, CLASS_JOURNEYMAN_T1, GetClassData(CLASS_JOURNEYMAN_T1)->descTextId);
                 break;
 
             case CLASS_PUPIL:
                 proc->jid[2] = CLASS_PUPIL_T1;
                 proc->use_wpn[2] = LoadClassBattleSprite(&proc->sprite[2], CLASS_PUPIL_T1, weapon);
-                proc->msg_desc[2] = GetClassData(CLASS_PUPIL_T1)->descTextId;
+                proc->msg_desc[2] = RFO_SKILL_PROMO_DESC(unit, 2, CLASS_PUPIL_T1, GetClassData(CLASS_PUPIL_T1)->descTextId);
                 break;
 
             case CLASS_RECRUIT:
                 proc->jid[2] = CLASS_RECRUIT_T1;
                 proc->use_wpn[2] = LoadClassBattleSprite(&proc->sprite[2], CLASS_RECRUIT_T1, weapon);
-                proc->msg_desc[2] = GetClassData(CLASS_RECRUIT_T1)->descTextId;
+                proc->msg_desc[2] = RFO_SKILL_PROMO_DESC(unit, 2, CLASS_RECRUIT_T1, GetClassData(CLASS_RECRUIT_T1)->descTextId);
                 break;
             }
         }
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        /* the FE7 classes (port/reforged/reforged_fe7.c): a Myrmidon's third choice, Blade Lord, with
+           its preview animation, name and description (ClassChgMenuItem_3rdUsability shows it); in a
+           randomizer version 11-14 run the run's third (include/bmunit.h RFO_PROMO_SLOT) */
+        {
+            int third = Reforged_PromoSlot(unit, 2, Reforged_Fe7ThirdPromo(unit->pClassData->number));
+
+            if (third != 0) {
+                proc->jid[2] = third;
+                proc->use_wpn[2] = LoadClassBattleSprite(&proc->sprite[2], third, weapon);
+                proc->msg_desc[2] = RFO_SKILL_PROMO_DESC(unit, 2, third, GetClassData(third)->descTextId);
+            }
+        }
+#endif
         break;
     }
 
@@ -360,6 +386,9 @@ void LoadBattleSpritesForBranchScreen(struct ProcPromoSel *proc) {
                 battle_anim_ptr,
                 (u16) GetUnitEquippedWeapon(&copied_unit),
                 &battle_anim_id);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            ret = RANDO_BANIM_FALLBACK(battle_anim_ptr, ret, &battle_anim_id); RANDO_CHARA_ENSURE(1, (s16)_pid, (s16)_jid, (s16)ret, unit) /* a class with no animation for that weapon; a character's colours on it (include/bmunit.h) */
+#endif
             for (i = 0; i <= 6; i++) {
                 if (gAnimCharaPalConfig[(s16)_pid][i] == (s16) _jid) {
                     chara_pal = gAnimCharaPalIt[(s16)_pid][i] - 1;

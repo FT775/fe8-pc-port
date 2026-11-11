@@ -38,7 +38,10 @@
  *   FE8PC_SAVE=PATH    PATH; FE8PC_SAVE=none: none. Window build only.
  *   otherwise          window build (fe8pc-sdl): the ROM path with its
  *                      extension replaced by .sav (baserom.gba ->
- *                      baserom.sav), as mGBA names it. Headless builds
+ *                      baserom.sav), as mGBA names it (v1.22.0, Windows:
+ *                      for a ROM found in the exe's roms folder or chosen
+ *                      with the picker, as for a ROM of that name next to
+ *                      the exe: PortSave_SetSaveBase). Headless builds
  *                      (fe8pc, the Gate 0 build, fe8pc.exe): none.
  * The headless builds are the test builds: they never read FE8PC_SAVE, so a
  * value left in the environment cannot reach a gate, and they keep a save
@@ -250,6 +253,17 @@ static int DefaultPath(const char *romPath, char *out, size_t outSize)
     if (strcmp(out, romPath) == 0 && snprintf(out, outSize, "%s.sav", romPath) >= (int)outSize)
         return -1;
     return 0;
+}
+
+/* v1.22.0, the Windows window build (port/win32/posix_win32.c), before
+   PortSave_Init, for a ROM found in the exe's roms folder or chosen with the
+   picker: the default save is chosen as for a ROM at path (the exe's folder,
+   the ROM's file name), as if the ROM sat next to the exe. */
+static char sSaveBase[PATH_SIZE];
+
+void PortSave_SetSaveBase(const char *path)
+{
+    snprintf(sSaveBase, sizeof(sSaveBase), "%s", path);
 }
 
 /* The file a write replaces: path itself, or, when path is a symbolic link
@@ -823,7 +837,7 @@ int PortSave_Init(const char *romPath, const char *savePath, int noSave)
     }
     else if (Platform_IsInteractive())
     {
-        if (DefaultPath(romPath, sPath, sizeof(sPath)) != 0)
+        if (DefaultPath(sSaveBase[0] != '\0' ? sSaveBase : romPath, sPath, sizeof(sPath)) != 0)
             goto too_long;
         isDefault = 1;
     }

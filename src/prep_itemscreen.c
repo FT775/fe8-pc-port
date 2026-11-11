@@ -1786,7 +1786,7 @@ void PrepItemScreen_DrawUnitItems(struct Text * text, u16 * tilemap, struct Unit
         PutText(text, TILEMAP_LOCATED(tilemap, 2, i * 2));
         PutNumberOrBlank(
             TILEMAP_LOCATED(tilemap, 11, i * 2), !isUnusable ? TEXT_COLOR_SYSTEM_BLUE : TEXT_COLOR_SYSTEM_GRAY,
-            GetItemUses(item));
+            RFO_SHOWN_USES(item, NULL));
     }
 
     return;

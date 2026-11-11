@@ -179,7 +179,7 @@ void PathArrowDisp_Init(u8 a) {
     ApplyPalette(Pal_MovePath, 0x13);
     if (a == 0) {
         gpPathArrowProc->maxMov =
-            gActiveUnit->movBonus + gActiveUnit->pClassData->baseMov - gActionData.moveCount;
+            gActiveUnit->movBonus + gActiveUnit->pClassData->baseMov - gActionData.moveCount RFO_SKILL_MOV(gActiveUnit);
         CutOffPathLength(0);
         AddPointToPathArrowProc(gActiveUnit->xPos, gActiveUnit->yPos);
         gpPathArrowProc->pathCosts[0] = gpPathArrowProc->maxMov;

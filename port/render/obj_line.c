@@ -156,6 +156,43 @@ static void OvlDraw(struct RenderObjLine *out)
         }
     }
 }
+
+/*
+ * Reforged Options "Skill banners" (port/reforged/reforged_skillbanner.c):
+ * gReforgedScreenOvl, a whole-screen picture laid over the finished line,
+ * after windows and blending. Pixel 0: nothing; RFO_SCREEN_OPAQUE set: that
+ * colour; otherwise that colour mixed half and half with the game's. Dropped
+ * when no frame stamp is newer than 2 frame steps (its loop stopped).
+ */
+static void ScreenOvlLine(int line, uint16_t *dst)
+{
+    const unsigned short *src;
+    int x;
+
+    if (!gReforgedScreenOvl.active || (uint32_t)(gPortFrameCount - gReforgedScreenOvl.frame) > 2)
+        return;
+    if (line < 0 || line >= RFO_SCREEN_H || !gReforgedScreenOvl.rowUsed[line])
+        return;
+    src = gReforgedScreenOvl.pix[line];
+    for (x = 0; x < RENDER_WIDTH && x < RFO_SCREEN_W; x++)
+    {
+        unsigned c = src[x];
+
+        if (c == 0)
+            continue;
+        if (c & RFO_SCREEN_OPAQUE)
+            dst[x] = (uint16_t)(c & 0x7FFF);
+        else
+        {
+            unsigned d = dst[x];
+            unsigned r = ((c & 0x1F) + (d & 0x1F)) >> 1;
+            unsigned g = (((c >> 5) & 0x1F) + ((d >> 5) & 0x1F)) >> 1;
+            unsigned b = (((c >> 10) & 0x1F) + ((d >> 10) & 0x1F)) >> 1;
+
+            dst[x] = (uint16_t)(r | (g << 5) | (b << 10));
+        }
+    }
+}
 #endif /* PORT_RFO_MAPOVERLAY */
 
 void RenderFxTrip(int id, int line, uint32_t detail)
@@ -512,4 +549,7 @@ void RenderObjFxLine(int line, const struct RenderFxRegs *fx, const struct Rende
     RenderObjLine(line, fx->dispcnt, mem, &obj);
     RenderWindowLine(line, fx, obj.win, mask);
     RenderComposeLine(line, fx, bg, backdrop, &obj, mask, dst);
+#if PORT_RFO_MAPOVERLAY
+    ScreenOvlLine(line, dst);
+#endif
 }

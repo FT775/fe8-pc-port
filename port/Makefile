@@ -34,13 +34,27 @@ GBA_ROM ?= $(GBA_DIR)/baserom.gba
 # found by the NULL probe, Chapter 4 preparations, tick 67,669). Since D-36 the
 # PC's trainees[] holds the GBA's 7 entries, so that loop stays in bounds; the
 # flag stays for every other loop that indexes past an array.
+# -ftrivial-auto-var-init=zero (HOST_CFLAGS and PORT_CFLAGS): every local the
+# code leaves uninitialised starts as zero (padding included), so the game never
+# reads host stack garbage. On the GBA such a read gets whatever an earlier call
+# left on the GBA stack, the same every run; on the host it got values from SDL,
+# the audio thread's queue counts, fast-forward timing and ASLR'd pointers, so a
+# replayed key file could play out differently from run to run, more often
+# under load. Found: AiEquipGetFlags (src/cp_0803E2F4.c) stops filling out[] at
+# the first empty item slot and AiEquipBestMatch reads all five, so an enemy
+# with one weapon sometimes "equipped" its empty slot 1 (CpPerform_EquipBest,
+# src/cp_perform.c; route e15 frame 5251); WriteWorldMapStuff
+# (src/bmsave-gmap.c) writes its struct's 3 padding bytes to the suspend save.
+# Zero takes the path the code means (no entry, no equip). The GBA build is
+# not compiled with these flags.
 HOST_ARCH    := -m32
 HOST_CFLAGS  := $(HOST_ARCH) -std=gnu89 -O1 -g -fno-pie -funsigned-char -fno-toplevel-reorder \
                 -fno-common -fno-strict-aliasing -fwrapv -fpermissive -malign-data=abi \
-                -fno-delete-null-pointer-checks -fno-aggressive-loop-optimizations -fdata-sections -w
+                -fno-delete-null-pointer-checks -fno-aggressive-loop-optimizations -fdata-sections -w \
+                -ftrivial-auto-var-init=zero
 HOST_CPPFLAGS := -DPC_PORT=1 -DNONMATCHING=1 -Iinclude -Iport/include -include port/include/port.h
 PORT_CFLAGS  := $(HOST_ARCH) -std=gnu11 -O1 -g -fno-pie -funsigned-char -fno-strict-aliasing \
-                -fwrapv -Wall -Wno-unused-function
+                -fwrapv -Wall -Wno-unused-function -ftrivial-auto-var-init=zero
 # Code goes above the GBA map; 0x08048000 (the i386 default) is inside the ROM window.
 HOST_LDFLAGS := $(HOST_ARCH) -no-pie -Wl,-Ttext-segment=0x10000000 -Wl,--no-check-sections \
                 -Wl,--wrap=OnMain
@@ -295,7 +309,12 @@ endif
 
 # port/reforged (above) is game-side code: the game's flags and port.h, as
 # src/ is (a shorter stem, so this rule wins over the next for these files).
-$(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/port_reforged.h port/reforged/reforged_rando.h port/platform.h $(COMPILE_STAMP)
+# Every port/reforged header is a prerequisite (no -MD tracking): v1.1 added a
+# field to reforged_listmenu.h's struct ReforgedListScreen, and the screens whose
+# .c did not change kept their old, shorter tables in an incremental build, so
+# leaving them read past those tables and called what was there (a crash on B).
+$(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/port_reforged.h \
+    port/include/port_controls.h $(wildcard port/reforged/*.h) port/platform.h $(COMPILE_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_CFLAGS) $(HOST_CPPFLAGS) -c $< -o $@ $(WARNLOG)
 

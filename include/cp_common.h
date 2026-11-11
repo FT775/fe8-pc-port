@@ -320,4 +320,32 @@ int Reforged_FixAiHealFullHp(struct Unit *unit, int wants);
 #define RFO_AI_HEAL_WANTS(unit, cond) (cond)
 #endif
 
+/*
+ * PC played builds only: Game fixes, "Smarter enemies" (RFO_FIX_SMART_AI, port/reforged/reforged_gamefixes.c),
+ * OFF by default. src/cp_battle.c, after the AI's battle simulation against a target:
+ *   RFO_AI_BAD_FIGHT()        AiIsBadFight (FE8: always 0): 1 skips the target, for a regular enemy (red, not a
+ *                             boss, not berserk) whose attack would do no real damage while the target hits
+ *                             back, or that would likely die (50%+) without likely killing (50%+).
+ *   RFO_AI_SCORE_RISK(score)  AiComputeCombatScore: the score loses the attacker's chance to die / 5 (0-20).
+ *   RFO_AI_AVOID_MOVE(px, py, maxDanger)  src/cp_utility.c AiTryMoveTowards: a unit that skipped targets this
+ *                             turn does not end its move inside a skipped target's reach (when it can help it).
+ *   RFO_AI_ESCAPE_MARK()      src/cp_0803E2F4.c AiTryMoveTowardsEscape: that move heads for an escape point (never steered).
+ * No random numbers are used. In every other build: 0 and nothing.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_FixAiBadFight(void);
+int Reforged_FixAiRiskPenalty(void);
+void Reforged_FixAiAvoidMove(s16 *xOut, s16 *yOut, int maxDanger);
+void Reforged_FixAiEscapeMark(void);
+#define RFO_AI_ESCAPE_MARK() Reforged_FixAiEscapeMark();
+#define RFO_AI_BAD_FIGHT() Reforged_FixAiBadFight()
+#define RFO_AI_SCORE_RISK(score) (score) -= Reforged_FixAiRiskPenalty();
+#define RFO_AI_AVOID_MOVE(px, py, maxDanger) Reforged_FixAiAvoidMove((px), (py), (maxDanger));
+#else
+#define RFO_AI_BAD_FIGHT() 0
+#define RFO_AI_SCORE_RISK(score)
+#define RFO_AI_AVOID_MOVE(px, py, maxDanger)
+#define RFO_AI_ESCAPE_MARK()
+#endif
+
 #endif // GUARD_CP_COMMON_H

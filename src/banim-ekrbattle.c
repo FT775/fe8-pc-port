@@ -236,7 +236,7 @@ void MainUpdateEkrBattle(void)
     Proc_Run(gProcTreeRootArray[1]);
 
     AnimUpdateAll();
-    BattleAIS_ExecCommands();
+    BattleAIS_ExecCommands(); RFO_ASTRA_COPIES()
 
     Proc_Run(gProcTreeRootArray[4]);
 

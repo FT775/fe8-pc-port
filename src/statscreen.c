@@ -35,6 +35,32 @@
 #include "port_reforged.h" /* PC played builds: Reforged Options, growth rates on Select */
 #endif
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/* Skills (port/reforged/reforged_skills.c): with skills on for the unit, R on the class name
+   lists its skills and their short effects (a virtual text id, 0x7F53) instead of the class's
+   description: every page has the class name, and it costs no stat-screen text slot. */
+int Reforged_SkillClassHelp(struct Unit *unit, int desc);
+#define RFO_SKILL_CLASS_HELP(unit, desc) Reforged_SkillClassHelp((unit), (desc))
+#else
+#define RFO_SKILL_CLASS_HELP(unit, desc) (desc)
+#endif
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/* Skills, the 4th page "Skills" (port/reforged/reforged_skills_page.c): only with skills on for
+   a unit that has a skill or a promotion that changes its skills; else the screen keeps its 3
+   pages. DisplayPage's lut slot 3 (retail: DisplayPage0, never reached) draws it. */
+int Reforged_SkillPageExists(struct Unit *unit);
+void Reforged_SkillPageDisplay(void);
+void Reforged_SkillPageDrawn(int pageid);
+void Reforged_SkillPageWillDraw(int pageid);
+const struct HelpBoxInfo *Reforged_SkillPageHelp(const struct HelpBoxInfo *current);
+#define RFO_SKILL_PAGE_FUNC Reforged_SkillPageDisplay
+#define RFO_SKILL_PAGE_AMT(unit) (STATSCREEN_PAGE_MAX + Reforged_SkillPageExists(unit))
+#else
+#define RFO_SKILL_PAGE_FUNC DisplayPage0
+#define RFO_SKILL_PAGE_AMT(unit) STATSCREEN_PAGE_MAX
+#endif
+
 struct StatScreenInfo EWRAM_DATA sStatScreenInfo = {};
 struct HelpBoxInfo EWRAM_DATA sMutableHbi = {};
 const struct HelpBoxInfo * EWRAM_DATA sLastHbi = NULL;
@@ -581,21 +607,21 @@ void DisplayPage0(void)
 
     // displaying skl stat value
     DrawStatWithBar(1, 5, 3,
-        gStatScreen.unit->state & US_RESCUING
+        RFO_RESCUE_HALVES(gStatScreen.unit)
             ? gStatScreen.unit->skl/2
             : gStatScreen.unit->skl,
         GetUnitSkill(gStatScreen.unit),
-        gStatScreen.unit->state & US_RESCUING
+        RFO_RESCUE_HALVES(gStatScreen.unit)
             ? UNIT_SKL_MAX(gStatScreen.unit)/2
             : UNIT_SKL_MAX(gStatScreen.unit));
 
     // displaying spd stat value
     DrawStatWithBar(2, 5, 5,
-        gStatScreen.unit->state & US_RESCUING
+        RFO_RESCUE_HALVES(gStatScreen.unit)
             ? gStatScreen.unit->spd/2
             : gStatScreen.unit->spd,
         GetUnitSpeed(gStatScreen.unit),
-        gStatScreen.unit->state & US_RESCUING
+        RFO_RESCUE_HALVES(gStatScreen.unit)
             ? UNIT_SPD_MAX(gStatScreen.unit)/2
             : UNIT_SPD_MAX(gStatScreen.unit));
 
@@ -654,8 +680,8 @@ void DisplayPage0(void)
         {
             Text_InsertDrawString(
                 &gStatScreen.text[STATSCREEN_TEXT_STATUS],
-                24, TEXT_COLOR_SYSTEM_BLUE,
-                GetUnitStatusName(gStatScreen.unit));
+                RFO_PAIR_STATUS_X(gStatScreen.unit, 24), TEXT_COLOR_SYSTEM_BLUE,
+                RFO_PAIR_STATUS_NAME(gStatScreen.unit, GetUnitStatusName(gStatScreen.unit))); RFO_PAIR_STATUS_GAUGE(gStatScreen.unit)
         }
         else
         {
@@ -736,10 +762,10 @@ void DisplayPage1(void)
                     ? TEXT_COLOR_SYSTEM_WHITE
                     : TEXT_COLOR_SYSTEM_GRAY;
 
-            DrawItemStatScreenLine(
+            RFO_ITEM_OWNER(gStatScreen.unit) DrawItemStatScreenLine(
                 &gStatScreen.text[STATSCREEN_TEXT_ITEM0 + i],
                 item, color,
-                gUiTmScratchA + TILEMAP_INDEX(1, 1 + i*2));
+                gUiTmScratchA + TILEMAP_INDEX(1, 1 + i*2)); RFO_ITEM_OWNER(NULL)
         }
     }
 
@@ -928,7 +954,7 @@ void DisplayPage(int pageid)
         DisplayPage0,
         DisplayPage1,
         DisplayPage2,
-        DisplayPage0,
+        RFO_SKILL_PAGE_FUNC,
     };
 
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
@@ -936,7 +962,9 @@ void DisplayPage(int pageid)
        growth view's own text characters are taken back before a page is
        drawn, and page 0 is drawn the retail way before another page takes
        its place, so what the next draw keeps is what retail leaves. */
-    Reforged_GrowthPageWillDraw(pageid);
+    /* (the Skills page, 3, is another page to them: their 3 means DisplayPage0) */
+    Reforged_GrowthPageWillDraw(pageid == STATSCREEN_PAGE_MAX ? STATSCREEN_PAGE_2 : pageid);
+    Reforged_SkillPageWillDraw(pageid); /* the Skills page's glyphs out of the borrowed chrs */
 #endif
 
     CpuFastFill(0, gUiTmScratchA, sizeof(gUiTmScratchA));
@@ -948,7 +976,10 @@ void DisplayPage(int pageid)
     /* PC played builds only, Reforged Options "Growth rates on Select" (off
        by default; port/reforged/reforged_growths.c): with the growth view
        on, page 0's numbers are drawn over with the unit's growth rates. */
-    Reforged_GrowthPageDrawn(pageid);
+    Reforged_GrowthPageDrawn(pageid == STATSCREEN_PAGE_MAX ? STATSCREEN_PAGE_2 : pageid);
+
+    /* Skills page: its title on BG0 for page 3, taken away after it (nothing without the page). */
+    Reforged_SkillPageDrawn(pageid);
 #endif
 }
 
@@ -1268,6 +1299,12 @@ void DisplayPageNameSprite(int pageid)
         111 + gStatScreen.xDispOff, 1 + gStatScreen.yDispOff,
         sSprite_PageNameBack, 0x4293 + 0xC00);
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* the Skills page: only the plate (its title is text on BG0, Reforged_SkillPageDrawn) */
+    if (pageid >= STATSCREEN_PAGE_MAX)
+        return;
+#endif
+
     PutSprite(4,
         114 + gStatScreen.xDispOff, 0 + gStatScreen.yDispOff,
         sPageNameSpriteLut[pageid], 0x3240 + sPageNameChrOffsetLut[pageid] + 0xC00);
@@ -1464,8 +1501,8 @@ void PageNumCtrl_DisplayBlinkIcons(struct StatScreenPageNameProc* proc)
     {
         if ((gStatScreen.page == STATSCREEN_PAGE_0) && (gStatScreen.unit->state & US_RESCUING))
         {
-            UpdateStatArrowSprites(120, 40, 1);
-            UpdateStatArrowSprites(120, 56, 1);
+            RFO_IF_RESCUE_HALVES(gStatScreen.unit) UpdateStatArrowSprites(120, 40, 1);
+            RFO_IF_RESCUE_HALVES(gStatScreen.unit) UpdateStatArrowSprites(120, 56, 1);
 
             if (displayIcon)
             {
@@ -1593,7 +1630,17 @@ void StatScreen_Display(struct Proc* proc)
         fid++;
 
     // Set page amount (in FE6, this was dependant on whether this is ally or enemy)
-    gStatScreen.pageAmt = STATSCREEN_PAGE_MAX;
+    gStatScreen.pageAmt = RFO_SKILL_PAGE_AMT(gStatScreen.unit);
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* Skills page: a page past the count (the Skills page remembered in chapterStateBits, or a
+       unit without it) is page 0, with no help box left from the Skills page */
+    if (gStatScreen.page >= gStatScreen.pageAmt)
+    {
+        gStatScreen.page = STATSCREEN_PAGE_0;
+        gStatScreen.help = NULL;
+    }
+#endif
 
     // Init text and icons
 
@@ -1758,6 +1805,12 @@ void StartStatScreenHelp(int pageid, struct Proc* proc)
 {
     LoadHelpBoxGfx(NULL, -1); // default
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* the Skills page's help boxes (the last one R left there, if still valid, else its first) */
+    if (pageid == STATSCREEN_PAGE_MAX)
+        gStatScreen.help = Reforged_SkillPageHelp(gStatScreen.help);
+#endif
+
     if (!gStatScreen.help)
     {
         switch (pageid)
@@ -1894,7 +1947,7 @@ void HbPopulate_SSCharacter(struct HelpBoxProc* proc)
 
 void HbPopulate_SSClass(struct HelpBoxProc* proc)
 {
-    proc->msgId = gStatScreen.unit->pClassData->descTextId;
+    proc->msgId = RFO_SKILL_CLASS_HELP(gStatScreen.unit, gStatScreen.unit->pClassData->descTextId);
 }
 
 void HbRedirect_SSSupports(struct HelpBoxProc* proc)

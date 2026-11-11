@@ -2099,7 +2099,7 @@ u8 Event29_SetFogVision(struct EventEngineProc * proc)
 u8 Event2A_MoveToChapter(struct EventEngineProc * proc)
 {
     u8 subcode = EVT_SUB_CMD(proc->pEventCurrent);
-    s16 chIndex = EVT_CMD_ARGV(proc->pEventCurrent)[0];
+    s16 chIndex = EVT_CMD_ARGV(proc->pEventCurrent)[0]; RFO_RUINS_MOVE(subcode)
 
     if (chIndex < 0)
         chIndex = gEventSlots[2];
@@ -3773,7 +3773,7 @@ u8 Event40_PromoteUnit(struct EventEngineProc * proc)
 
     s16 pid = EVT_CMD_ARGV(proc->pEventCurrent)[0];
     u16 jid = RANDO_PROMOTE_JID(GetUnitStructFromEventParameter(pid), EVT_CMD_ARGV(proc->pEventCurrent)[1]);
-    u16 itemId = EVT_CMD_ARGV(proc->pEventCurrent)[2]; RANDO_PROMOTE_SKIP(jid)
+    u16 itemId = EVT_CMD_ARGV(proc->pEventCurrent)[2]; RANDO_PROMOTE_SKIP(jid) RFO_PROMOTE_MENU(proc, pid, jid, itemId)
 
     struct ProcEventPromote * childProc = Proc_StartBlocking(ProcScr_EventPromoteUnit, proc);
     childProc->event_engine = proc;

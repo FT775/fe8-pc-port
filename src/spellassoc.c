@@ -5,7 +5,7 @@
 struct SpellAssoc *GetSpellAssocStructPtr(u16 item)
 {
     struct SpellAssoc *it = gSpellAssocData;
-    u16 iid = GetItemIndex(item);
+    u16 iid = RFO_SPELL_ITEM(GetItemIndex(item));
     u16 item_;
 
     item_ = it->item;

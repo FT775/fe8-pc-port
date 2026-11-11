@@ -156,7 +156,7 @@ void ArenaUi_WelcomeDialogue(ProcPtr proc) {
 
 //! FE8U = 0x080B59CC
 void ArenaUi_WagerGoldDialogue(ProcPtr proc) {
-    SetTalkNumber(ArenaGetMatchupGoldValue());
+    RFO_ARENA_ODDS_EARLY(proc) SetTalkNumber(ArenaGetMatchupGoldValue());
     StartArenaDialogue(0x8D2, proc);
     // TODO: msgid "Would you like to wager[.][NL][G] gold?[Yes]"
     return;
@@ -304,7 +304,7 @@ void ArenaUi_ShowGoldBoxOnVictoryOrDraw(ProcPtr proc) {
 
 //! FE8U = 0x080B5BE4
 void ArenaUi_OnEnd(void) {
-    Proc_EndEach(gProcScr_GoldBox);
+    RFO_ARENA_TEST_END() Proc_EndEach(gProcScr_GoldBox);
     Proc_ForEach(ProcScr_Mu, (ProcFunc) ShowMu);
     return;
 }
@@ -330,7 +330,7 @@ void StartArenaDialogue(int msgId, ProcPtr proc) {
 //! FE8U = 0x080B5C48
 void DrawArenaOpponentDetailsText(ProcPtr proc) {
 
-    DrawUiFrame2(7, 9, 0x10, 6, 0);
+    RFO_ARENA_DETAILS() DrawUiFrame2(7, 9, 0x10, 6, 0);
     SetTextFont(0);
     InitSystemTextFont();
 

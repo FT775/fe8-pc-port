@@ -146,7 +146,9 @@ PORT_TABLE = {
         "sPressParsed": SESSION, "sPressStart": SESSION, "sPressPeriod": SESSION, "sPressMask": SESSION,
         # FE8PC_KEYSCRIPT (any build): the environment's one-off presses, read at
         # the first frame, as sPress* is; a resumed run keeps its own.
-        "sScriptFrame": SESSION, "sScriptMask": SESSION, "sScriptCount": SESSION},
+        "sScriptFrame": SESSION, "sScriptMask": SESSION, "sScriptCount": SESSION,
+        # FE8PC_KEYFILE (any build, v1.1.5): the key file read at the first frame (a heap copy).
+        "sKeyFile": SESSION, "sKeyFileTicks": SESSION, "sKeyFileRead": SESSION},
     "port/hw/main_pc.o": {
         "sDropBiosWrites": SESSION, "gPortOnMainCalls": STATE, "sDroppedCount": STATE, "sDroppedSites": CODE,
         "sResetJmp": SESSION, "sStubsHit": STATE},

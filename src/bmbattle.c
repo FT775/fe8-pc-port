@@ -196,7 +196,7 @@ void BattleGenerateBallistaReal(struct Unit* actor, struct Unit* target) {
 
 void BattleGenerate(struct Unit* actor, struct Unit* target) {
     ComputeBattleUnitStats(&gBattleActor, &gBattleTarget);
-    ComputeBattleUnitStats(&gBattleTarget, &gBattleActor);
+    ComputeBattleUnitStats(&gBattleTarget, &gBattleActor); RFO_SKILL_BATTLE_MODS()
 
     ComputeBattleUnitEffectiveStats(&gBattleActor, &gBattleTarget);
     ComputeBattleUnitEffectiveStats(&gBattleTarget, &gBattleActor);
@@ -208,6 +208,10 @@ void BattleGenerate(struct Unit* actor, struct Unit* target) {
         BattleUnwindScripted();
     else
         BattleUnwind();
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* class skills: Poison Strike, the Despoil roll (reforged_skills_battle.c) */
+    Reforged_SkillAfterUnwind();
+#endif
 }
 
 void BattleGenerateUiStats(struct Unit* unit, s8 itemSlot) {
@@ -666,7 +670,7 @@ void ComputeBattleUnitEffectiveCritRate(struct BattleUnit* attacker, struct Batt
     }
 }
 
-void ComputeBattleUnitSilencerRate(struct BattleUnit* attacker, struct BattleUnit* defender) {
+void ComputeBattleUnitSilencerRate(struct BattleUnit* attacker, struct BattleUnit* defender) { RFO_SKILL_NIHIL_SILENCER(attacker)
     if (!(UNIT_CATTRIBUTES(&attacker->unit) & CA_ASSASSIN))
         attacker->battleSilencerRate = 0;
     else {
@@ -777,7 +781,7 @@ void BattleUnwind(void) {
         struct BattleUnit* attacker;
         struct BattleUnit* defender;
 
-        BattleGetBattleUnitOrder(&attacker, &defender);
+        BattleGetBattleUnitOrder(&attacker, &defender); RFO_SKILL_VANTAGE(&attacker, &defender)
 
         gBattleHitIterator->info |= BATTLE_HIT_INFO_BEGIN;
 
@@ -800,7 +804,7 @@ void BattleGetBattleUnitOrder(struct BattleUnit** outAttacker, struct BattleUnit
     *outDefender = &gBattleTarget;
 }
 
-s8 BattleGetFollowUpOrder(struct BattleUnit** outAttacker, struct BattleUnit** outDefender) {
+s8 BattleGetFollowUpOrder(struct BattleUnit** outAttacker, struct BattleUnit** outDefender) { RFO_SKILL_NO_FOLLOWUP()
     if (gBattleTarget.battleSpeed > 250)
         return FALSE;
 
@@ -832,7 +836,7 @@ s8 BattleGenerateRoundHits(struct BattleUnit* attacker, struct BattleUnit* defen
         return FALSE;
 
     attrs = gBattleHitIterator->attributes;
-    count = GetBattleUnitHitCount(attacker);
+    count = GetBattleUnitHitCount(attacker); RFO_SKILL_ASTRA(attacker, count, attrs)
 
     for (i = 0; i < count; ++i) {
         gBattleHitIterator->attributes |= attrs;
@@ -925,7 +929,7 @@ void BattleUpdateBattleStats(struct BattleUnit* attacker, struct BattleUnit* def
     gBattleStats.silencerRate = attacker->battleSilencerRate;
 }
 
-void BattleCheckSureShot(struct BattleUnit* attacker) {
+void BattleCheckSureShot(struct BattleUnit* attacker) { RFO_SKILL_NIHIL_OFF(attacker)
     if (gBattleHitIterator->attributes & BATTLE_HIT_ATTR_SURESHOT)
         return;
 
@@ -959,7 +963,7 @@ void BattleCheckSureShot(struct BattleUnit* attacker) {
     } // switch (attacker->unit.pClassData->number)
 }
 
-void BattleCheckPierce(struct BattleUnit* attacker, struct BattleUnit* defender) {
+void BattleCheckPierce(struct BattleUnit* attacker, struct BattleUnit* defender) { RFO_SKILL_NIHIL_OFF(attacker)
     if (gBattleHitIterator->attributes & BATTLE_HIT_ATTR_SURESHOT)
         return;
 
@@ -981,7 +985,7 @@ void BattleCheckPierce(struct BattleUnit* attacker, struct BattleUnit* defender)
     } // switch (attacker->unit.pClassData->number)
 }
 
-void BattleCheckGreatShield(struct BattleUnit* attacker, struct BattleUnit* defender) {
+void BattleCheckGreatShield(struct BattleUnit* attacker, struct BattleUnit* defender) { RFO_SKILL_NIHIL_OFF(defender)
     if (gBattleHitIterator->attributes & BATTLE_HIT_ATTR_MISS)
         return;
 
@@ -1051,6 +1055,11 @@ void BattleGenerateHitAttributes(struct BattleUnit* attacker, struct BattleUnit*
             return;
         }
     }
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* Pair Up: a full Dual Guard gauge, the partner blocks the hit (reforged_pairup.c) */
+    if (Reforged_PairDualGuard(attacker, defender))
+        return;
+#endif
 
     attack = gBattleStats.attack;
     defense = gBattleStats.defense;
@@ -1063,7 +1072,7 @@ void BattleGenerateHitAttributes(struct BattleUnit* attacker, struct BattleUnit*
     if (gBattleHitIterator->attributes & BATTLE_HIT_ATTR_PIERCE)
         defense = 0;
 
-    gBattleStats.damage = attack - defense;
+    gBattleStats.damage = attack - defense; RFO_SKILL_LUNA(attacker, defense)
 
     if (gBattleHitIterator->attributes & BATTLE_HIT_ATTR_GREATSHLD)
         gBattleStats.damage = 0;
@@ -1079,7 +1088,7 @@ void BattleGenerateHitAttributes(struct BattleUnit* attacker, struct BattleUnit*
             gBattleHitIterator->attributes = gBattleHitIterator->attributes | BATTLE_HIT_ATTR_CRIT;
             gBattleStats.damage = gBattleStats.damage * 3;
         }
-    }
+    } RFO_SKILL_PAVISE(attacker, defender) RFO_SKILL_ASTRA_HALF()
 
     if (gBattleStats.damage > BATTLE_MAX_DAMAGE)
         gBattleStats.damage = BATTLE_MAX_DAMAGE;
@@ -1100,7 +1109,7 @@ void BattleGenerateHitTriangleAttack(struct BattleUnit* attacker, struct BattleU
     if (gBattleStats.range != 1)
         return;
 
-    if (!(gBattleHitIterator->info & BATTLE_HIT_INFO_BEGIN))
+    if (!(gBattleHitIterator->info & BATTLE_HIT_INFO_BEGIN) RFO_VANTAGE_TA(attacker))
         return;
 
     if (attacker->unit.statusIndex == UNIT_STATUS_BERSERK)
@@ -1121,7 +1130,7 @@ void BattleGenerateHitTriangleAttack(struct BattleUnit* attacker, struct BattleU
 void BattleGenerateHitEffects(struct BattleUnit* attacker, struct BattleUnit* defender) {
     attacker->wexpMultiplier++;
 
-    if (!(gBattleHitIterator->attributes & BATTLE_HIT_ATTR_MISS)) {
+    if (!(gBattleHitIterator->attributes & (BATTLE_HIT_ATTR_MISS RFO_DUALGUARD_ATTR))) {
         if (defender->unit.pClassData->number != CLASS_DEMON_KING) {
             switch (GetItemWeaponEffect(attacker->weapon)) {
 
@@ -1151,7 +1160,7 @@ void BattleGenerateHitEffects(struct BattleUnit* attacker, struct BattleUnit* de
 
             if (attacker->unit.curHP < 0)
                 attacker->unit.curHP = 0;
-        } else {
+        } else { RFO_SKILL_MIRACLE(defender)
             if (gBattleStats.damage > defender->unit.curHP)
                 gBattleStats.damage = defender->unit.curHP;
 
@@ -1168,7 +1177,7 @@ void BattleGenerateHitEffects(struct BattleUnit* attacker, struct BattleUnit* de
                 attacker->unit.curHP += gBattleStats.damage;
 
             gBattleHitIterator->attributes |= BATTLE_HIT_ATTR_HPSTEAL;
-        }
+        } RFO_SKILL_SOL(attacker, defender)
 
         if (defender->unit.pClassData->number != CLASS_DEMON_KING) {
             if (GetItemWeaponEffect(attacker->weapon) == WPN_EFFECT_PETRIFY) {
@@ -1210,7 +1219,7 @@ void BattleGenerateHitEffects(struct BattleUnit* attacker, struct BattleUnit* de
     if (!(gBattleHitIterator->attributes & BATTLE_HIT_ATTR_MISS) || attacker->weaponAttributes & (IA_UNCOUNTERABLE | IA_MAGIC)) {
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
         /* PC played builds: Reforged Options "Unbreakable weapons" (blue units) */
-        attacker->weapon = Reforged_ItemAfterUse(attacker->weapon, &attacker->unit);
+        attacker->weapon = RFO_SKILL_ARMSTHRIFT(attacker, Reforged_ItemAfterUse(attacker->weapon, &attacker->unit));
 #else
         attacker->weapon = GetItemAfterUse(attacker->weapon);
 #endif
@@ -1228,7 +1237,7 @@ s8 BattleGenerateHit(struct BattleUnit* attacker, struct BattleUnit* defender) {
 
     BattleGenerateHitTriangleAttack(attacker, defender);
     BattleGenerateHitAttributes(attacker, defender);
-    BattleGenerateHitEffects(attacker, defender);
+    BattleGenerateHitEffects(attacker, defender); RFO_PAIR_GAUGE_FILL(attacker, defender)
 
     if (attacker->unit.curHP == 0 || defender->unit.curHP == 0) {
         attacker->wexpMultiplier++;
@@ -1240,7 +1249,7 @@ s8 BattleGenerateHit(struct BattleUnit* attacker, struct BattleUnit* defender) {
             return TRUE;
         }
 
-        gBattleHitIterator->info |= BATTLE_HIT_INFO_KILLS_TARGET;
+        gBattleHitIterator->info |= BATTLE_HIT_INFO_KILLS_TARGET; RFO_SKILL_LIFETAKER(attacker, defender)
 
         gBattleHitIterator++;
         return TRUE;
@@ -1392,7 +1401,7 @@ void CheckBattleUnitLevelUp(struct BattleUnit* bu) {
 }
 
 void ApplyUnitDefaultPromotion(struct Unit* unit) {
-    const struct ClassData* promotedClass = GetClassData(unit->pClassData->promotion);
+    const struct ClassData* promotedClass = GetClassData(RANDO_PROMO_CHOICE(unit, unit->pClassData->promotion));
 
     int baseClassId = unit->pClassData->number;
     int promClassId = promotedClass->number;
@@ -1401,7 +1410,7 @@ void ApplyUnitDefaultPromotion(struct Unit* unit) {
 
     // Apply stat ups
 
-    unit->maxHP += promotedClass->promotionHp;
+    RANDO_HOOK_PROMOTING(unit) unit->maxHP += promotedClass->promotionHp; // PC played builds: Reforged randomizer (include/bmunit.h)
 
     if (unit->maxHP > promotedClass->maxHP)
         unit->maxHP = promotedClass->maxHP;
@@ -1460,7 +1469,7 @@ void ApplyUnitDefaultPromotion(struct Unit* unit) {
     unit->curHP += promotedClass->promotionHp;
 
     if (unit->curHP > GetUnitMaxHp(unit))
-        unit->curHP = GetUnitMaxHp(unit);
+        unit->curHP = GetUnitMaxHp(unit); RANDO_HOOK_PROMOTED(unit) // PC played builds: Reforged randomizer (include/bmunit.h)
 }
 
 void ApplyUnitPromotion(struct Unit* unit, u8 classId) {
@@ -1473,7 +1482,7 @@ void ApplyUnitPromotion(struct Unit* unit, u8 classId) {
 
     // Apply stat ups
 
-    unit->maxHP += promotedClass->promotionHp;
+    RANDO_HOOK_PROMOTING(unit) unit->maxHP += promotedClass->promotionHp; // PC played builds: Reforged randomizer (include/bmunit.h)
 
     if (unit->maxHP > promotedClass->maxHP)
         unit->maxHP = promotedClass->maxHP;
@@ -1532,7 +1541,7 @@ void ApplyUnitPromotion(struct Unit* unit, u8 classId) {
     unit->curHP += promotedClass->promotionHp;
 
     if (unit->curHP > GetUnitMaxHp(unit))
-        unit->curHP = GetUnitMaxHp(unit);
+        unit->curHP = GetUnitMaxHp(unit); RANDO_HOOK_PROMOTED(unit) // PC played builds: Reforged randomizer (include/bmunit.h)
 }
 
 void GenerateBattleUnitStatGainsComparatively(struct BattleUnit* bu, struct Unit* unit) {
@@ -1585,7 +1594,7 @@ void BattleApplyUnitUpdates(void) {
     if (gBattleTarget.canCounter)
         gBattleTarget.unit.items[gBattleTarget.weaponSlotIndex] = gBattleTarget.weapon;
 
-    UpdateUnitFromBattle(actor, &gBattleActor);
+    UpdateUnitFromBattle(actor, &gBattleActor); RFO_SKILL_APPLY()
 
     if (target)
         UpdateUnitFromBattle(target, &gBattleTarget);
@@ -1625,7 +1634,7 @@ int GetBattleUnitUpdatedWeaponExp(struct BattleUnit* bu) {
     }
 
     result = bu->unit.ranks[bu->weaponType];
-    result += GetItemAwardedExp(bu->weapon) * bu->wexpMultiplier;
+    result += GetItemAwardedExp(bu->weapon) * bu->wexpMultiplier RFO_SKILL_WEXP_MUL(bu);
 
     for (i = 0; i < 8; ++i) {
         if (i == bu->weaponType)

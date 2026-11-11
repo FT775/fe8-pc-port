@@ -39,7 +39,14 @@
  *     "Fast-forward sound":
  *       Mute (default): the same, at gain 0. The gain ramps down and back up
  *       over about 12 ms of real time (Reforged_FastForwardGain), so neither
- *       the press nor the release clicks.
+ *       the press nor the release clicks. A release after a press of 250 ms or
+ *       more does not glide: the stream (muted samples only by then) is emptied
+ *       and refilled with 50 ms of silence, and the multiplier is 1 at once, so
+ *       sound comes back at normal pitch (v1.1.1; the glide played the first
+ *       normal samples sped up and sliding down, a whine). A press does not
+ *       glide either: the multiplier stays 1 while the normal samples already
+ *       queued play out and fade, then goes to N at once over silence (v1.1.2;
+ *       the glide played them sped up and rising, a squeak).
  *       Sped up: the sound plays N times as fast (and higher), resampled by
  *       SDL's own resampler (the same one the 0.5% drift control uses), at
  *       2x, 3x and 4x. At 8x it is muted as with Mute (decided for
@@ -92,6 +99,17 @@
    part of a long release (8x) found the stream 95 frames short of a 1024-frame
    device buffer without it; audio_out's own 0.5% drift ratio takes the rest. */
 #define FF_RELEASE_MARGIN 224.0
+/* A muted release flushes the stream only after a press this long: by then the audible
+   samples queued before the press have played (50 ms at a rising multiplier), so all it
+   holds is muted; a shorter tap glides as before. */
+#define FF_FLUSH_MIN_NS 250000000u
+static int sFlush;                      /* a flush for the platform to take */
+/* A muted press does not glide up either: gliding, the normal samples still queued (about
+   50 ms) played sped up and rising (a squeak). The multiplier stays 1 until they and the
+   gain's ramp down have played (sPressHoldUntil), then goes to N at once, inaudibly (the
+   stream holds silence from there). The queue grows meanwhile (N - 1 times the rate), well
+   below N's target. */
+static uint64_t sPressHoldUntil;
 
 static int sSpeed = 1;                  /* N while fast-forwarding, else 1 */
 static double sMul = 1.0;               /* the stream's multiplier now (glides to sSpeed) */
@@ -286,6 +304,17 @@ static int Glide(unsigned queued, uint64_t realNs)
 
     if (sMul == (double)sSpeed)
         return 0;
+    if (sPressHoldUntil != 0)
+    {
+        /* a muted press: 1 until what was queued has played, then N at once */
+        if (sSpeed == 1 || realNs >= sPressHoldUntil)
+        {
+            sPressHoldUntil = 0;
+            sMul = (double)sSpeed;
+            return 1;
+        }
+        return 0;
+    }
     at = realNs + 16742706u / (2u * (unsigned)sSpeed);
     dt = at > sGlideAt ? (double)(at - sGlideAt) : 0.0;
     sGlideAt = at;
@@ -315,12 +344,35 @@ int Reforged_FastForwardFrame(int keyHeld, unsigned queued, uint64_t realNs)
 
     if (Reforged_GetOption(RFO_FAST_FORWARD) && (keyHeld || ScriptHeld()))
         want = HeldSpeed();
+    {
+        /* "Enemy phase" (reforged_enemyphase.c): its speed, the faster of the two */
+        int enemy = Reforged_EnemyPhaseSpeed();
+
+        if (enemy > want)
+            want = enemy;
+    }
     if (want == sSpeed)
         return Glide(queued, realNs);
 
     /* Rebase the clock at this instant: it goes on from the same value. */
     sBaseVirt = Reforged_FastForwardClock(realNs);
     sBaseReal = realNs;
+    /* A muted fast-forward released (held long enough that what the stream holds is muted
+       samples only): no glide down. Gliding, the first normal samples played while the
+       multiplier was still above 1, so the sound came back high and slid down (a whine).
+       The platform empties the stream and refills it with silence at the normal target
+       (Reforged_FastForwardTakeFlush); the gain ramps up from 0 as after any release. */
+    if (want == 1 && sSpeed > 1 && !SoundHeard(sSpeed) && realNs - sPressReal >= FF_FLUSH_MIN_NS)
+    {
+        sMul = 1.0;
+        sFlush = 1;
+    }
+    sPressHoldUntil = 0;
+    if (want > 1 && sSpeed == 1 && sMul == 1.0 && !SoundHeard(want))
+        /* the queue and the gain's ramp down (FF_RAMP_FRAMES x N input frames), both played
+           at 1x, and a frame step's margin */
+        sPressHoldUntil = realNs + (uint64_t)((queued + FF_RAMP_FRAMES * (double)want) * 1e9 / FF_RATE_HZ) +
+                          16742706u;
     sSpeed = want;
     sGlideAt = realNs; /* the glide toward `want` starts now */
     Glide(queued, realNs);
@@ -342,6 +394,15 @@ int Reforged_FastForwardFrame(int keyHeld, unsigned queued, uint64_t realNs)
         PortLog("[ff] normal speed from frame %u: %u frames in %.1f ms (%.2fx; queue %u, glide %.1f ms)\n",
             gPortFrameCount, frames, ms, ms > 0 ? frames * 16.742706 / ms : 0.0, queued, sGlideNs / 1e6);
     }
+    return 1;
+}
+
+int Reforged_FastForwardTakeFlush(unsigned *silence)
+{
+    if (!sFlush)
+        return 0;
+    sFlush = 0;
+    *silence = (unsigned)FF_Q_TARGET;
     return 1;
 }
 
@@ -375,7 +436,11 @@ void Reforged_FastForwardStreamShort(int additional, int total)
 
 unsigned Reforged_FastForwardQueued(unsigned frames)
 {
-    return sMul == 1.0 ? frames : (unsigned)(frames * FF_Q_TARGET / QueueTarget(sMul));
+    /* (a muted press's hold: the queue is filling toward N's target, so it is counted as at N,
+       or audio_out would take it for an overfull 1x queue and drop VBlanks) */
+    double m = sPressHoldUntil != 0 ? (double)sSpeed : sMul;
+
+    return m == 1.0 ? frames : (unsigned)(frames * FF_Q_TARGET / QueueTarget(m));
 }
 
 int Reforged_FastForwardGain(const short *in, short *out, unsigned frames)

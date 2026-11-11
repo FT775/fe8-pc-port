@@ -83,6 +83,17 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_SCALE_MODE] = "scaling",
     [RFO_SCALE_SMOOTH] = "smoothing",
     [RFO_FULLSCREEN] = "fullscreen",
+    [RFO_KEEP_GAME_OPTIONS] = "keep_game_options",
+    [RFO_ENEMY_SPEED] = "enemy_phase_speed",
+    [RFO_TRUE_HIT] = "true_hit",
+    [RFO_ARENA_ODDS] = "arena_odds",
+    [RFO_SKILL_BANNERS] = "skill_banners",
+    [RFO_MYRRH_LOOK] = "myrrh_look",
+    [RFO_CONVOY_ANYWHERE] = "convoy_anywhere",
+    [RFO_SKIRMISH_PASS] = "pass_skirmishes",
+    [RFO_REWIND] = "rewind",
+    [RFO_RUINS_SKIP] = "skip_ruin_floors",
+    [RFO_FAST_SUPPORTS] = "faster_supports",
     /* --- Game fixes submenu (reforged_gamefixes.c): 0 off (the default), 1 on --- */
     [RFO_FIX_EARLY_EXP] = "fix_early_kill_exp",
     [RFO_FIX_PROMO_LEVELS] = "fix_promoted_enemy_levels",
@@ -90,6 +101,15 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_FIX_CANTO] = "fix_canto_after_trade",
     [RFO_FIX_DEVIL] = "fix_devil_high_luck",
     [RFO_FIX_CH15_DROP] = "fix_ch15_staff_drop",
+    [RFO_FIX_PAIR_UP] = "fix_pair_up",
+    /* (these two take 0-2: off/class/personal and off/promoted/all; SkillFixNames) */
+    [RFO_FIX_SKILLS] = "fix_skills",
+    [RFO_FIX_ENEMY_SKILLS] = "fix_enemy_skills",
+    [RFO_FIX_SMART_AI] = "fix_smart_enemies",
+    [RFO_FIX_MYRRH] = "fix_myrrh_buff",
+    [RFO_FIX_JOIN_RANKS] = "fix_join_ranks",
+    [RFO_FIX_ARMED_DANCERS] = "fix_armed_dancers",
+    [RFO_FIX_PROMO3] = "fix_third_promotion",
     /* --- end of the Game fixes block --- */
     /* --- Cheats submenu (reforged_cheats.c) --- */
     [RFO_CHEAT_GOLD] = "cheat_infinite_gold",
@@ -137,6 +157,12 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_RANDO_REWARDS] = "randomizer_rewards",
     [RFO_RANDO_DROPS] = "randomizer_enemy_drops",
     [RFO_RANDO_SHOPS] = "randomizer_shops",
+    [RFO_RANDO_MASTER_SEALS] = "randomizer_master_seals",
+    [RFO_RANDO_PROMOTIONS] = "randomizer_promotions",
+    [RFO_RANDO_MUSIC] = "randomizer_music",
+    [RFO_RANDO_FLOOR_MONSTERS] = "randomizer_floor_monsters",
+    [RFO_RANDO_PROMO_MONSTERS] = "randomizer_promo_monsters",
+    [RFO_RANDO_FE7] = "randomizer_fe7",
     [RFO_RANDO_NUZLOCKE] = "randomizer_nuzlocke",
     /* --- end of the Randomizer block --- */
 };
@@ -149,7 +175,7 @@ static const char *const sKeys[RFO_COUNT] = {
    fixes (ON; DECISIONS.md 2026-10-30, U10) and the Randomizer's amounts (UFER's
    defaults, port_reforged.h; they act only with the randomizer and their mode on).
    A missing file or key, or a bad value, gives the default. */
-#define RFO_DEFAULTS { [RFO_FAST_FORWARD] = 1, [RFO_FF_SPEED] = 4, [RFO_BUG_FIXES] = 1, \
+#define RFO_DEFAULTS { [RFO_FAST_FORWARD] = 1, [RFO_FF_SPEED] = 4, [RFO_BUG_FIXES] = 1, [RFO_ENEMY_SPEED] = 4, [RFO_TRUE_HIT] = 1, [RFO_ARENA_ODDS] = 1, [RFO_SKILL_BANNERS] = 1, \
     [RFO_RANDO_GROWTH_VAR] = 30, [RFO_RANDO_GROWTH_MIN] = 5, [RFO_RANDO_GROWTH_MAX] = 80, \
     [RFO_RANDO_BASE_VAR] = 5, [RFO_RANDO_GENDER] = 1, [RFO_RANDO_PALETTES] = 1, [RFO_RANDO_ENEMY_GROWTH_AMT] = 10, \
     [RFO_RANDO_BOSS_BUFF_AMT] = 5 }
@@ -173,6 +199,8 @@ int Reforged_GetOption(int id)
 /* fast-forward block: the speed is one of 2, 3, 4, 8. */
 static int FfValueOk(int id, int value)
 {
+    if (id == RFO_ENEMY_SPEED)
+        return value == 1 || value == 2 || value == 4;
     return id != RFO_FF_SPEED || value == 2 || value == 3 || value == 4 || value == 8;
 }
 
@@ -198,11 +226,17 @@ int Reforged_OptionMax(int id)
 {
     if (id == RFO_FF_SPEED)
         return 8;
+    if (id == RFO_ENEMY_SPEED) /* 1, 2 or 4 (FfValueOk) */
+        return 4;
     if (id == RFO_MAP_HPBARS) /* map HP bars block */
         return RFO_HPBARS_BOTH;
     if (id == RFO_WINDOW_SCALE) /* Display submenu: auto, 1x-8x; pixel-perfect, fill, stretch */
         return 8;
     if (id == RFO_SCALE_MODE)
+        return 2;
+    /* Game fixes: Skills (off, class, class + personal) and Enemy skills (off, promoted
+       enemies and bosses, all) are modes; the other fixes are switches */
+    if (id == RFO_FIX_SKILLS || id == RFO_FIX_ENEMY_SKILLS)
         return 2;
     /* --- Cheats submenu: growths 0 off, 1 fixed, 2 +25%, 3 +50%; EXP 0 x1, 1 x2, 2 x3 --- */
     if (id == RFO_CHEAT_GROWTHS)
@@ -210,6 +244,8 @@ int Reforged_OptionMax(int id)
     if (id == RFO_CHEAT_EXP)
         return 2;
     /* --- end of the Cheats block --- */
+    if (id == RFO_FAST_SUPPORTS) /* Helpers: 0 off, 1 x2, 2 x3 */
+        return 2;
     /* --- Randomizer submenu: modes, then the amounts (port_reforged.h); the rest are switches --- */
     switch (id)
     {
@@ -251,6 +287,7 @@ static const char *const *RandoModeNames(int id)
     static const char *const recruitStats[] = { "autolevel", "slot" };
     static const char *const enemyGrowth[] = { "off", "flat", "scaling" };
     static const char *const bossBuff[] = { "off", "linear", "ease" };
+    static const char *const promoMonsters[] = { "separate", "mixed" };
 
     switch (id)
     {
@@ -270,8 +307,39 @@ static const char *const *RandoModeNames(int id)
         return enemyGrowth;
     case RFO_RANDO_BOSS_BUFF:
         return bossBuff;
+    case RFO_RANDO_PROMO_MONSTERS:
+        return promoMonsters;
     }
     return NULL;
+}
+
+/* --- Game fixes: the two skills modes' names, by value (NULL for any other id) --- */
+static const char *const *SkillFixNames(int id)
+{
+    static const char *const skills[] = { "off", "class", "personal" };
+    static const char *const enemy[] = { "off", "promoted", "all" };
+
+    return id == RFO_FIX_SKILLS ? skills : id == RFO_FIX_ENEMY_SKILLS ? enemy : NULL;
+}
+
+/* A skills mode from 0-2 or its name (on/yes/true: 1, the mildest "on"); -1 when bad. */
+static int ParseSkillFixValue(int id, const char *v)
+{
+    const char *const *names = SkillFixNames(id);
+    int i;
+
+    for (i = 0; i <= 2; i++)
+    {
+        char num[2] = { (char)('0' + i), 0 };
+
+        if (strcmp(v, num) == 0 || strcasecmp(v, names[i]) == 0)
+            return i;
+    }
+    if (id == RFO_FIX_SKILLS && strcasecmp(v, "class+personal") == 0)
+        return 2;
+    if (id == RFO_FIX_ENEMY_SKILLS && (strcasecmp(v, "bosses") == 0 || strcasecmp(v, "everyone") == 0))
+        return strcasecmp(v, "bosses") == 0 ? 1 : 2;
+    return ParseBool(v);
 }
 
 /* 1 for a Randomizer amount (a number, not a switch or a mode). */
@@ -487,6 +555,8 @@ static const char *ValueName(int id, int value)
         return growths[value];
     if (id == RFO_CHEAT_EXP && value >= 0 && value <= 2)
         return exp[value];
+    if (id == RFO_FAST_SUPPORTS) /* Helpers */
+        return value == 2 ? "x3" : value == 1 ? "x2" : "off";
     /* --- end of the Cheats block --- */
     /* --- Randomizer submenu: a mode's name, an amount's number --- */
     if (RandoModeNames(id) != NULL)
@@ -501,10 +571,14 @@ static const char *ValueName(int id, int value)
         return num[which];
     }
     /* --- end of the Randomizer block --- */
+    if (SkillFixNames(id) != NULL) /* Game fixes: Skills, Enemy skills */
+        return value >= 0 && value <= 2 ? SkillFixNames(id)[value] : "?";
     if (id == RFO_UNBREAKABLE)
         return value == 2 ? "everyone" : value == 1 ? "yours" : "off";
     if (id == RFO_FF_SPEED) /* fast-forward block */
         return value >= 0 && value <= 8 ? speeds[value] : "?";
+    if (id == RFO_ENEMY_SPEED)
+        return value == 1 ? "normal" : value == 2 ? "2x" : value == 4 ? "4x" : "?";
     if (id == RFO_FF_SOUND)
         return value ? "sped up" : "mute";
     if (id == RFO_MAP_HPBARS) /* map HP bars block */
@@ -526,6 +600,8 @@ static const char *ValueName(int id, int value)
    changes the first key). A name the platform does not know keeps that slot's default
    (logged); names are kept in the platform's spelling. Controls_Tidy runs after the
    file (duplicates, essential actions). 1 when key is a control key. --- */
+static int sSawRewindKey; /* the file names control_rewind (v1.3.0 on) */
+
 static int ParseControlLine(const char *key, char *val, const char *path, int lineNo)
 {
     int a, s;
@@ -536,6 +612,8 @@ static int ParseControlLine(const char *key, char *val, const char *path, int li
             break;
     if (a == CTL_COUNT)
         return 0;
+    if (a == CTL_REWIND)
+        sSawRewindKey = 1;
     for (s = 0; s < CTL_SLOTS && p != NULL; s++)
     {
         char *bar = strchr(p, '|');
@@ -569,11 +647,83 @@ enum { RS_FILE, RS_SET, RS_CLI };
 
 static int IsDisplaySubmenu(int id)
 {
-    return id == RFO_WINDOW_SCALE || id == RFO_SCALE_MODE || id == RFO_SCALE_SMOOTH || id == RFO_FULLSCREEN;
+    return id == RFO_WINDOW_SCALE || id == RFO_SCALE_MODE || id == RFO_SCALE_SMOOTH || id == RFO_FULLSCREEN
+        || id == RFO_KEEP_GAME_OPTIONS || id == RFO_ENEMY_SPEED || id == RFO_TRUE_HIT
+        || id == RFO_SKILL_BANNERS
+        || id == RFO_MYRRH_LOOK; /* on the Display screen: this computer's, never a set's (Myrrh look: it needs this
+                                    computer's FE6 ROM) */
 }
 
 /* One "key = value" (both trimmed) into the options; path and lineNo name it in the
    log. ffLine / ffBuild: the fast-forward block's check of an older file. */
+/* --- "Keep game Options": the game_options line (reforged_gameoptions.c) --- */
+#define RFO_GAME_OPTIONS_KEY "game_options"
+static const char *const sGameOptionKeys[RFO_GAME_OPTION_COUNT] = {
+    "animation", "game_speed", "text_speed", "terrain", "unit", "combat", "objective",
+    "subtitle_help", "autocursor", "autoend_turns", "music", "sound_effects", "window_color",
+};
+static unsigned char sGameOpts[RFO_GAME_OPTION_COUNT];
+static int sGameOptsSet;
+
+const char *Reforged_GameOptionKey(int i)
+{
+    return i >= 0 && i < RFO_GAME_OPTION_COUNT ? sGameOptionKeys[i] : "";
+}
+
+int Reforged_GameOptionsGet(unsigned char *out)
+{
+    if (sGameOptsSet)
+        memcpy(out, sGameOpts, sizeof(sGameOpts));
+    return sGameOptsSet;
+}
+
+void Reforged_GameOptionsSet(const unsigned char *v)
+{
+    memcpy(sGameOpts, v, sizeof(sGameOpts));
+    sGameOptsSet = 1;
+}
+
+/* "animation:1 game_speed:1 ..." (any order; each value 0-3, the screen's choice); a
+   name not given keeps 0, the original's default. 0 when nothing could be read. */
+static int ParseGameOptions(char *val)
+{
+    unsigned char v[RFO_GAME_OPTION_COUNT];
+    char *p = val;
+    int any = 0;
+
+    memset(v, 0, sizeof(v));
+    for (;;)
+    {
+        char *tok, *colon;
+        int i;
+
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (*p == '\0')
+            break;
+        tok = p;
+        while (*p != '\0' && *p != ' ' && *p != '\t')
+            p++;
+        if (*p != '\0')
+            *p++ = '\0';
+        colon = strchr(tok, ':');
+        if (colon == NULL || colon[1] < '0' || colon[1] > '3' || colon[2] != '\0')
+            return 0;
+        *colon = '\0';
+        for (i = 0; i < RFO_GAME_OPTION_COUNT; i++)
+            if (strcmp(tok, sGameOptionKeys[i]) == 0)
+                break;
+        if (i == RFO_GAME_OPTION_COUNT)
+            return 0;
+        v[i] = (unsigned char)(colon[1] - '0');
+        any = 1;
+    }
+    if (any)
+        Reforged_GameOptionsSet(v);
+    return any;
+}
+/* --- end of the Keep game Options block --- */
+
 static void ApplySettingLine(const char *key, char *val, const char *path, int lineNo, int scope, int *ffLine,
     int *ffBuild)
 {
@@ -599,6 +749,14 @@ static void ApplySettingLine(const char *key, char *val, const char *path, int l
         return;
     }
     /* --- end of the Randomizer block --- */
+    if (strcmp(key, RFO_GAME_OPTIONS_KEY) == 0)
+    {
+        if (scope == RS_SET)
+            return; /* (an option set never changes the remembered game Options: Display) */
+        if (!ParseGameOptions(val))
+            PortLog("[reforged] %s line %d: bad value for %s: skipped\n", path, lineNo, key);
+        return;
+    }
     if (scope == RS_SET && strncmp(key, "control_", 8) == 0)
         return; /* (an option set never changes the keys) */
     if (ParseControlLine(key, val, path, lineNo))
@@ -632,6 +790,12 @@ static void ApplySettingLine(const char *key, char *val, const char *path, int l
         if (!FfValueOk(id, v))
             v = -1;
     }
+    if (id == RFO_ENEMY_SPEED) /* 1, 2 or 4 (or 1x, 2x, 4x; normal) */
+    {
+        v = strcasecmp(val, "normal") == 0 ? 1 : atoi(val);
+        if (!FfValueOk(id, v))
+            v = -1;
+    }
     if (id == RFO_FF_SOUND && v < 0)
     {
         if (strcasecmp(val, "mute") == 0 || strcasecmp(val, "muted") == 0)
@@ -642,7 +806,23 @@ static void ApplySettingLine(const char *key, char *val, const char *path, int l
     /* --- Cheats submenu: growths and EXP take more than on/off --- */
     if (id == RFO_CHEAT_GROWTHS || id == RFO_CHEAT_EXP)
         v = ParseCheatValue(id, val);
+    if (id == RFO_FAST_SUPPORTS) /* Helpers: 0-2 or off/x2/x3 */
+    {
+        static const char *const names[] = { "off", "x2", "x3" };
+        int k;
+
+        for (v = -1, k = 0; k <= 2 && v < 0; k++)
+        {
+            char num[2] = { (char)('0' + k), 0 };
+
+            if (strcmp(val, num) == 0 || strcasecmp(val, names[k]) == 0)
+                v = k;
+        }
+    }
     /* --- end of the Cheats block --- */
+    /* Game fixes: Skills and Enemy skills take 0-2 or their mode names */
+    if (SkillFixNames(id) != NULL)
+        v = ParseSkillFixValue(id, val);
     /* map HP bars block: 0-3 or off/bars/warnings/both (not on/yes/true:
        which of the four "on" would mean is not clear); a bad value gives
        the default, as for any key */
@@ -777,6 +957,7 @@ void Reforged_LoadSettings(void)
     memcpy(sValues, sDefaults, sizeof(sValues));
     sRandoSeed = 0; /* Randomizer block: "Random" */
     Controls_ResetDefaults();
+    sGameOptsSet = 0; /* Keep game Options: only what the file holds */
 
     haveFile = SettingsPath(path, sizeof(path)) && ReadSettingsFile(path, RS_FILE, &ffLine, &ffBuild);
     if (!haveFile) /* no file: every option at its default (the command line still counts) */
@@ -805,6 +986,16 @@ void Reforged_LoadSettings(void)
         Reforged_ApplyDisplay(-1); /* the window as the file (and the command line) want it */
     }
     sLoadedOnce = 1;
+    /* A file from before v1.3.0 names Select's old default, Backspace (every file lists every
+       control), and no Rewind: Backspace goes to Rewind, its new default, and Select gets its
+       new one, Tab, so the Tidy below does not leave Rewind without a key. */
+    if (haveFile && !sSawRewindKey && strcasecmp(Controls_Get(CTL_SELECT, CTL_KEY1), "Backspace") == 0)
+    {
+        Controls_Load(CTL_SELECT, CTL_KEY1, "Tab");
+        Controls_Load(CTL_REWIND, CTL_KEY1, "Backspace");
+        PortLog("[reforged] %s: from before v1.3.0: Select moved from Backspace to Tab (Backspace is Rewind now)\n", path);
+    }
+    sSawRewindKey = 0;
     {
         int dupes, restored;
 
@@ -836,6 +1027,11 @@ static const unsigned char sDisplayOnly[RFO_COUNT] = {
     [RFO_DANGER_ZONE_SELECT] = 1,
     [RFO_FAST_FORWARD] = 1,
     [RFO_FF_SPEED] = 1, /* merge (port-rfo-int3): fast-forward's speed and sound, display-only too */
+    [RFO_ENEMY_SPEED] = 1, /* the enemy phase's speed and its Start skip: no change to the game */
+    [RFO_TRUE_HIT] = 1, /* the hit chance shown: no change to the game */
+    [RFO_ARENA_ODDS] = 1, /* the arena's opponent and odds shown before the wager: no change to the game */
+    [RFO_SKILL_BANNERS] = 1, /* a skill's name shown when it activates (reforged_skillbanner.c): no change to the game */
+    [RFO_MYRRH_LOOK] = 1, /* v1.20.0: Myrrh's dragon drawn as FE6's Divine Dragon (reforged_fe7.c): pictures only */
     [RFO_FF_SOUND] = 1,
     [RFO_GROWTH_SELECT] = 1, /* growth rates on Select: shows numbers only */
     [RFO_MAP_HPBARS] = 1, /* map HP bars block: pictures only (reforged_hpbars.c) */
@@ -843,6 +1039,7 @@ static const unsigned char sDisplayOnly[RFO_COUNT] = {
     [RFO_SCALE_MODE] = 1,
     [RFO_SCALE_SMOOTH] = 1,
     [RFO_FULLSCREEN] = 1,
+    [RFO_KEEP_GAME_OPTIONS] = 1, /* the game's own Options screen's values, as the player may set them */
     /* original-game bug fixes block: never marks a save. Off is the original game; on is the default (a mark
        is for a value not at its default). The Riev fix acts only where the original hangs for good; the Pierce
        fix also paces every Pierce hit (animations on) as Sure Shot; where it does not hang, the battle results,
@@ -963,9 +1160,16 @@ static int WriteSettingsTo(const char *path)
         "# original_game_bug_fixes: 1 (the default) = fixes for the original game's\n"
         "# freezes (the Pierce freeze, Riev's Chapter 20 turn-1 softlock, a Dancer\n"
         "# fighting with a tome); 0 = they hang as on the GBA.\n"
+        "# myrrh_look: 1 = Myrrh's dragon form in battle is FE6's Divine Dragon (needs your\n"
+        "# own FE6 ROM; looks only).\n"
         /* --- Game fixes submenu --- */
         "# fix_*: optional changes to the original's rules (the Game fixes screen),\n"
-        "# 0 = off (the default, the original), 1 = on; each marks a save.\n"
+        "# 0 = off (the default, the original), 1 = on; each marks a save. fix_skills:\n"
+        "# 0 = off, 1 = class, 2 = class + personal; fix_enemy_skills: 0 = off,\n"
+        "# 1 = promoted enemies and bosses (and NPCs), 2 = all. fix_smart_enemies: 1 =\n"
+        "# regular enemies skip hopeless attacks. fix_myrrh_buff: 1 = Myrrh's Dragonstone\n"
+        "# never breaks and her Speed is +2. fix_join_ranks: 1 = characters joining from\n"
+        "# Chapter 9 start 1 weapon rank higher, from Chapter 13 2 (at most A).\n"
         /* --- Cheats submenu --- */
         "# cheat_infinite_gold: 1 = gold stays at 999,999. cheat_growths: 0 = off, 1 = fixed,\n"
         "# 2 = +25%%, 3 = +50%% to every growth. cheat_exp: 0 = x1, 1 = x2, 2 = x3.\n"
@@ -980,7 +1184,9 @@ static int WriteSettingsTo(const char *path)
         "# randomizer_class_growths 0 = keep, 1 = transfer;\n"
         "# randomizer_class_bases 0 = final, 1 = personal; randomizer_enemy_growths\n"
         "# 0 = off, 1 = flat, 2 = scaling; randomizer_boss_stats 0 = off, 1 = linear,\n"
-        "# 2 = ease. Amounts: growth_variance, growth_min, enemy_buff 0-100;\n"
+        "# 2 = ease; randomizer_promo_monsters 0 = separate, 1 = mixed.\n"
+        "# randomizer_fe7: 1 = rare FE7/FE6 classes (needs your own FE7 or FE6 ROM).\n"
+        "# Amounts: growth_variance, growth_min, enemy_buff 0-100;\n"
         "# growth_max 0-255; base_variance 1-10; boss_max_boost 1-20; the chances\n"
         "# enemy_weapons, weapon_traits, enemy_drops 0-100 (%%, 0 = off).\n"
         /* --- end of the Randomizer block --- */
@@ -1004,6 +1210,20 @@ static int WriteSettingsTo(const char *path)
             f[s] = Controls_Get(id, s)[0] ? Controls_Get(id, s) : "none";
         len += snprintf(buf + len, sizeof(buf) - len, "%s = %s | %s | %s | %s\n", Controls_SettingsKey(id), f[0], f[1],
             f[2], f[3]);
+    }
+    if (sGameOptsSet && len < (int)sizeof(buf)) /* Keep game Options */
+    {
+        int i;
+
+        len += snprintf(buf + len, sizeof(buf) - len,
+            "# game_options: the game's Options last chosen (keep_game_options = 1 starts every New\n"
+            "# Game with them): each the screen's choice, 0 = the first (animation 0 = 1, 1 = 2,\n"
+            "# 2 = off, 3 = solo; text_speed 0 = slow .. 3 = max; game_speed 0 = normal, 1 = fast).\n"
+            "%s =", RFO_GAME_OPTIONS_KEY);
+        for (i = 0; i < RFO_GAME_OPTION_COUNT && len < (int)sizeof(buf); i++)
+            len += snprintf(buf + len, sizeof(buf) - len, " %s:%d", sGameOptionKeys[i], sGameOpts[i]);
+        if (len < (int)sizeof(buf))
+            len += snprintf(buf + len, sizeof(buf) - len, "\n");
     }
     if (len >= (int)sizeof(buf))
     {

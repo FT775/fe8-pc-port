@@ -51,6 +51,11 @@
 
 #include "bmmind.h"
 #include "rng.h"
+#include "bmudisp.h"
+#include "mu.h"
+#include "event.h"
+#include "statscreen.h"
+#include "player_interface.h"
 
 #include "port_reforged.h"
 
@@ -99,9 +104,12 @@ int Reforged_DangerZoneShown(void)
     return sZoneShown;
 }
 
+static u8 sFreeZone; /* the free-map view (below) is open */
+
 void Reforged_DangerZoneReset(void)
 {
     sZoneShown = 0;
+    sFreeZone = 0;
 }
 
 /* FE8PC_RFO_CHECK=1 (a test switch for scripted runs): log hashes of the
@@ -443,6 +451,141 @@ void Reforged_DangerZoneTargetSelect(void)
 {
     Step();
     LogCheck("check target");
+}
+
+/*
+ * Select on the free map (no unit picked): every enemy's range, as the
+ * DS games and later show it. This is the retail game's own danger-zone view,
+ * which no retail key or menu reaches (bmmenu.c MapMenu_DangerZone_UnusedEffect
+ * is in no menu): gActiveUnit NULL, gBmSt.swapActionRangeCount 0, the player
+ * phase at label 12 (PlayerPhase_DisplayDangerZone, then PlayerPhase_RangeDisplayIdle).
+ * The cursor moves freely; R shows the stat screen of the unit under it (and
+ * comes back to the zone, retail label 6 with no unit); A swaps to the
+ * enemies' staff range and back when they have both (retail ACT_SWAP_RANGES),
+ * else closes; B or Select closes. RangeDisplayIdle's B and R read gActiveUnit
+ * (NULL here: an unreachable retail path), so this file handles B, R and the
+ * closing A itself (Reforged_DangerZoneFreeMapIdle).
+ *
+ * Display only, as above: at the open, the movement, range and "other" maps,
+ * the movement code's working state, gActiveUnit, swapActionRangeCount and
+ * gBmSt.gameStateBits are saved; the close puts every one back, after the
+ * retail cancel's redraw (HideMoveRangeGraphics, RefreshEntityBmMaps,
+ * RefreshUnitSprites). With FE8PC_RFO_CHECK, "free before" and "free restored"
+ * lines: equal with the cursor not moved in between.
+ */
+bool CanShowUnitStatScreen(struct Unit *unit); /* src/playerphase.c (the header's is commented out) */
+
+static struct {
+    struct Unit *activeUnit;
+    u8 swapCount;
+    u32 stateBits;
+} sFreeSaved;
+
+int Reforged_DangerZoneFreeMap(ProcPtr proc)
+{
+    struct Unit *unit;
+
+    if (!Reforged_GetOption(RFO_DANGER_ZONE_SELECT) || !MapFits())
+        return 0;
+    if (!(gKeyStatusPtr->newKeys & SELECT_BUTTON) ||
+        (gKeyStatusPtr->heldKeys & (A_BUTTON | B_BUTTON | START_BUTTON)))
+        return 0;
+
+    LogGameHash("free before", "");
+    CopyMap(sSaved.movement, gBmMapMovement, 1);
+    CopyMap(sSaved.range, gBmMapRange, 1);
+    CopyMap(sSaved.other, gBmMapOther, 1);
+    sSaved.workingMap = gWorkingBmMap;
+    memcpy(sSaved.moveCosts, gWorkingTerrainMoveCosts, TERRAIN_COUNT);
+    sSaved.fill = gMovMapFillState;
+    sFreeSaved.activeUnit = gActiveUnit;
+    sFreeSaved.swapCount = gBmSt.swapActionRangeCount;
+    sFreeSaved.stateBits = gBmSt.gameStateBits;
+
+    /* PlayerPhase_MainIdle's A on an empty square, before the map menu (from
+       which the unused retail command would have run) */
+    EndPlayerPhaseSideWindows();
+    unit = GetUnit(gBmMapUnit[gBmSt.playerCursor.y][gBmSt.playerCursor.x]);
+    if (unit)
+    {
+        EndAllMus();
+        ShowUnitSprite(unit);
+    }
+
+    /* MapMenu_DangerZone_UnusedEffect */
+    gActiveUnit = NULL;
+    gBmSt.swapActionRangeCount = 0;
+    sFreeZone = 1;
+    Proc_Goto(proc, 12);
+    return 1;
+}
+
+static void FreeZoneClose(ProcPtr proc)
+{
+    /* RangeDisplayIdle's ACT_CANCEL with no unit */
+    gBmSt.gameStateBits &= ~BM_FLAG_3;
+    HideMoveRangeGraphics();
+    RefreshEntityBmMaps();
+    RefreshUnitSprites();
+    PlaySoundEffect(SONG_SE_SYS_WINDOW_CANSEL1);
+
+    CopyMap(sSaved.movement, gBmMapMovement, 0);
+    CopyMap(sSaved.range, gBmMapRange, 0);
+    CopyMap(sSaved.other, gBmMapOther, 0);
+    gWorkingBmMap = sSaved.workingMap;
+    memcpy(gWorkingTerrainMoveCosts, sSaved.moveCosts, TERRAIN_COUNT);
+    gMovMapFillState = sSaved.fill;
+    gActiveUnit = sFreeSaved.activeUnit;
+    gBmSt.swapActionRangeCount = sFreeSaved.swapCount;
+    gBmSt.gameStateBits = sFreeSaved.stateBits;
+    sFreeZone = 0;
+    LogGameHash("free restored", "");
+
+    Proc_Goto(proc, 9);
+}
+
+int Reforged_DangerZoneFreeMapIdle(ProcPtr proc)
+{
+    u16 keys = gKeyStatusPtr->newKeys;
+    struct Unit *unit;
+
+    if (!sFreeZone)
+        return 0;
+    if (gActiveUnit != NULL)
+    {
+        sFreeZone = 0; /* not this view (cannot happen: label 12 is ours alone) */
+        return 0;
+    }
+
+    if ((keys & (B_BUTTON | SELECT_BUTTON)) ||
+        ((keys & A_BUTTON) && GetCombinedEnemyWeaponUsabilityBits() != 3))
+    {
+        FreeZoneClose(proc);
+        return 1;
+    }
+
+    if (keys & R_BUTTON)
+    {
+        /* RangeDisplayIdle's ACT_INFOSCREEN, without its unit's square. Every R is
+           handled here: the retail one reads gActiveUnit (NULL here) when the cursor
+           is on gActiveUnitMoveOrigin, so with no stat screen to show this draws the
+           frame's cursor (RangeDisplayIdle's last step) and ends the frame. */
+        unit = GetUnit(gBmMapUnit[gBmSt.playerCursor.y][gBmSt.playerCursor.x]);
+        if (EventEngineExists() == 1 || gBmMapUnit[gBmSt.playerCursor.y][gBmSt.playerCursor.x] == 0 ||
+            !CanShowUnitStatScreen(unit))
+        {
+            PutMapCursor(gBmSt.playerCursorDisplay.x, gBmSt.playerCursorDisplay.y, 1);
+            return 1;
+        }
+        EndAllMus();
+        SetStatScreenConfig(
+            STATSCREEN_CONFIG_NONDEAD | STATSCREEN_CONFIG_NONBENCHED | STATSCREEN_CONFIG_NONUNK9 |
+            STATSCREEN_CONFIG_NONROOFED | STATSCREEN_CONFIG_NONUNK16);
+        StartStatScreen(unit, proc);
+        Proc_Goto(proc, 6);
+        return 1;
+    }
+    return 0;
 }
 
 #endif /* PORT_PLAYED_BUILD */

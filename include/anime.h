@@ -258,4 +258,37 @@ int Reforged_FixDancerWeaponBanim(struct Unit *unit1, int weapon1, struct Unit *
 #define BANIM_DANCER_WEAPON_MAPANIM(unit1, weapon1, unit2, weapon2)
 #endif
 
+/*
+ * The FE7 Bard (class 0x88, port/reforged/reforged_fe7.c; v1.18.0; it exists only in the PC played builds, when
+ * the player's FE7 ROM is loaded) dances with the Dancer's Dance: its refresh in a battle animation gets the
+ * Dancer's refresh effect (spell animation 0xF; without it the item has none and the refreshed unit stays grey on
+ * the battle screen) (src/banim-ekrbattleintro.c, the refresh's spell animation). Empty in every other build.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#define BANIM_BARD_REFRESH(unit) || (unit)->pClassData->number == 0x88
+#else
+#define BANIM_BARD_REFRESH(unit)
+#endif
+
+/*
+ * "Myrrh look" (v1.20.0, port/reforged/reforged_fe7.c; it exists only in the PC played builds): with the option on
+ * and the player's FE6 ROM loaded, Myrrh's dragon form (src/banim-ekrdragon-myrrh.c) is FE6's Divine Dragon: FE8's
+ * transform flow as it is, with FE6's three animations in place of FE8's (transform in, dragon, transform out;
+ * the girl, BANIM_INDEX_MYRRH_NOWPN, stays FE8's) and the transform palettes to match. RFO_MYRRH_START decides it
+ * once per dragon (the dragon proc's first step), RFO_MYRRH_BANIM maps an animation index, RFO_MYRRH_PAL fills
+ * the transform's two palettes. Elsewhere (and with the look off) the index and palette are FE8's.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+void Reforged_MyrrhLookStart(struct Anim * anim);
+int Reforged_MyrrhLookBanim(struct Anim * anim, int index);
+void Reforged_MyrrhLookPal(struct Anim * anim, void * pal);
+#define RFO_MYRRH_START(anim) Reforged_MyrrhLookStart(anim);
+#define RFO_MYRRH_BANIM(anim, index) Reforged_MyrrhLookBanim((anim), (index))
+#define RFO_MYRRH_PAL(anim, pal) Reforged_MyrrhLookPal((anim), (pal));
+#else
+#define RFO_MYRRH_START(anim)
+#define RFO_MYRRH_BANIM(anim, index) (index)
+#define RFO_MYRRH_PAL(anim, pal)
+#endif
+
 #endif // GUARD_ANIME_H

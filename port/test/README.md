@@ -2112,6 +2112,11 @@ saves they are given:
   the lag-free PC frame N is harness tick N (one main-loop `VBlankIntrWait`
   per frame). `OnMain` calls can be fewer than frames, e.g. in battles
   (`frames=4000 OnMain calls=3202`), so they are not the measure.
+- `FE8PC_KEYFILE=K.keys` (v1.1.5, `port/hw/frame.c` `KeyFileHeld`, every build):
+  a played build plays a whole key file tick by tick, tick N on frame N, any
+  press length and any number of presses, so a route's 1-tick presses replay
+  exactly (`FE8PC_KEYSCRIPT` cannot). Past the file's last tick nothing more
+  is pressed. Used for the randomizer's chapter replays (enemy class checks).
 - `tools/sram_blockdiff.py A.sav B.sav` lists, region by region of
   `struct SaveBlocks` (header, the seven SaveBlockInfo entries, both suspend
   blocks, the three game blocks, arena, ranks, sound room, bonus claim,

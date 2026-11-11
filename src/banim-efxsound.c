@@ -1,4 +1,5 @@
 #include "global.h"
+#include "bmunit.h"
 #include "proc.h"
 #include "anime.h"
 #include "ekrbattle.h"
@@ -964,7 +965,7 @@ void EkrPlayMainBGM(void)
 
     if (songid2 != -1)
     {
-        EfxOverrideBgm(songid2, 0x100);
+        EfxOverrideBgm(RANDO_BATTLE_SONG(songid2), 0x100);
         return;
     }
 
@@ -1007,7 +1008,7 @@ void EkrPlayMainBGM(void)
 
     if (songid != -1)
     {
-        EfxOverrideBgm(songid, 0x100);
+        EfxOverrideBgm(RANDO_BATTLE_SONG(songid), 0x100);
         return;
     }
     gEkrMainBgmPlaying = false;

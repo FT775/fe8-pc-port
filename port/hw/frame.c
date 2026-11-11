@@ -361,6 +361,75 @@ static u16 KeyScriptHeld(void)
             held |= (u16)sScriptMask[i];
     return held;
 }
+/*
+ * FE8PC_KEYFILE=PATH: a Gate 0 key file (port/test/README.md, "Input file": one
+ * "mask[*count]" line per tick, # comments) played exactly, tick N on frame N, for
+ * a test run from a chapter save whose route holds presses 1 tick (FE8PC_KEYSCRIPT
+ * holds 2). Past its last tick nothing more is pressed. Unset: nothing changes.
+ */
+static u16 *sKeyFile;
+static uint32_t sKeyFileTicks;
+static int sKeyFileRead;
+#define KEYFILE_MAX_TICKS (1u << 24) /* about 77 hours: a typo's huge count stops here */
+
+static u16 KeyFileHeld(void)
+{
+    if (!sKeyFileRead)
+    {
+        const char *path = getenv("FE8PC_KEYFILE");
+        FILE *f;
+        char line[256];
+        uint32_t cap = 0;
+        int midline = 0; /* the last chunk did not end its line */
+
+        sKeyFileRead = 1;
+        f = path != NULL ? fopen(path, "r") : NULL;
+        while (f != NULL && fgets(line, sizeof(line), f) != NULL)
+        {
+            char *hash, *star;
+            unsigned mask, count = 1;
+            int cont = midline;
+
+            /* lines may be any length (README "Input file"): only a line's first chunk
+               holds an entry; the rest of a long line is comment text */
+            midline = strchr(line, '\n') == NULL && !feof(f);
+            if (cont)
+                continue;
+            hash = strchr(line, '#');
+            if (hash != NULL)
+                *hash = '\0';
+            if (sscanf(line, "%x", &mask) != 1)
+                continue;
+            star = strchr(line, '*');
+            if (star != NULL && sscanf(star + 1, "%u", &count) != 1)
+                count = 1;
+            while (count-- > 0 && sKeyFileTicks < KEYFILE_MAX_TICKS)
+            {
+                if (sKeyFileTicks == cap)
+                {
+                    uint32_t ncap = cap ? cap * 2 : 4096;
+                    u16 *grown = realloc(sKeyFile, (size_t)ncap * sizeof(u16));
+
+                    if (grown == NULL)
+                        goto done; /* keep what was read */
+                    sKeyFile = grown;
+                    cap = ncap;
+                }
+                sKeyFile[sKeyFileTicks++] = (u16)mask;
+            }
+        }
+    done:
+        if (f != NULL)
+        {
+            fclose(f);
+            PortLog("[keys] key file '%s': %u ticks\n", path, sKeyFileTicks);
+        }
+        else if (path != NULL)
+            PortLog("[keys] key file '%s' not read\n", path);
+    }
+    return gPortFrameCount < sKeyFileTicks ? sKeyFile[gPortFrameCount] : 0;
+}
+
 static u16 sAutoHeld; /* this frame step's FE8PC_AUTOPRESS keys */
 
 /*
@@ -405,6 +474,7 @@ static void UpdateKeys(void)
         (gPortFrameCount - sPressStart) % sPressPeriod < sPressHold)
         held = (u16)sPressMask;
     held |= KeyScriptHeld();
+    held |= KeyFileHeld();
     sAutoHeld = held;
     REG_KEYINPUT = (u16)(0x03FF & ~held); /* active low */
 }

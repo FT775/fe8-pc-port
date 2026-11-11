@@ -7059,4 +7059,12 @@ CONST_DATA struct ClassData gClassData[] = {
         .pTerrainDefenseLookup = TerrainTable_Def_Common,
         .pTerrainResistanceLookup = TerrainTable_Res_Common,
     },
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* 0x80-0x88: the FE7 classes (Nomad, Nomad F, Blade Lord, Eirika's Blade Lord, Great Lord,
+       Ephraim's Great Lord, Archsage, Dark Druid, Bard), built by port/reforged/reforged_fe7.c when the
+       FE7 ROM is loaded; 0x89-0x8C (v1.19.0): the FE6 classes (Thief F, Nomad Trooper, Nomad Trooper F,
+       King), and 0x8D-0x8F (v1.20.0: Lion Lord, Master Lord, Divine Dragon), built when the FE6 ROM is
+       loaded; zero (unreachable) otherwise */
+    [0x8F - 1] = { 0 },
+#endif
 };

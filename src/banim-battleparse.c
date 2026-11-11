@@ -156,7 +156,7 @@ int GetBanimBackgroundIndex(u16 terrain, u16 tileset)
 s16 GetSpellAnimId(u16 jid, u16 weapon)
 {
     u16 ret;
-    u16 item = GetItemIndex(weapon);
+    u16 item = RFO_SPELL_ITEM(GetItemIndex(weapon));
     const struct SpellAssoc * it;
     for (it = gSpellAssocData; it->item != 0xFFFF; it++)
     {
@@ -166,7 +166,7 @@ s16 GetSpellAnimId(u16 jid, u16 weapon)
     ret = it->efx;
     if (it->efx == 3)
     {
-        switch (jid) {
+        switch (RFO_LANCE_CLASS(jid)) {
         case CLASS_CAVALIER:
         case CLASS_CAVALIER_F:
             ret = 4;
@@ -330,7 +330,7 @@ void ParseBattleHitToBanimCmd(void)
     s16 distance_sp1C;
     s32 is_dark_breath;
 
-    hit = gBattleHitArray;
+    hit = RFO_ASTRA_HITS(gBattleHitArray);
 
     for (i = 0; i < 20; i++)
         gAnimRoundData[i] = 0xFFFF;
@@ -437,7 +437,7 @@ void ParseBattleHitToBanimCmd(void)
         }
 
         /* _080583D0 */
-        if (hit->attributes & BATTLE_HIT_ATTR_CRIT)
+        if (hit->attributes & (BATTLE_HIT_ATTR_CRIT RFO_SKILL_ASTRA_ANIM))
         {
             if (!UnitHasMagicRank(unit_r6))
                 *r5 = gUnknown_080DAEA0[distance_r4];

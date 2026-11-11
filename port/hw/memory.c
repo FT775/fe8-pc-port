@@ -207,6 +207,16 @@ static void Sha1Hex(struct Sha1 *s, char out[41])
     out[40] = '\0';
 }
 
+/* The SHA-1 of n bytes at data, as 40 lower-case hex digits (port_hw.h). */
+void PortSha1Hex(const void *data, size_t n, char out[41])
+{
+    struct Sha1 s;
+
+    Sha1Init(&s);
+    Sha1Add(&s, (const uint8_t *)data, n);
+    Sha1Hex(&s, out);
+}
+
 static int HeaderIsFe8Usa(const uint8_t *rom, size_t n)
 {
     return n >= 0xC0 && memcmp(rom + 0xA0, "FIREEMBLEM2E", 12) == 0 && memcmp(rom + 0xAC, "BE8E", 4) == 0;
@@ -292,6 +302,8 @@ static int LoadRom(const char *path)
     return 0;
 }
 
+void (*gPortAfterRomLoad)(const char *romPath);
+
 int PortMemInit(const char *romPath)
 {
     unsigned i;
@@ -321,6 +333,8 @@ int PortMemInit(const char *romPath)
 
     if (LoadRom(romPath) != 0)
         return -1;
+    if (gPortAfterRomLoad != NULL)
+        gPortAfterRomLoad(romPath); /* a played build's extra ROM data (port_hw.h) */
     PortApplyRomRelocs(); /* risk 12: ROM code pointers -> host functions (romreloc.c) */
     return 0;
 }

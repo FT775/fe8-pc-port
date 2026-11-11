@@ -295,7 +295,7 @@ void UpdateBanimFrame(void)
             gBanimTriAtkPalettes[0] = banim[idx].pal;
 
             pid = gpEkrTriangleUnits[0]->pCharacterData->number - 1;
-            jid = gpEkrTriangleUnits[0]->pClassData->number;
+            jid = gpEkrTriangleUnits[0]->pClassData->number; RANDO_CHARA_ENSURE(1, pid, jid, idx, gpEkrTriangleUnits[0])
 
             for (i = 0; i < 7; i++) {
                 if (gAnimCharaPalConfig[pid][i] == jid) {
@@ -311,7 +311,7 @@ void UpdateBanimFrame(void)
             gBanimTriAtkPalettes[1] = banim[idx].pal;
 
             pid = gpEkrTriangleUnits[1]->pCharacterData->number - 1;
-            jid = gpEkrTriangleUnits[1]->pClassData->number;
+            jid = gpEkrTriangleUnits[1]->pClassData->number; RANDO_CHARA_ENSURE(1, pid, jid, idx, gpEkrTriangleUnits[1])
 
             for (i = 0; i < 7; i++) {
                 if (gAnimCharaPalConfig[pid][i] == jid) {

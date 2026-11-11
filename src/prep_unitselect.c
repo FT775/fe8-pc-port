@@ -224,7 +224,7 @@ void PrepUnit_DrawUnitItems(struct Unit *unit)
             IsItemDisplayUsable(unit, item)
                 ? TEXT_COLOR_SYSTEM_BLUE
                 : TEXT_COLOR_SYSTEM_GRAY,
-            GetItemUses(item)
+            RFO_SHOWN_USES(item, unit)
         );
 
     }

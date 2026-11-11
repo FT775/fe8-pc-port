@@ -7,6 +7,34 @@
 #include "ap.h"
 #include "constants/worldmap.h"
 
+/* PC played builds: Reforged Options "Pass skirmishes" (port/reforged/reforged_helpers_menu.c): the
+   army walks through a node held by monsters (worldmap_main.c WorldMap_MuWalkLoop). Elsewhere:
+   nothing. */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_SkirmishPass(void);
+#define RFO_SKIRMISH_BLOCKS && !Reforged_SkirmishPass()
+#else
+#define RFO_SKIRMISH_BLOCKS
+#endif
+
+/* PC played builds: Reforged Options "Skip ruin floors" (port/reforged/reforged_ruins.c). RFO_RUINS_MOVE:
+   src/eventscr.c Event2A_MoveToChapter, a floor of the Lagdou Ruins is left (cleared): counted.
+   RFO_RUINS_ENTER: worldmap_main.c WorldMap_CallIntroEvent, after the intro event is chosen: the
+   Ruins load at the floor picked (RFO_RUINS_FRESH, RFO_RUINS_RECORDS: include/bmdifficulty.h). RFO_RUINS_PICK_CMD:
+   worldmap_main.c, the world map's label 14 (entering a node): the floor menu on the Ruins. Elsewhere: nothing. */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+void Reforged_RuinsMove(int subcode);
+void Reforged_RuinsEnter(void);
+s8 Reforged_RuinsPick(ProcPtr proc);
+#define RFO_RUINS_MOVE(subcode) Reforged_RuinsMove(subcode);
+#define RFO_RUINS_ENTER() Reforged_RuinsEnter();
+#define RFO_RUINS_PICK_CMD PROC_CALL_2(Reforged_RuinsPick),
+#else
+#define RFO_RUINS_MOVE(subcode)
+#define RFO_RUINS_ENTER()
+#define RFO_RUINS_PICK_CMD
+#endif
+
 enum worldmap_unit_alignace {
     WM_FACTION_BLUE  = 0,
     WM_FACTION_RED   = 1,

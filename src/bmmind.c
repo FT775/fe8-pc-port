@@ -664,7 +664,7 @@ void BATTLE_HandleCombatDeaths(struct CombatActionProc* proc) {
 
 //! FE8U = 0x080328B0
 void StartMapSongBgmIfChanged(void) {
-    int bgmIdx = GetCurrentMapMusicIndex();
+    int bgmIdx = RANDO_MAP_SONG(GetCurrentMapMusicIndex());
 
     if (GetCurrentBgmSong() != bgmIdx) {
         StartBgmExt(bgmIdx, 6, NULL);

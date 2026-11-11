@@ -77,7 +77,7 @@ struct ReforgedControlsProc {
 
 static const char *const sColumnTitles[CTL_SLOTS] = { "Key", "Key 2", "Pad", "Pad 2" };
 static const char *const sRowLabels[CTL_COUNT] = {
-    "A", "B", "Select", "Start", "Right", "Left", "Up", "Down", "R", "L", "Fast fwd", "Fullscreen",
+    "A", "B", "Select", "Start", "Right", "Left", "Up", "Down", "R", "L", "Fast fwd", "Fullscreen", "Rewind",
 };
 
 static struct Text sTitleText, sHelpText;

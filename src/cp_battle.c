@@ -549,7 +549,7 @@ u32 AiGetCombatPositionScore(int x, int y, struct AiCombatSimulationSt* st) {
 //! FE8U = 0x0803DEC4
 s8 AiIsBadFight(struct AiCombatSimulationSt* st) {
     // In FE6, this is used to check if it is worthwhile to use Eclipse
-    return 0;
+    return RFO_AI_BAD_FIGHT();
 }
 
 //! FE8U = 0x0803DEC8
@@ -777,7 +777,7 @@ void AiComputeCombatScore(struct AiCombatSimulationSt * st)
     score += AiGetTurnCombatScoreComponent();
     score -= AiGetDamageTakenScoreComponent();
     score -= AiGetDangerScoreComponent();
-    score -= AiGetLowHpScoreComponent();
+    score -= AiGetLowHpScoreComponent(); RFO_AI_SCORE_RISK(score)
 
     if (score < 0) {
         score = 0;

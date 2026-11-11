@@ -63,6 +63,7 @@
 #include <string.h>
 
 #include "bmitem.h"
+#include "spellassoc.h"
 #include "bmshop.h"
 #include "bmunit.h"
 #include "proc.h"
@@ -73,6 +74,8 @@
 #include "worldmap.h"
 #include "constants/items.h"
 #include "constants/classes.h"
+#include "constants/chapters.h"
+#include "chapterdata.h"
 
 #include "port_hw.h"
 #include "port_reforged.h"
@@ -367,8 +370,31 @@ int Rando_ItemRankLevel(int iid)
 }
 
 /* An item a reward or a shop may hand out (and so may also replace). */
+/* The Mine and the Light Rune: FE7's, left in FE8's item table named "Dummy" (text 0x403,
+   help "DUMMY") and given by no chapter. Out of the pools from version 6 on; a run of an
+   older version keeps its picks. */
+/* An item FE8 names "Dummy" (text 0x403): FE7's leftovers. */
+static int IsFe7Item(int iid)
+{
+    const struct ItemData *v = Rando_VanillaItem(iid);
+
+    return v != NULL && v->nameTextId == 0x403;
+}
+
+static int IsDummyItem(int iid)
+{
+    if (iid == ITEM_MINE || iid == ITEM_LIGHTRUNE)
+        return 1;
+    /* version 8: every one of them (a run of an older version keeps its picks) */
+    if (gRandoRunOn && gRandoRun.version < RANDO_VERSION_NOFE7)
+        return 0;
+    return IsFe7Item(iid);
+}
+
 static int IsPoolable(int iid)
 {
+    if (IsDummyItem(iid) && (!gRandoRunOn || gRandoRun.version >= RANDO_VERSION_NODUMMY))
+        return 0;
     switch (Kind(iid)) {
     case KIND_WEAPON:
     case KIND_STAFF:
@@ -418,6 +444,8 @@ int Rando_PickWeapon(int type, int wantLevel, int maxLevel, u32 r)
                 continue;
             if (VanillaType(iid) != type)
                 continue;
+            if (gRandoRunOn && gRandoRun.version >= RANDO_VERSION_NOFE7 && IsDummyItem(iid))
+                continue; /* Luce: FE7's, named "Dummy" in FE8 */
         }
         lvl = sLevel[iid];
         if (lvl < WPN_LEVEL_E || lvl > maxLevel)
@@ -464,6 +492,42 @@ int Rando_MonsterWeapon(int jid, u32 r)
     case CLASS_MANAKETE_2: return ITEM_MONSTER_WRETCHAIR; /* Morva's */
     }
     return 0;
+}
+
+int Rando_MonsterKin(int jid, u8 *out)
+{
+    /* The weapons of each kind (the vanilla monster generator's rows, monstergen_data.c
+       gMonsterItemTable, pair the claws and the eyes the same way; the fangs, the Gorgon's
+       and the Demon King's are the two of their kind). Shadowshot (range 3-10, 5 uses)
+       is left out: a siege tome, not a monster's own attack. */
+    static const u8 sClaw[] = { ITEM_MONSTER_ROTTENCLW, ITEM_MONSTER_FETIDCLW };
+    static const u8 sTalon[] = { ITEM_MONSTER_SHARPCLAW, ITEM_MONSTER_VENINCLW, ITEM_MONSTER_LTHLTALON };
+    static const u8 sFang[] = { ITEM_MONSTER_FIREFANG, ITEM_MONSTER_HELLFANG };
+    static const u8 sEye[] = { ITEM_MONSTER_EVILEYE, ITEM_MONSTER_CRIMSNEYE };
+    static const u8 sGorgon[] = { ITEM_MONSTER_DEMONSURG, ITEM_MONSTER_STONE };
+    static const u8 sDemonKing[] = { ITEM_DEMONLIGHT, ITEM_RAVAGER };
+    const u8 *kin = NULL;
+    int n = 0, i;
+
+    switch (jid) {
+    case CLASS_REVENANT: case CLASS_ENTOUMBED: kin = sClaw; n = 2; break;
+    case CLASS_BAEL: case CLASS_ELDER_BAEL: case CLASS_ELDER_BAEL_2: kin = sTalon; n = 3; break;
+    case CLASS_MAUTHEDOOG: case CLASS_GWYLLGI: kin = sFang; n = 2; break;
+    case CLASS_MOGALL: case CLASS_ARCH_MOGALL: kin = sEye; n = 2; break;
+    case CLASS_GORGON: kin = sGorgon; n = 2; break;
+    case CLASS_DEMON_KING: kin = sDemonKing; n = 2; break;
+    default:
+        /* one weapon of its kind (the Draco Zombie's Wretched Air, the stones) */
+        if (Rando_MonsterWeapon(jid, 0) != 0)
+        {
+            out[0] = (u8)Rando_MonsterWeapon(jid, 0);
+            return 1;
+        }
+        return 0;
+    }
+    for (i = 0; i < n && i < RANDO_KIN_MAX; i++)
+        out[i] = kin[i];
+    return i;
 }
 
 /* ------------------------------------------------------------ weapon stats, traits */
@@ -643,6 +707,35 @@ void RandoItems_Apply(void)
        hundreds of configs. */
 }
 
+/* ---------------------------------------------------------------- Master Seals only */
+
+/* "Master Seals only" (RFO_RANDO_MASTER_SEALS, the user's request of 2026-11-03: easy
+   promotions): every promotion item the game hands out is a Master Seal, which promotes
+   any class (Hero Crest, Knight Crest, Orion's Bolt, Elysian Whip, Guiding Ring, Ocean
+   Seal: KIND_PROMO; the Heaven Seal and the braces are not promotion items here). At
+   every way in: the units' items as they load (their own and drops, Reforged_
+   RandoUnitLoaded), chests (the fixed ones and the Valni / Lagdou random ones), gifts,
+   and the shops' lists. Applied after the rewards and shops randomizing. */
+int Rando_SealItem(int item)
+{
+    int iid = item & 0xFF;
+
+    if (!gRandoRunOn || !Rando_Opt(RFO_RANDO_MASTER_SEALS) || Kind(iid) != KIND_PROMO || iid == ITEM_MASTERSEAL)
+        return item;
+    return (item & ~0xFF) | ITEM_MASTERSEAL;
+}
+
+void RandoItems_SealUnit(struct Unit *unit)
+{
+    int i;
+
+    if (!gRandoRunOn || !Rando_Opt(RFO_RANDO_MASTER_SEALS) || unit == NULL)
+        return;
+    for (i = 0; i < UNIT_ITEM_COUNT && unit->items[i]; i++)
+        if (Rando_SealItem(unit->items[i]) != unit->items[i])
+            unit->items[i] = (u16)MakeNewItem(ITEM_MASTERSEAL); /* full uses: a Master Seal's own */
+}
+
 /* ------------------------------------------------------------------------ rewards */
 
 /* The candidates in id order; returns how many. */
@@ -700,13 +793,283 @@ static int RewardFor(int item, u32 h)
     return cands[Rando_HashInt(Mix(h, 1), n)];
 }
 
+/*
+ * Randomizer version 3 (RANDO_VERSION_NOREPEAT, the user's request of 2026-11-03: a run
+ * gave Antitoxin in two of Chapter 2's three villages): no reward repeats within a
+ * chapter. Order-free and stateless, so a visit order or a reload changes nothing: the
+ * chapter's rewards are read from its own location events (GetChapterEventDataPointer
+ * ->locationBasedEvents, walked as SearchAvailableEvent does: VILL / LOCA visit
+ * entries, whose script's SVAL slot 3 + GIVEITEMTO to the visitor is the gift, and
+ * CHES entries other than gold and the random chests) and given their items together,
+ * in the list's order: each takes its version 1/2 pick (the same key), or when that
+ * item is already taken in the chapter, up to REWARD_TRIES - 1 more picks keyed on the
+ * same reward, the first not taken (the version 1/2 pick when every one is). The hooks
+ * look a reward up by its kind, tile and vanilla item; one not in the table (a story
+ * gift to a fixed character, a Valni / Lagdou floor) keeps the version 1/2 rule.
+ */
+extern struct EventListCmdInfo CONST_DATA gEventListCmdInfoTable[]; /* eventinfo.c */
+
+#define REWARD_MAX 64
+#define REWARD_TRIES 16
+
+struct RewardSlot {
+    u8 chest, iid, x, y, out;
+};
+
+static struct RewardSlot sRewards[REWARD_MAX];
+static int sRewardCount;
+static int sRewardChapter = -1;
+static u32 sRewardSeed;
+static int sRewardSeals; /* the table compares sealed items ("Master Seals only") */
+static int sRewardVersion; /* the run's version (version 6's pools leave out the "Dummy" items) */
+
+static u32 GiftKey(int chapter, int iid, int x, int y)
+{
+    return Rando_Hash(RANDO_SALT_REWARDS + 1, chapter, iid, 0x10000 | ((x & 0xFF) << 8) | (y & 0xFF));
+}
+
+static u32 ChestKey(int chapter, int iid, int x, int y)
+{
+    return Rando_Hash(RANDO_SALT_REWARDS, chapter, iid, ((x & 0xFF) << 8) | (y & 0xFF));
+}
+
+static void RewardAdd(int chest, int iid, int x, int y)
+{
+    if (sRewardCount < REWARD_MAX && iid > 0 && iid <= RANDO_ITEM_MAX) {
+        struct RewardSlot *r = &sRewards[sRewardCount++];
+
+        r->chest = (u8)chest;
+        r->iid = (u8)iid;
+        r->x = (u8)x;
+        r->y = (u8)y;
+        r->out = (u8)iid;
+    }
+}
+
+/* A visit script's gifts: SVAL slot 3 then GIVEITEMTO to the visitor (the active unit
+   or the unit at slot B), up to the script's first END; commands are walked by their
+   length (event.h EVT_CMD_LEN, in halfwords), as the event engine does. */
+static void ScanVisitScript(const u16 *scr, int x, int y)
+{
+    u32 slot3 = 0;
+    int have = 0, n;
+
+    for (n = 0; scr != NULL && n < 256; n++) {
+        int cmd = scr[0] >> 8, len = EVT_CMD_LEN(scr);
+
+        if (len == 0 || cmd == EV_CMD_END)
+            break;
+        if (cmd == EV_CMD_SVAL && scr[1] == EVT_SLOT_3 && len >= 4) {
+            slot3 = (u32)scr[2] | ((u32)scr[3] << 16);
+            have = 1;
+        } else if (cmd == EV_CMD_GIVEITEM && EVT_SUB_CMD(scr) == EVSUBCMD_GIVEITEMTO && have &&
+                   ((s16)scr[1] == CHAR_EVT_ACTIVE_UNIT || (s16)scr[1] == CHAR_EVT_POSITION_AT_SLOTB)) {
+            RewardAdd(0, slot3 & 0xFF, x, y);
+        }
+        scr += len;
+    }
+}
+
+/* The current chapter's reward table (built once per chapter and run). */
+static void BuildRewardTable(void)
+{
+    const struct ChapterEventGroup *group;
+    const EventListScr *list;
+    int chapter = ChapterKey(), i, k, n;
+
+    if (sRewardChapter == chapter && sRewardSeed == gRandoRun.seed && sRewardVersion == gRandoRun.version &&
+        sRewardSeals == Rando_Opt(RFO_RANDO_MASTER_SEALS))
+        return;
+    sRewardChapter = chapter;
+    sRewardSeed = gRandoRun.seed;
+    sRewardVersion = gRandoRun.version;
+    sRewardSeals = Rando_Opt(RFO_RANDO_MASTER_SEALS);
+    sRewardCount = 0;
+    group = GetChapterEventDataPointer(chapter);
+    list = group ? (const EventListScr *)group->locationBasedEvents : NULL;
+    for (n = 0; list != NULL && n < 512; n++) {
+        int cmd = list[0] & 0xFFFF, x, y, tile;
+
+        if (cmd == EVT_LIST_CMD_END || cmd > EVT_LIST_CMD_10)
+            break;
+        x = list[2] & 0xFF;
+        y = (list[2] >> 8) & 0xFF;
+        tile = (list[2] >> 16) & 0xFF;
+        if ((cmd == EVT_LIST_CMD_VILL || cmd == EVT_LIST_CMD_LOCA) && tile == TILE_COMMAND_VISIT && list[1] > 1)
+            ScanVisitScript((const u16 *)list[1], x, y);
+        else if (cmd == EVT_LIST_CMD_CHES && (list[1] & 0xFF) != 0 && (list[1] & 0xFF) != ITEM_GOLD)
+            RewardAdd(1, list[1] & 0xFF, x, y);
+        list += gEventListCmdInfoTable[cmd].length;
+    }
+
+    for (i = 0; i < sRewardCount; i++) {
+        struct RewardSlot *r = &sRewards[i];
+        u32 h = r->chest ? ChestKey(chapter, r->iid, r->x, r->y) : GiftKey(chapter, r->iid, r->x, r->y);
+        int first = RewardFor(r->iid, h), t;
+
+        r->out = (u8)first;
+        if (!IsPoolable(r->iid))
+            continue;
+        for (t = 0; t < REWARD_TRIES; t++) {
+            int pick = t == 0 ? first : RewardFor(r->iid, Mix(h, 0x100 + t)), taken = 0;
+
+            for (k = 0; k < i; k++)
+                taken |= Rando_SealItem(sRewards[k].out) == Rando_SealItem(pick); /* every promotion item is one Master Seal */
+            if (!taken) {
+                r->out = (u8)pick;
+                break;
+            }
+        }
+    }
+}
+
+/* The table's pick for a reward, or -1 when it is not in the table (or the run is
+   before version 3). */
+static int RewardFromTable(int chest, int iid, int x, int y)
+{
+    int i;
+
+    if (gRandoRun.version < RANDO_VERSION_NOREPEAT)
+        return -1;
+    BuildRewardTable();
+    for (i = 0; i < sRewardCount; i++)
+        if (sRewards[i].chest == chest && sRewards[i].iid == iid && sRewards[i].x == (x & 0xFF) &&
+            sRewards[i].y == (y & 0xFF))
+            return sRewards[i].out;
+    return -1;
+}
+
+static int ChestItem(int item, int x, int y);
+static int GiftItem(int item, struct Unit *target);
+static int sRewardLogQuiet; /* the self-test hands out thousands */
+
+/*
+ * "Infinite gold" (RFO_CHEAT_GOLD, the user's request of 2026-11-04): gold is no use with
+ * the cheat on, so a gem (Red, Blue, White, Black, Gold: items only there to be sold) a
+ * chest, village, house or gift hands out becomes a useful item of about its worth: a
+ * weapon (up to rank A, no siege tome), staff, consumable, stat booster, promotion item
+ * or accessory whose shop value is from half to twice the gem's (the nearest in value
+ * when none is), picked by a hash of the chapter, the gem and where it is given, so a
+ * reload or a second visit gives the same. A cheat acts live: with it off, gems are gems.
+ * It works with or without a randomized run (Master Seals only still applies).
+ */
+static int ShopValue(int iid)
+{
+    const struct ItemData *v = Rando_VanillaItem(iid);
+
+    if (v == NULL)
+        return 0;
+    return v->maxUses > 0 ? v->costPerUse * v->maxUses : v->costPerUse;
+}
+
+static int GemSwapOk(int iid)
+{
+    /* (not the Silver Card either: half-price shopping is no use with the gold full) */
+    return IsPoolable(iid) && !IsFe7Item(iid) && Kind(iid) != KIND_GEM && iid != ITEM_SILVERCARD &&
+           sLevel[iid] <= WPN_LEVEL_A &&
+           !(sFlags[iid] & IFLAG_SIEGE) &&
+           ShopValue(iid) > 0;
+}
+
+/* The items from half to twice the value; with fewer than 8, the floor goes down (a quarter,
+   an eighth) so the dearest gems (Black, Gold) do not always give the same one. */
+static int GemSwapCands(int value, u8 *cands)
+{
+    int div, n = 0, c;
+
+    for (div = 2; div <= 8; div *= 2)
+    {
+        n = 0;
+        for (c = 1; c <= RANDO_ITEM_MAX; c++)
+            if (GemSwapOk(c) && ShopValue(c) * div >= value && ShopValue(c) <= value * 2)
+                cands[n++] = (u8)c;
+        if (n >= 8)
+            break;
+    }
+    return n;
+}
+
+static int GemSwap(int item, u32 where)
+{
+    u8 cands[RANDO_ITEM_SLOTS];
+    int iid = item & 0xFF, value, n = 0, c, best = -1, out;
+
+    if (!Reforged_GetOption(RFO_CHEAT_GOLD))
+        return item;
+    Classify();
+    if (!sClassified || Kind(iid) != KIND_GEM)
+        return item;
+    value = ShopValue(iid);
+    n = GemSwapCands(value, cands);
+    if (n == 0) /* none in range: the nearest in value */
+        for (c = 1; c <= RANDO_ITEM_MAX; c++)
+            if (GemSwapOk(c) && (best < 0 || AbsDiff(ShopValue(c), value) < AbsDiff(ShopValue(best), value)))
+                best = c;
+    if (n == 0 && best < 0)
+        return item;
+    out = n ? cands[Rando_HashInt(Rando_Hash(RANDO_SALT_GEMSWAP, (u32)ChapterKey(), (u32)iid, where), n)] : best;
+    out = Rando_SealItem((item & ~0xFF) | out);
+    if (!sRewardLogQuiet)
+        PortLog("[reforged] infinite gold: gem 0x%02X becomes 0x%02X (chapter %d)\n", iid, out & 0xFF, ChapterKey());
+    return out;
+}
+
+/* One line per reward handed out in a run with Rewards or Master Seals on (rare: a
+   chest or a gift), for checking a run against its seed. */
+
+static int LogReward(const char *what, int in, int out, int x, int y)
+{
+    if (!sRewardLogQuiet && gRandoRunOn && (Rando_Opt(RFO_RANDO_REWARDS) || Rando_Opt(RFO_RANDO_MASTER_SEALS)))
+        PortLog("[rando] reward: %s 0x%02X at %d,%d (chapter %d) -> 0x%02X\n", what, in & 0xFF, x, y,
+            ChapterKey(), out & 0xFF);
+    return out;
+}
+
+static const struct EventEngineProc *GiftEngine(void);
+
+/* Where a gift is given, GiftItem's rule: a village's, house's, desert's or random chest's
+   (to whoever stands there) is keyed on the tile, a story gift to a fixed character on
+   that character, so a reload or another visitor finds the same item. */
+static u32 GiftWhere(struct Unit *target)
+{
+    const struct EventEngineProc *proc = GiftEngine();
+
+    if (target == NULL)
+        return 0;
+    if (proc) {
+        s16 param = (s16)proc->pEventCurrent[1];
+
+        if (param == CHAR_EVT_ACTIVE_UNIT || param == CHAR_EVT_POSITION_AT_SLOTB)
+            return 0x10000u | ((u32)(target->xPos & 0xFF) << 8) | (u32)(target->yPos & 0xFF);
+    }
+    return target->pCharacterData ? (u32)target->pCharacterData->number : 0;
+}
+
 int Reforged_RandoChestItem(int item, int x, int y)
 {
-    int iid = item & 0xFF;
+    int out = LogReward("chest", item, Rando_SealItem(ChestItem(item, x, y)), x, y);
+
+    return GemSwap(out, 0x20000u | ((u32)(x & 0xFF) << 8) | (u32)(y & 0xFF));
+}
+
+int Reforged_RandoGiftItem(int item, struct Unit *target)
+{
+    int out = LogReward("gift", item, Rando_SealItem(GiftItem(item, target)), target ? target->xPos : -1,
+        target ? target->yPos : -1);
+
+    return GemSwap(out, GiftWhere(target));
+}
+
+static int ChestItem(int item, int x, int y)
+{
+    int iid = item & 0xFF, out;
     u32 h;
 
     if (!gRandoRunOn || !Rando_Opt(RFO_RANDO_REWARDS))
         return item;
+    out = RewardFromTable(1, iid, x, y);
+    if (out >= 0)
+        return (item & ~0xFF) | out;
 
     h = Rando_Hash(RANDO_SALT_REWARDS, ChapterKey(), iid, ((x & 0xFF) << 8) | (y & 0xFF));
     return (item & ~0xFF) | RewardFor(iid, h);
@@ -725,7 +1088,7 @@ static const struct EventEngineProc *GiftEngine(void)
     return proc;
 }
 
-int Reforged_RandoGiftItem(int item, struct Unit *target)
+static int GiftItem(int item, struct Unit *target)
 {
     /* Slot 3 holds an item id; GotItem's MakeNewItem gives it full uses (it reads only
        the low byte), so any high bits are kept as they are. */
@@ -749,8 +1112,13 @@ int Reforged_RandoGiftItem(int item, struct Unit *target)
 
         /* A village, a house or the Ch15 desert gives to whoever stands there: key on the
            tile, not on the visitor, so another visitor (or a reload) finds the same item. */
-        if (target && (param == CHAR_EVT_ACTIVE_UNIT || param == CHAR_EVT_POSITION_AT_SLOTB))
+        if (target && (param == CHAR_EVT_ACTIVE_UNIT || param == CHAR_EVT_POSITION_AT_SLOTB)) {
+            int out = RewardFromTable(0, iid, target->xPos, target->yPos);
+
+            if (out >= 0)
+                return (item & ~0xFF) | out;
             where = 0x10000 | ((target->xPos & 0xFF) << 8) | (target->yPos & 0xFF);
+        }
     }
 
     h = Rando_Hash(RANDO_SALT_REWARDS + 1, ChapterKey(), iid, where);
@@ -785,7 +1153,7 @@ static int ShopCandidates(int item, int anyType, int rare, const u8 *used, int n
     int n = 0, iid;
 
     for (iid = 1; iid <= RANDO_ITEM_MAX; iid++) {
-        if (!IsPoolable(iid) || (used && InList(used, nused, iid)))
+        if (!IsPoolable(iid) || (used && InList(used, nused, Rando_SealItem(iid)))) /* used: sealed items */
             continue;
         if (Rando_VanillaItem(iid)->costPerUse == 0)
             continue; /* no price (venin weapons, the ruins weapons, Metis's Tome): free in a shop */
@@ -826,10 +1194,25 @@ const u16 *Reforged_RandoShopItems(const u16 *inventory, int shopType)
     u32 base;
     int n, i;
 
-    if (!inventory || !gRandoRunOn || !Rando_Opt(RFO_RANDO_SHOPS))
+    if (!inventory || !gRandoRunOn)
         return inventory;
-    if (shopType != SHOP_TYPE_ARMORY && shopType != SHOP_TYPE_VENDOR && shopType != SHOP_TYPE_SECRET_SHOP)
-        return inventory;
+    if (!Rando_Opt(RFO_RANDO_SHOPS) || (shopType != SHOP_TYPE_ARMORY && shopType != SHOP_TYPE_VENDOR &&
+                                        shopType != SHOP_TYPE_SECRET_SHOP)) {
+        /* not randomized: only the Master Seals (a copy, when one changes) */
+        if (!Rando_Opt(RFO_RANDO_MASTER_SEALS))
+            return inventory;
+        memset(sShopBuf, 0, sizeof(sShopBuf));
+        for (n = 0, i = 0; n < SHOP_ITEMS_MAX_AMT && inventory[n] != 0; n++) {
+            int out = Rando_SealItem(inventory[n]), k;
+
+            for (k = 0; k < i && (sShopBuf[k] & 0xFF) != (out & 0xFF); k++)
+                ;
+            if (k < i && (out & 0xFF) == ITEM_MASTERSEAL)
+                continue; /* a second promotion item: one Master Seal on the list */
+            sShopBuf[i++] = (u16)out;
+        }
+        return sShopBuf;
+    }
     Classify();
     if (!sClassified)
         return inventory;
@@ -856,6 +1239,7 @@ const u16 *Reforged_RandoShopItems(const u16 *inventory, int shopType)
             if (c > 0)
                 out = cands[Rando_HashInt(Mix(e, 2), c)];
         }
+        out = Rando_SealItem(out);
         used[i] = out;
         sShopBuf[i] = out;
     }
@@ -1029,6 +1413,7 @@ static void CheckRewardsAndShops(void)
     int savedOn = gRandoRunOn;
     int iid, k, start, shopType, len, i;
 
+    sRewardLogQuiet = 1;
     /* Off: every hook gives its input back. */
     gRandoRunOn = 0;
     for (iid = 1; iid <= RANDO_ITEM_MAX; iid++) {
@@ -1048,6 +1433,69 @@ static void CheckRewardsAndShops(void)
 
     if (Reforged_RandoShopItems(NULL, SHOP_TYPE_ARMORY) != NULL)
         CheckFail("the default shop list was not passed through", 0, 0);
+
+    /* "Master Seals only": no chest, gift or shop hands out another promotion item */
+    gRandoRun.v[RFO_RANDO_MASTER_SEALS - RFO_RANDO_FIRST] = 1;
+    for (iid = 1; iid <= RANDO_ITEM_MAX; iid++) {
+        int outs[3], j;
+
+        list[0] = (u16)iid;
+        list[1] = 0;
+        outs[0] = Reforged_RandoChestItem(iid, 3, 4) & 0xFF;
+        outs[1] = Reforged_RandoGiftItem(iid, NULL) & 0xFF;
+        outs[2] = Reforged_RandoShopItems(list, SHOP_TYPE_SECRET_SHOP)[0] & 0xFF;
+        for (j = 0; j < 3; j++)
+            if (Kind(outs[j]) == KIND_PROMO && outs[j] != ITEM_MASTERSEAL)
+                CheckFail("Master Seals only: a promotion item was handed out", iid, outs[j]);
+        if (Kind(iid) == KIND_PROMO && (Rando_SealItem(iid) & 0xFF) != ITEM_MASTERSEAL)
+            CheckFail("Master Seals only: a promotion item kept", iid, Rando_SealItem(iid));
+        if (Kind(iid) != KIND_PROMO && Rando_SealItem(iid) != iid)
+            CheckFail("Master Seals only: another item changed", iid, Rando_SealItem(iid));
+    }
+    gRandoRun.v[RFO_RANDO_MASTER_SEALS - RFO_RANDO_FIRST] = 0;
+
+    /* Version 3: every chapter's villages, houses and chests, read from its events,
+       get no item twice (the table, rebuilt per chapter). */
+    {
+        int savedChapter = gPlaySt.chapterIndex, savedVersion = gRandoRun.version;
+        int ch, a, b, tables = 0, rewards = 0, repeats = 0, villages = 0;
+
+        int seals;
+
+        gRandoRun.version = RANDO_VERSION_NOREPEAT;
+        for (seals = 0; seals < 2; seals++)
+        for (ch = 0; ch <= CHAPTER_4E; ch++) {
+            gRandoRun.v[RFO_RANDO_MASTER_SEALS - RFO_RANDO_FIRST] = (u8)seals;
+            gPlaySt.chapterIndex = ch;
+            sRewardChapter = -1;
+            BuildRewardTable();
+            if (sRewardCount == 0)
+                continue;
+            tables++;
+            rewards += sRewardCount;
+            for (a = 0; a < sRewardCount; a++) {
+                villages += !sRewards[a].chest;
+                if (!RewardOk(sRewards[a].iid, sRewards[a].out))
+                    CheckFail("a table reward is a bad item", sRewards[a].iid, sRewards[a].out);
+                if (RewardFromTable(sRewards[a].chest, sRewards[a].iid, sRewards[a].x, sRewards[a].y) != sRewards[a].out)
+                    CheckFail("a table reward is not found again", sRewards[a].iid, ch);
+                for (b = 0; b < a; b++)
+                    if (IsPoolable(sRewards[a].iid) &&
+                        Rando_SealItem(sRewards[a].out) == Rando_SealItem(sRewards[b].out))
+                        repeats++;
+            }
+        }
+        PortLog("[rando] check: rewards: %d chapters with rewards, %d rewards (%d visits, %d chests), %d repeats\n",
+            tables, rewards, villages, rewards - villages, repeats);
+        if (repeats)
+            CheckFail("a chapter repeats a reward", 0, repeats);
+        if (tables < 40 || villages < 36) /* twice (seals off, on): the event sources hold 18 gifts to the visitor */
+            CheckFail("too few rewards read from the chapters' events", tables, villages);
+        gPlaySt.chapterIndex = savedChapter;
+        gRandoRun.version = savedVersion;
+        gRandoRun.v[RFO_RANDO_MASTER_SEALS - RFO_RANDO_FIRST] = 0;
+        sRewardChapter = -1;
+    }
 
     for (iid = 1; iid <= RANDO_ITEM_MAX; iid++) {
         for (k = 0; k < 3; k++) {
@@ -1112,6 +1560,136 @@ static void CheckRewardsAndShops(void)
 
     gRandoRun = saved;
     gRandoRunOn = savedOn;
+    sRewardLogQuiet = 0;
+    sRewardChapter = -1;
+}
+
+/* "Infinite gold": off, every item comes back; on, each gem becomes a useful non-gem item,
+   the same for the same place and none of the others change. */
+static void CheckGemSwap(void)
+{
+    static const u8 sGems[] = { ITEM_REDGEM, ITEM_BLUEGEM, ITEM_WHITEGEM, ITEM_BLACKGEM, ITEM_GOLDGEM };
+    int saved = Reforged_GetOption(RFO_CHEAT_GOLD), quiet = sRewardLogQuiet, iid, i, k;
+
+    sRewardLogQuiet = 1;
+    Reforged_SetOption(RFO_CHEAT_GOLD, 0);
+    for (i = 0; i < (int)sizeof(sGems); i++)
+        if (GemSwap(sGems[i], 5) != sGems[i])
+            CheckFail("a gem changed with Infinite gold off", sGems[i], 0);
+    Reforged_SetOption(RFO_CHEAT_GOLD, 1);
+    for (iid = 1; iid <= RANDO_ITEM_MAX; iid++)
+        if (Kind(iid) != KIND_GEM && GemSwap(iid, 5) != iid)
+            CheckFail("Infinite gold changed an item that is no gem", iid, GemSwap(iid, 5));
+    for (i = 0; i < (int)sizeof(sGems); i++)
+        for (k = 0; k < 64; k++)
+        {
+            int out = GemSwap(sGems[i], (u32)k * 0x101u);
+
+            if ((out & 0xFF) == sGems[i] || Kind(out & 0xFF) == KIND_GEM || !IsPoolable(out & 0xFF) ||
+                (out & 0xFF) == ITEM_SILVERCARD || IsFe7Item(out & 0xFF) ||
+                sLevel[out & 0xFF] > WPN_LEVEL_A)
+                CheckFail("Infinite gold left a gem or gave an unusable item", sGems[i], out & 0xFF);
+            if (out != GemSwap(sGems[i], (u32)k * 0x101u))
+                CheckFail("Infinite gold's gem swap is not the same twice", sGems[i], k);
+        }
+    {
+        static int logged;
+
+        for (i = 0; i < (int)sizeof(sGems) && !logged; i++)
+        {
+            u8 cands[RANDO_ITEM_SLOTS];
+            int n = GemSwapCands(ShopValue(sGems[i]), cands);
+            PortLog("[rando] check: infinite gold: gem 0x%02X (worth %d) can become %d items\n", sGems[i],
+                ShopValue(sGems[i]), n);
+        }
+        logged = 1;
+    }
+    Reforged_SetOption(RFO_CHEAT_GOLD, saved);
+    sRewardLogQuiet = quiet;
+}
+
+/* Version 6: no reward is ever a Mine or Light Rune ("Dummy"); version 5 keeps its picks
+   (some are). Every poolable item, 64 keys each, through the reward picker. */
+static void CheckNoDummy(void)
+{
+    struct RandoConfig saved = gRandoRun;
+    int savedOn = gRandoRunOn, iid, k, ver, dummies[2] = { 0, 0 };
+
+    gRandoRunOn = 1;
+    for (ver = RANDO_VERSION_NODUMMY - 1; ver <= RANDO_VERSION_NODUMMY; ver++)
+    {
+        gRandoRun.version = (u8)ver;
+        for (iid = 1; iid <= RANDO_ITEM_MAX; iid++)
+            for (k = 0; k < 64 && !IsDummyItem(iid); k++) /* (a Dummy given in comes back as it is) */
+                dummies[ver - (RANDO_VERSION_NODUMMY - 1)] +=
+                    IsDummyItem(RewardFor(iid, Rando_Hash(RANDO_SALT_REWARDS + 9, (u32)iid, (u32)k, 0)) & 0xFF);
+    }
+    gRandoRun = saved;
+    gRandoRunOn = savedOn;
+    if (dummies[1] != 0 || dummies[0] == 0)
+        CheckFail("version 6 rewards: Dummy items given (or version 5 changed)", dummies[1], dummies[0]);
+}
+
+/* Version 8: no reward and no picked weapon is ever an item FE8 names "Dummy"; version 7
+   keeps its picks (Luce among them). */
+static void CheckNoFe7(void)
+{
+    struct RandoConfig saved = gRandoRun;
+    int savedOn = gRandoRunOn, iid, k, ver, t, got[2] = { 0, 0 };
+
+    gRandoRunOn = 1;
+    for (ver = RANDO_VERSION_NOFE7 - 1; ver <= RANDO_VERSION_NOFE7; ver++)
+    {
+        int *n = &got[ver - (RANDO_VERSION_NOFE7 - 1)];
+
+        gRandoRun.version = (u8)ver;
+        for (iid = 1; iid <= RANDO_ITEM_MAX; iid++)
+            for (k = 0; k < 64 && !IsFe7Item(iid); k++)
+                *n += IsFe7Item(RewardFor(iid, Rando_Hash(RANDO_SALT_REWARDS + 10, (u32)iid, (u32)k, 0)) & 0xFF);
+        for (t = ITYPE_SWORD; t <= ITYPE_DARK; t++)
+            for (k = 0; k < 256; k++)
+                *n += IsFe7Item(Rando_PickWeapon(t, k % 6, 5, Rando_Hash(RANDO_SALT_WEAPONS + 11, (u32)t, (u32)k, 0)));
+    }
+    gRandoRun = saved;
+    gRandoRunOn = savedOn;
+    if (got[1] != 0 || got[0] == 0)
+        CheckFail("version 8: an FE7 \"Dummy\" item given (or version 7 changed)", got[1], got[0]);
+}
+
+/* The FE7 items a player can hold read their own names and help (reforged_items.c), not
+   "Dummy" / "DUMMY"; Luce and Forblaze cast a spell FE8 has (spellassoc.c). */
+s16 GetSpellAnimId(u16 jid, u16 weapon); /* banim-battleparse.c (include/anime.h) */
+
+static void CheckFe7Text(void)
+{
+    static const u8 sHeld[] = { ITEM_SWORD_MKATTI, ITEM_ANIMA_FORBLAZE, ITEM_LIGHT_LUCE, ITEM_MINE, ITEM_LIGHTRUNE,
+                                ITEM_FILLAS_MIGHT, ITEM_NINISS_GRACE, ITEM_THORS_IRE, ITEM_SETS_LITANY, ITEM_HEAVENSEAL };
+    static int logged;
+    int i;
+
+    for (i = 0; i < (int)sizeof(sHeld); i++)
+    {
+        char name[64], help[128];
+
+        strncpy(name, GetItemName(sHeld[i]), sizeof(name) - 1);
+        name[sizeof(name) - 1] = 0;
+        strncpy(help, GetStringFromIndex(GetItemDescId(sHeld[i])), sizeof(help) - 1);
+        help[sizeof(help) - 1] = 0;
+        if (strstr(name, "Dummy") || strstr(help, "DUMMY") || name[0] == 0 || help[0] == 0)
+            CheckFail("an FE7 item still reads Dummy", sHeld[i], 0);
+        if (!logged)
+            PortLog("[rando] check: item 0x%02X reads \"%s\" (help %d chars)\n", sHeld[i], name, (int)strlen(help));
+    }
+    logged = 1;
+    if (GetSpellAssocStructPtr(ITEM_LIGHT_LUCE)->item != ITEM_LIGHT_DIVINE ||
+        GetSpellAssocStructPtr(ITEM_ANIMA_FORBLAZE)->item != ITEM_ANIMA_ELFIRE ||
+        GetSpellAnimId(CLASS_SAGE, ITEM_LIGHT_LUCE) != GetSpellAnimId(CLASS_SAGE, ITEM_LIGHT_DIVINE) ||
+        GetSpellAnimId(CLASS_SAGE, ITEM_ANIMA_FORBLAZE) != GetSpellAnimId(CLASS_SAGE, ITEM_ANIMA_ELFIRE) ||
+        GetSpellAnimId(CLASS_SAGE, ITEM_LIGHT_LUCE) < 0)
+        CheckFail("Luce or Forblaze has no spell", ITEM_LIGHT_LUCE, 0);
+    for (i = 0; i < (int)sizeof(sHeld); i++)
+        if ((GetItemAttributes(sHeld[i]) & IA_WEAPON) && GetItemUseDescId(sHeld[i]) != 0)
+            CheckFail("an FE7 weapon has a use help", sHeld[i], 0);
 }
 
 int RandoItems_SelfTest(void)
@@ -1122,9 +1700,35 @@ int RandoItems_SelfTest(void)
         PortLog("[rando] check: items: no vanilla snapshot\n");
         return 1;
     }
-    CheckTables();
-    CheckPickers();
-    CheckRewardsAndShops();
+    {
+        /* the run's own picks: no gem swap, whatever the settings say (CheckGemSwap sets it) */
+        int gold = Reforged_GetOption(RFO_CHEAT_GOLD);
+
+        Reforged_SetOption(RFO_CHEAT_GOLD, 0);
+        CheckTables();
+        CheckPickers();
+        CheckRewardsAndShops();
+        CheckGemSwap();
+        CheckNoDummy();
+        CheckNoFe7();
+        CheckFe7Text();
+        {
+            /* "True hit": the two-roll chances (rng.c Roll2RN), and off: the game's number */
+            int saved = Reforged_GetOption(RFO_TRUE_HIT);
+
+            Reforged_SetOption(RFO_TRUE_HIT, 1);
+            if (Reforged_ShownHit(70) != 82 || Reforged_ShownHit(30) != 18 || Reforged_ShownHit(50) != 51 ||
+                Reforged_ShownHit(0) != 0 || Reforged_ShownHit(100) != 100 || Reforged_ShownHit(0xFF) != 0xFF ||
+                Reforged_ShownHit(1) != 1 || Reforged_ShownHit(99) != 99 ||
+                Reforged_ShownHit(-1) != -1)
+                CheckFail("True hit shows a wrong chance", Reforged_ShownHit(70), Reforged_ShownHit(30));
+            Reforged_SetOption(RFO_TRUE_HIT, 0);
+            if (Reforged_ShownHit(70) != 70)
+                CheckFail("True hit off changed the number", 70, Reforged_ShownHit(70));
+            Reforged_SetOption(RFO_TRUE_HIT, saved);
+        }
+        Reforged_SetOption(RFO_CHEAT_GOLD, gold);
+    }
     return sFails;
 }
 

@@ -101,7 +101,7 @@ void sub_809D300(struct Text * textBase, u16 * tm, int yLines, struct Unit * uni
 
         PutText(th, tm + TILEMAP_INDEX(3, i*2 & 0x1f));
 
-        PutNumberOrBlank(tm + TILEMAP_INDEX(12, i*2 & 0x1f), !unusable ? 2 : 1, GetItemUses(item));
+        PutNumberOrBlank(tm + TILEMAP_INDEX(12, i*2 & 0x1f), !unusable ? 2 : 1, RFO_SHOWN_USES(item, NULL));
     }
 
     return;
@@ -136,7 +136,7 @@ void sub_809D47C(struct Text * textBase, u16 * tm, int yLines, struct Unit * uni
         DrawIcon(tm + offset + 1, GetItemIconId(item), 0x4000);
         PutText(th, tm + offset + 3);
 
-        PutNumberOrBlank(tm + offset + 12, !unusable ? 2 : 1,  GetItemUses(item));
+        PutNumberOrBlank(tm + offset + 12, !unusable ? 2 : 1,  RFO_SHOWN_USES(item, NULL));
     }
 }
 

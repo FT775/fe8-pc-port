@@ -62,7 +62,7 @@ struct CheatRow {
 };
 
 static const struct CheatRow sCheatRows[CHT_ROW_COUNT] = {
-    { RFO_CHEAT_GOLD, "Infinite gold", "Gold stays at 999,999 (refilled).",
+    { RFO_CHEAT_GOLD, "Infinite gold", "Gold stays at 999,999; gems become items.",
       2, { "On", "Off" }, { 1, 0 } },
     { RFO_CHEAT_GROWTHS, "Growths", "Fixed: average gains. Or more growth.",
       4, { "Off", "Fixed", "+25%", "+50%" }, { 0, 1, 2, 3 } },

@@ -74,13 +74,25 @@ static const char *RunFix(int id)
     return OnOff(Reforged_RunFix(id));
 }
 
+/* Skills and Enemy skills are modes (0-2), not switches: their names, as the Game fixes screen. */
+static const char *RunSkillFix(int id)
+{
+    static const char *const skills[] = { "Off", "Class", "Personal" };
+    static const char *const enemy[] = { "Off", "Promoted", "All" };
+    int v = Reforged_RunFix(id);
+
+    if (v < 0 || v > 2)
+        v = 0;
+    return id == RFO_FIX_SKILLS ? skills[v] : enemy[v];
+}
+
 #define RUN_HELP "Set at New Game: fixed for this run."
 #define RR_RUN(fn, arg, label) RR_ACT(NULL, fn, arg, label, RUN_HELP)
 
 /* The help lines are at most 192 pixels (24 tiles). */
 static const struct RandoRow sFieldRows[] = {
     RR_HEAD("-- Options --"),
-    RR_SWITCH(RFO_DANGER_ZONE_SELECT, "Danger zone", "Select shows the enemy range."),
+    RR_SWITCH(RFO_DANGER_ZONE_SELECT, "Danger zone", "Select shows enemy ranges."),
     RR_SWITCH(RFO_FAST_FORWARD, "Fast-forward", "Hold Space or right stick: go faster."),
     { RR_CHOICE, RFO_FF_SPEED, 4, 0, 0, 0, "Fast-forward speed", "How fast, while the key is held.",
       { "2x", "3x", "4x", "8x" }, { 2, 3, 4, 8 }, NULL, NULL, 0 },
@@ -94,7 +106,7 @@ static const struct RandoRow sFieldRows[] = {
     RR_SWITCH(RFO_CASUAL_MODE, "Casual mode", "Fallen units return (not with Nuzlocke)."),
     RR_SWITCH(RFO_BUG_FIXES, "Freeze fixes", "Fix the original game's freezes."),
     RR_HEAD("-- Cheats --"),
-    RR_SWITCH(RFO_CHEAT_GOLD, "Infinite gold", "Gold stays at 999,999 (refilled)."),
+    RR_SWITCH(RFO_CHEAT_GOLD, "Infinite gold", "Gold stays at 999,999; gems become items."),
     { RR_CHOICE, RFO_CHEAT_GROWTHS, 4, 0, 0, 0, "Growths", "Fixed: average gains. Or more growth.",
       { "Off", "Fixed", "+25%", "+50%" }, { 0, 1, 2, 3 }, NULL, NULL, 0 },
     { RR_CHOICE, RFO_CHEAT_EXP, 3, 0, 0, 0, "EXP gained", "More EXP, still one level a battle.",
@@ -105,6 +117,20 @@ static const struct RandoRow sFieldRows[] = {
       { "Pixel", "Fill", "Stretch" }, { 0, 1, 2 }, NULL, NULL, 0 },
     RR_SWITCH(RFO_SCALE_SMOOTH, "Smoothing", "Soften the pixels when filling or stretching."),
     RR_SWITCH(RFO_FULLSCREEN, "Fullscreen", "Start fullscreen. F11 still switches."),
+    { RR_CHOICE, RFO_ENEMY_SPEED, 3, 0, 0, 0, "Enemy phase", "How fast enemy turns go.\nStart during them: skip to your turn.",
+      { "Normal", "2x", "4x" }, { 1, 2, 4 }, NULL, NULL, 0 },
+    RR_SWITCH(RFO_TRUE_HIT, "True hit", "Show the real chance to hit: the game\nrolls twice, so 70 is 82 and 30 is 18."),
+    RR_SWITCH(RFO_ARENA_ODDS, "Arena odds", "Arena: see the foe and both sides' hit,\ndamage and crit before the wager."),
+    RR_SWITCH(RFO_SKILL_BANNERS, "Skill banners", "Show a skill's name in battle when it\nactivates (Luna, Sol, Pavise...)."),
+    RR_SWITCH(RFO_MYRRH_LOOK, "Myrrh look", "Myrrh's dragon form in battle: FE6's\nDivine Dragon instead of FE8's."),
+    RR_SWITCH(RFO_CONVOY_ANYWHERE, "Convoy anywhere", "Every unit can use Supply, not only\nthe lord and the units next to the lord."),
+    RR_SWITCH(RFO_SKIRMISH_PASS, "Pass skirmishes", "World map: walk past monsters. Stop on\ntheir square, or wait, to fight them."),
+    RR_SWITCH(RFO_RUINS_SKIP, "Ruin floor select", "Lagdou Ruins: pick a floor to start on,\nup to one past the best you cleared."),
+    { RR_CHOICE, RFO_FAST_SUPPORTS, 3, 0, 0, 0, "Faster supports", "Support points x2 or x3, and units\nwithin 3 squares count, not only next to.",
+      { "Off", "x2", "x3" }, { 0, 1, 2 }, NULL, NULL, 0 },
+    RR_SWITCH(RFO_REWIND, "Rewind", "Hold Backspace on the map: back to the\nstart of the turn (again: one more)."),
+    RR_SWITCH(RFO_KEEP_GAME_OPTIONS, "Keep game Options",
+        "New games start with this game's Options\n(speeds, animation), and later changes."),
     RR_HEAD("-- This run --"),
     RR_RUN(RunRandomizer, 0, "Randomizer"),
     RR_RUN(RunSeed, 0, "Seed"),
@@ -115,6 +141,14 @@ static const struct RandoRow sFieldRows[] = {
     RR_RUN(RunFix, RFO_FIX_CANTO, "Canto after Trade"),
     RR_RUN(RunFix, RFO_FIX_DEVIL, "Devil at high Luck"),
     RR_RUN(RunFix, RFO_FIX_CH15_DROP, "Ch15 staff drop"),
+    RR_RUN(RunFix, RFO_FIX_PAIR_UP, "Pair Up"),
+    RR_RUN(RunSkillFix, RFO_FIX_SKILLS, "Skills"),
+    RR_RUN(RunSkillFix, RFO_FIX_ENEMY_SKILLS, "Enemy skills"),
+    RR_RUN(RunFix, RFO_FIX_SMART_AI, "Smarter enemies"),
+    RR_RUN(RunFix, RFO_FIX_MYRRH, "Myrrh buff"),
+    RR_RUN(RunFix, RFO_FIX_JOIN_RANKS, "Late joiners' ranks"),
+    RR_RUN(RunFix, RFO_FIX_ARMED_DANCERS, "Armed dancers"),
+    RR_RUN(RunFix, RFO_FIX_PROMO3, "Third promotion"),
 };
 
 /* Behind the list's fade out: the map back as the game's Options leave it. */
@@ -126,9 +160,17 @@ static void FieldEnded(void *parent)
     RefreshBMapGraphics();
 }
 
+/* A game is loaded here: switching "Keep game Options" on remembers its Options at once. */
+static void FieldChanged(int option)
+{
+    Reforged_ApplyDisplay(option);
+    if (option == RFO_KEEP_GAME_OPTIONS)
+        Reforged_GameOptionsCapture();
+}
+
 static const struct ReforgedListScreen sFieldScreen = {
     "Reforged Options", sFieldRows, (int)(sizeof(sFieldRows) / sizeof(sFieldRows[0])), -1, 0,
-    Reforged_ApplyDisplay, FieldEnded,
+    FieldChanged, FieldEnded,
 };
 
 /* The options screen's backgrounds (reforged_menu.c ReforgedMenu_Init): the list screen

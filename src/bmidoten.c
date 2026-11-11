@@ -99,7 +99,7 @@ void GenerateMovementMap(int x, int y, int movement, int unitId)
 
     gMovMapFillState.movement = movement;
 
-    if (unitId == 0)
+    if (unitId == 0 RFO_SKILL_PASS(unitId))
     {
         gMovMapFillState.hasUnit = FALSE;
     }
@@ -337,7 +337,7 @@ void UnitApplyWorkingMovementScript(struct Unit* unit, int x, int y)
             }
         }
 
-        if (gBmMapHidden[y][x] & HIDDEN_BIT_UNIT)
+        if (gBmMapHidden[y][x] & HIDDEN_BIT_UNIT RFO_SKILL_PASS_BUMP(unit, &it))
         {
             *it++ = MOVE_CMD_BUMP;
             *it++ = MOVE_CMD_HALT;

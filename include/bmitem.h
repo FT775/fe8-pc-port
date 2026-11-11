@@ -252,4 +252,66 @@ extern CONST_DATA struct ItemStatBonuses ItemBonus_DemonLight;
 extern CONST_DATA struct ItemStatBonuses ItemBonus_Ravger;
 extern CONST_DATA struct ItemStatBonuses ItemBonus_DivineStone;
 
+/*
+ * PC played builds only: Reforged Options' "Unbreakable weapons" (port/reforged/reforged_items.c). With
+ * it on, an item it keeps at full shows "--" for its uses, as the original shows its own unbreakable
+ * items (GetItemUses 0xFF). In every other build these are the original expressions / nothing.
+ *   RFO_SHOWN_USES(item, owner)      the uses a screen draws; owner NULL: the convoy, a shop or a
+ *                                    screen of the player's own units.
+ *   RFO_SHOWN_MAX_USES(item, owner)  the same for the maximum ("--/--", as the original).
+ *   RFO_ITEM_OWNER(unit)             the owner the shared item-line draws (bmitem.c) use until
+ *                                    RFO_ITEM_OWNER(NULL): the stat screen's unit, a steal target.
+ *   RFO_SHOWN_OWNER                  that owner.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+struct Unit;
+int Reforged_ShownUses(int item, struct Unit *owner);
+int Reforged_ShownMaxUses(int item, struct Unit *owner);
+void Reforged_SetShownItemOwner(struct Unit *owner);
+struct Unit *Reforged_ShownItemOwner(void);
+#define RFO_SHOWN_USES(item, owner) Reforged_ShownUses((item), (owner))
+#define RFO_SHOWN_MAX_USES(item, owner) Reforged_ShownMaxUses((item), (owner))
+#define RFO_ITEM_OWNER(unit) Reforged_SetShownItemOwner(unit);
+#define RFO_SHOWN_OWNER Reforged_ShownItemOwner()
+/* The FE7 items FE8 kept under the name "Dummy" (reforged_items.c, the user's request of
+   2026-11-04): their own names and help (virtual text ids past the game's own, read by
+   GetStringFromIndex), and Luce and Forblaze cast with a light / fire tome's spell. */
+int Reforged_ItemTextId(int item, int id, int which);
+int Reforged_VirtualMsg(int index, char *buf);
+int Reforged_SpellItem(int iid);
+#define RFO_ITEM_TEXT(item, id, which) Reforged_ItemTextId((item), (id), (which))
+#define RFO_VMSG(index, buf) if (!Reforged_VirtualMsg((index), (buf)))
+/* Virtual ids 0x7F50 and up (reforged_skills.c: the promotion screen's and the stat screen's
+   skill texts) are composed per unit, so the same id can carry new text: GetStringFromIndex
+   (src/msg.c) must not hand back its one-message cache for them. */
+#define RFO_VMSG_CACHEABLE(index) && (index) < 0x7F50
+#define RFO_SPELL_ITEM(iid) Reforged_SpellItem(iid)
+/* FE7 classes (reforged_fe7.c): the FE8 class whose lance animation an FE7 class borrows, so a thrown
+   javelin uses that class's effect (GetSpellAnimId); any other class unchanged. */
+int Reforged_Fe7LanceClass(int jid);
+#define RFO_LANCE_CLASS(jid) Reforged_Fe7LanceClass(jid)
+/* "True hit" (reforged_items.c): the hit chance a forecast or a battle scene shows. */
+int Reforged_ShownHit(int rate);
+int Reforged_TrueHitChance(int rate); /* the real 2-number chance, whatever the display option */
+#define RFO_SHOWN_HIT(rate) Reforged_ShownHit(rate)
+int Reforged_ShownGaugeHit(int rate);
+#define RFO_SHOWN_GAUGE_HIT(rate) Reforged_ShownGaugeHit(rate)
+/* "Convoy anywhere" (reforged_helpers_menu.c): Supply for every unit (bmmenu.c SupplyUsability). */
+int Reforged_ConvoyAnywhere(void);
+#define RFO_SUPPLY_ANYWHERE if (Reforged_ConvoyAnywhere()) return MENU_ENABLED;
+#else
+#define RFO_SHOWN_USES(item, owner) GetItemUses(item)
+#define RFO_SHOWN_MAX_USES(item, owner) GetItemMaxUses(item)
+#define RFO_ITEM_OWNER(unit)
+#define RFO_SHOWN_OWNER NULL
+#define RFO_ITEM_TEXT(item, id, which) (id)
+#define RFO_VMSG(index, buf)
+#define RFO_VMSG_CACHEABLE(index)
+#define RFO_SPELL_ITEM(iid) (iid)
+#define RFO_LANCE_CLASS(jid) (jid)
+#define RFO_SHOWN_HIT(rate) (rate)
+#define RFO_SHOWN_GAUGE_HIT(rate) (rate)
+#define RFO_SUPPLY_ANYWHERE
+#endif
+
 #endif // GUARD_ITEMS_H

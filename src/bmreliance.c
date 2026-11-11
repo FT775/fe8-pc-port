@@ -268,12 +268,12 @@ void ProcessTurnSupportExp(void)
                     continue;
                 break;
 
-            default:
+            default: RFO_SUPPORT_FAR(unit, other)
                 continue;
             }
 
             if (GetUnitTotalSupportLevel(other) < MAX_SIMULTANEOUS_SUPPORT_COUNT)
-                UnitGainSupportExp(unit, j);
+                UnitGainSupportExp(unit, j); RFO_PAIR_SUPPORT_EXTRA(unit, j, other) RFO_SUPPORT_EXTRA(unit, j, other)
         }
     }
 }
@@ -336,11 +336,11 @@ int GetUnitSupportBonuses(struct Unit* unit, struct SupportBonuses* bonuses)
         // TODO: gameStateBits constants
         if (!(gBmSt.gameStateBits & 0x40))
         {
-            if (RECT_DISTANCE(unit->xPos, unit->yPos, other->xPos, other->yPos) > SUPPORT_BONUSES_MAX_DISTANCE)
+            if (RECT_DISTANCE(unit->xPos, unit->yPos, other->xPos, other->yPos) > SUPPORT_BONUSES_MAX_DISTANCE RFO_PAIR_SUPPORT_NEAR(unit, other))
                 continue;
         }
 
-        if (other->state & (US_UNAVAILABLE | US_RESCUED))
+        if (other->state & (US_UNAVAILABLE | US_RESCUED) RFO_PAIR_SUPPORT_NEAR(unit, other))
             continue;
 
         level1 = GetUnitSupportLevel(other, GetUnitSupporterNum(other, unit->pCharacterData->number));

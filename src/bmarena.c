@@ -751,7 +751,7 @@ void ArenaContinueBattle(void) {
     return;
 }
 
-s8 ArenaIsUnitAllowed(struct Unit* unit) {
+s8 ArenaIsUnitAllowed(struct Unit* unit) { RFO_ARENA_REFUSES(unit)
     if (unit->statusIndex == UNIT_STATUS_SILENCED) {
         return 0;
     }

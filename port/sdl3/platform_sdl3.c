@@ -793,11 +793,30 @@ uint16_t Platform_ReadKeys(void)
         /* (the right stick's click by default: the left stick moves the cursor,
            so pressing it in could also tilt it) */
         int ffHeld = ActionHeld(state, CTL_FAST_FORWARD);
+
+        Reforged_RewindKey(ActionHeld(state, CTL_REWIND)); /* "Rewind": the key held */
         int bytes = sAudio != NULL ? SDL_GetAudioStreamQueued(sAudio) : 0;
+
+        unsigned silence;
 
         if (Reforged_FastForwardFrame(ffHeld, bytes > 0 ? (unsigned)bytes / (2 * sizeof(int16_t)) : 0,
                 SDL_GetTicksNS()) && sAudio != NULL)
             SDL_SetAudioStreamFrequencyRatio(sAudio, (float)Reforged_FastForwardAudioRatio(0));
+        if (Reforged_FastForwardTakeFlush(&silence) && sAudio != NULL)
+        {
+            /* a muted fast-forward released: its queued (muted) samples dropped, the queue
+               refilled with silence to its normal level */
+            static const int16_t zeros[2 * 256];
+
+            SDL_ClearAudioStream(sAudio);
+            while (silence > 0)
+            {
+                unsigned n = silence < 256 ? silence : 256;
+
+                SDL_PutAudioStreamData(sAudio, zeros, (int)(n * 2 * sizeof(int16_t)));
+                silence -= n;
+            }
+        }
     }
 #endif
 

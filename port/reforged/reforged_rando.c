@@ -42,6 +42,8 @@
  * classes' and items' own checks), the totals logged ("[rando] self-test: N configs,
  * F failures"); =exit: the process then ends with 1 on a failure, 0 when clean.
  *
+ * FE8PC_RANDO_SCAN=first[:count] (a test switch: seeds and what they give, logged; Scan below).
+ *
  * FE8PC_RANDO_FORCE=<seed> (a test switch, for scripted runs on chapter saves that have
  * no save mark; hex with 0x, or decimal): a save block's read ignores the save mark and
  * a new game ignores the menu's seed; both apply the Randomizer screen's settings with
@@ -59,6 +61,7 @@
 #include "bmunit.h"
 #include "bmitem.h"
 #include "constants/classes.h"
+#include "constants/characters.h"
 
 #include "port_hw.h"
 #include "port_reforged.h"
@@ -166,9 +169,34 @@ void Rando_ConfigFromSettings(struct RandoConfig *cfg)
 
     memset(cfg, 0, sizeof(*cfg));
     cfg->seed = Reforged_GetRandoSeed();
-    cfg->version = RANDO_VERSION;
     for (i = 0; i < RFO_RANDO_COUNT; i++)
         cfg->v[i] = (u8)Reforged_GetOption(RFO_RANDO_FIRST + i);
+    /* "FE7/FE6 classes" is the version (RANDO_VERSION_THREE): an older build keeps that, not a new key; New
+       Game then makes the ROM set the version (RomsAtNewGame) */
+    cfg->v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = cfg->v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] != 0;
+    cfg->version = cfg->v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] ? RANDO_VERSION : RANDO_VERSION_PLAIN;
+}
+
+/* Every class the randomizer may name from a ROM is loaded (reforged_fe7.c): FE7's Nomads, lords, Archsage,
+   Dark Druid and Bard; FE6's Thief F, Troopers, King, Lion Lord, Master Lord and Divine Dragon. A ROM whose
+   classes did not all build counts as not loaded (its loader logged why). */
+int Rando_RomsLoaded(void)
+{
+    int roms = 0, jid, fe7 = 1, fe6 = 1;
+
+    for (jid = 0x80; jid <= REFORGED_FOREIGN_LAST_JID; jid++)
+        if (!Reforged_Fe7ClassAvailable(jid))
+        {
+            if (jid <= REFORGED_FE7_LAST_JID)
+                fe7 = 0;
+            else
+                fe6 = 0;
+        }
+    if (fe7)
+        roms |= RANDO_ROM_FE7;
+    if (fe6)
+        roms |= RANDO_ROM_FE6;
+    return roms;
 }
 
 /* ------------------------------------------------------------------ hashes and PRNG */
@@ -188,7 +216,7 @@ u32 Rando_Hash(u32 salt, u32 a, u32 b, u32 c)
     u32 h = 0x243F6A88u;
 
     h = Fmix32(h ^ gRandoRun.seed);
-    h = Fmix32(h + 0x9E3779B9u + gRandoRun.version);
+    h = Fmix32(h + 0x9E3779B9u + (gRandoRun.version >= 2 ? 1u : gRandoRun.version)); /* RANDO_VERSION's note */
     h = Fmix32(h ^ (salt * 0x85EBCA77u + 0x165667B1u));
     h = Fmix32(h + a * 0xC2B2AE3Du + 0x27D4EB2Fu);
     h = Fmix32(h ^ (b * 0x165667B1u + 0x9E3779B9u));
@@ -701,7 +729,7 @@ void Rando_Start(const struct RandoConfig *cfg)
     memset(&gRandoRun, 0, sizeof(gRandoRun));
     if (cfg != NULL && cfg->v[RFO_RANDO_ENABLE - RFO_RANDO_FIRST] != 0)
     {
-        if (cfg->version != RANDO_VERSION)
+        if (cfg->version < RANDO_VERSION_MIN || cfg->version > RANDO_VERSION)
         {
             /* carried: the blocks saved while it is played keep it (reforged_savemark.c) */
             gRandoCarried = *cfg;
@@ -714,12 +742,16 @@ void Rando_Start(const struct RandoConfig *cfg)
         {
             gRandoRun = *cfg;
             gRandoRunOn = 1;
+            /* the version decides "FE7/FE6 classes" (RANDO_VERSION_FE7, RANDO_VERSION_THREE), whatever the
+               entry's randomizer_fe7 says (an older build that carried the run drops that key) */
+            gRandoRun.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = (u8)(Rando_VersionRoms(cfg->version) != 0 ? 1 : 0);
         }
     }
 
     /* Every step runs at every start: with no run each changes nothing but clears its
        own per-run state (the classes' player-class map and unit key). The facts the
        classes and items files cache come from the snapshot, which never changes. */
+    RandoPromotions_Apply(); /* "Random promotions": before the classes read them */
     RandoClasses_Apply(); /* player classes (ranks, bases, growth transfer), the boss map */
     ApplyBases();
     RandoItems_Apply();   /* weapons */
@@ -730,10 +762,12 @@ void Rando_Start(const struct RandoConfig *cfg)
     ApplyGrowths();
     RandoRecruit_Apply();  /* the fills take this run's data of their characters */
     RandoPalettes_Apply(); /* after every class change */
+    RandoClasses_ApplyForeign(); /* versions 11-14: the players' foreign rolls, after everything they must not move */
+    Reforged_Promo3Tables(); /* v1.23.0, "Third promotion" (a game without the randomizer): the twins' prf locks */
 
     if (gRandoRunOn && !sQuiet)
     {
-        DescribeConfig(cfg, desc, sizeof(desc));
+        DescribeConfig(&gRandoRun, desc, sizeof(desc));
         PortLog("[rando] tables randomized: seed 0x%08X, version %d,%s\n", (unsigned)cfg->seed, cfg->version,
             desc[0] ? desc : " every option at its default");
     }
@@ -771,6 +805,36 @@ static int ForcedConfig(struct RandoConfig *cfg, const char *what)
     return 1;
 }
 
+/* "FE7/FE6 classes" (RANDO_VERSION_THREE) at New Game: the run includes the foreign ROMs whose classes are
+   loaded now (Rando_RomsLoaded), recorded as its version (since v1.22.0 15 + the set: 16 FE7, 17 FE6, 18 both,
+   Rando_VersionForRoms; v1.21.0 recorded 11-14); with the row off, or neither ROM loaded, it is version 15
+   (RANDO_VERSION_PLAIN). A ROM appearing later never changes
+   the run's picks; one that disappears later leaves FE8 choices and saved units' stand-ins. */
+static void RomsAtNewGame(struct RandoConfig *cfg, const char *what)
+{
+    int roms;
+
+    if (!cfg->v[RFO_RANDO_ENABLE - RFO_RANDO_FIRST])
+        return;
+    if (cfg->version != RANDO_VERSION)
+    {
+        PortLog("[rando] %s: randomizer version %d (three promotion choices; \"FE7/FE6 classes\" off)\n", what,
+            cfg->version);
+        return;
+    }
+    roms = Rando_RomsLoaded();
+    cfg->version = (u8)Rando_VersionForRoms(roms);
+    cfg->v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = (u8)(roms != 0);
+    if (roms != 0)
+        PortLog("[rando] %s: \"FE7/FE6 classes\" on with %s loaded: randomizer version %d (three promotion "
+                "choices; this run may use the %s classes)\n", what,
+            roms == (RANDO_ROM_FE7 | RANDO_ROM_FE6) ? "the FE7 and FE6 ROMs" : roms == RANDO_ROM_FE7 ? "the FE7 ROM" : "the FE6 ROM",
+            cfg->version, roms == (RANDO_ROM_FE7 | RANDO_ROM_FE6) ? "FE7 and FE6" : roms == RANDO_ROM_FE7 ? "FE7" : "FE6");
+    else
+        PortLog("[rando] %s: \"FE7/FE6 classes\" is on but neither foreign ROM is loaded: randomizer version %d "
+                "(three promotion choices, no foreign classes)\n", what, cfg->version);
+}
+
 void Reforged_RandoNewGame(void)
 {
     struct RandoConfig cfg;
@@ -779,6 +843,7 @@ void Reforged_RandoNewGame(void)
     Reforged_GameFixesNewGame(); /* the Game fixes screen's choices: also fixed for this run */
     if (ForcedConfig(&cfg, "new game"))
     {
+        RomsAtNewGame(&cfg, "new game");
         Rando_Start(&cfg);
         RandoNuzlocke_NewGame();
         PortLog("[rando] new game: randomized run, seed 0x%08X\n", (unsigned)gRandoRun.seed);
@@ -795,6 +860,7 @@ void Reforged_RandoNewGame(void)
         cfg.seed = seed;
         PortLog("[rando] new game: seed 0x%08X picked\n", seed);
     }
+    RomsAtNewGame(&cfg, "new game");
     Rando_Start(on ? &cfg : NULL);
     RandoNuzlocke_NewGame();
     if (gRandoRunOn)
@@ -811,7 +877,10 @@ void Reforged_RandoWillRead(int block)
 
     snprintf(what, sizeof(what), "save block %d", block);
     if (ForcedConfig(&forced, what))
+    {
+        RomsAtNewGame(&forced, what); /* the version a new game would record now (the ROMs loaded) */
         cfg = &forced; /* the save mark ignored */
+    }
     else if (block >= 0 && block <= 4)
         cfg = Rando_SaveMarkBlock(block);
     Rando_Start(cfg);
@@ -888,7 +957,10 @@ static int CheckTables(const struct RandoConfig *cfg, const char *what)
             fails += CheckFail("%s: pid 0x%02X: number changed", what, pid);
         if (!Rando_IsPlayable(pid))
             continue;
-        if (c->defaultClass < 1 || c->defaultClass > 0x7F || (k = Rando_Class(c->defaultClass)) == NULL ||
+        if (c->defaultClass > 0x7F && c->defaultClass <= REFORGED_FOREIGN_LAST_JID &&
+            RandoClasses_PlayerFe8Class(pid) != 0 && Reforged_Fe7ClassAvailable(c->defaultClass))
+            k = GetClassData(c->defaultClass); /* versions 11-14: a foreign class of the run (its limits) */
+        else if (c->defaultClass < 1 || c->defaultClass > 0x7F || (k = Rando_Class(c->defaultClass)) == NULL ||
             k->pBattleAnimDef == NULL)
         {
             fails += CheckFail("%s: pid 0x%02X: default class 0x%02X is not a unit class", what, pid,
@@ -985,7 +1057,9 @@ static void TestBase(struct RandoConfig *cfg, u32 seed)
 {
     memset(cfg, 0, sizeof(*cfg));
     cfg->seed = seed;
-    cfg->version = RANDO_VERSION;
+    cfg->version = RANDO_VERSION_THREE; /* the FE7 classes are the version (RANDO_VERSION_FE7). Versions 11-14 (the
+                                           Keep colours sets of v1.21.0's saves, built at the start); each config is
+                                           also run as 15-18 (the same tables, SelfTest) */
 #define SET(id, val) (cfg->v[(id) - RFO_RANDO_FIRST] = (u8)(val))
     SET(RFO_RANDO_ENABLE, 1);
     SET(RFO_RANDO_GROWTH_VAR, 30);
@@ -1021,6 +1095,12 @@ static int TestConfig(int kind, u32 seed, struct RandoConfig *cfg)
         SET(RFO_RANDO_EVENLY, kind == 0);
         SET(RFO_RANDO_GENDER, kind == 0);
         SET(RFO_RANDO_CLASS_GROWTHS, kind == 0);
+        SET(RFO_RANDO_PROMOTIONS, 1);
+        SET(RFO_RANDO_PROMO_MONSTERS, kind);
+        SET(RFO_RANDO_FE7, 1);
+        cfg->version = RANDO_VERSION_THREE + 3; /* "FE7 classes" on: the version says so (14; 18 too, SelfTest) */
+        SET(RFO_RANDO_MUSIC, 1);
+        SET(RFO_RANDO_FLOOR_MONSTERS, 1);
         SET(RFO_RANDO_CLASS_BASES, kind);
         SET(RFO_RANDO_BOSSES, 1);
         SET(RFO_RANDO_ENEMIES, 1);
@@ -1133,6 +1213,9 @@ static int TestConfig(int kind, u32 seed, struct RandoConfig *cfg)
 static struct CharacterData sTestChars[RANDO_CHARS];
 static struct ClassData sTestClasses[RANDO_CLASSES];
 static struct ItemData sTestItems[RANDO_ITEMS];
+static struct CharacterData sTestChars2[RANDO_CHARS]; /* a second set (versions 15-18 against 11-14) */
+static struct ClassData sTestClasses2[RANDO_CLASSES];
+static struct ItemData sTestItems2[RANDO_ITEMS];
 
 static int TablesEqual(const struct CharacterData *c, const struct ClassData *k, const struct ItemData *it)
 {
@@ -1140,15 +1223,37 @@ static int TablesEqual(const struct CharacterData *c, const struct ClassData *k,
            memcmp(gItemData, it, sizeof(sTestItems)) == 0;
 }
 
+/* Versions 11-14 change the characters only where they must (reforged_rando_classes.c RandoClasses_ApplyForeign):
+   the twins' prf locks, and the entry of a player whose foreign roll fired. The saved characters chars (a run of
+   another version) with those changes taken from the live run, then TablesEqual; *rolled: the players taken. */
+static int TablesEqualThree(struct CharacterData *chars, const struct ClassData *k, const struct ItemData *it, int *rolled)
+{
+    int pid;
+
+    *rolled = 0;
+    chars[CHARACTER_EIRIKA - 1].attributes |= CA_LOCK_4;
+    chars[CHARACTER_EPHRAIM - 1].attributes |= CA_LOCK_5;
+    for (pid = 1; pid <= RANDO_CHARS; pid++)
+        if (RandoClasses_PlayerFe8Class(pid) != 0)
+        {
+            if (chars[pid - 1].defaultClass != RandoClasses_PlayerFe8Class(pid))
+                return 0;
+            chars[pid - 1] = gCharacterData[pid - 1];
+            (*rolled)++;
+        }
+    return TablesEqual(chars, k, it);
+}
+
 static int SelfTest(void)
 {
     struct RandoConfig cfg, other;
     char what[64];
-    int kind, s, fails = 0, configs = 0, f;
+    int kind, s, fails = 0, configs = 0, f, allRuns = 0;
     u32 x = 0x0BADC0DEu;
 
     sQuiet = 1;
     RandoRecruit_SetQuiet(1);
+    RandoClasses_SetQuiet(1);
     sCheckLogged = 0;
     Rando_Start(NULL);
     fails += CheckTables(NULL, "vanilla");
@@ -1170,9 +1275,37 @@ static int SelfTest(void)
             f += RandoClasses_SelfTest();
             f += RandoItems_SelfTest();
             f += RandoPalettes_SelfTest();
+            f += RandoMusic_SelfTest();
             f += RandoRecruit_SelfTest();
-            if (kind == 13 && !TablesEqual(sVanillaChars, sVanillaClasses, sVanillaItems))
-                f += CheckFail("%s: every feature off, but the tables changed", what);
+            if (cfg.version >= RANDO_VERSION_THREE && cfg.version < RANDO_VERSION_ALLCOLOURS)
+            {
+                /* the same config as version 15-18 (11 + r -> 15 + r): the same tables (only the colours differ),
+                   and its palettes (built on demand) */
+                struct RandoConfig all = cfg;
+
+                all.version = (u8)(cfg.version - RANDO_VERSION_THREE + RANDO_VERSION_ALLCOLOURS);
+                memcpy(sTestChars2, gCharacterData, sizeof(sTestChars2));
+                memcpy(sTestClasses2, gClassData, sizeof(sTestClasses2));
+                memcpy(sTestItems2, gItemData, sizeof(sTestItems2));
+                Rando_Start(&all);
+                if (!gRandoRunOn || gRandoRun.version != all.version)
+                    f += CheckFail("%s: version %d: the run did not start", what, all.version);
+                else if (!TablesEqual(sTestChars2, sTestClasses2, sTestItems2))
+                    f += CheckFail("%s: version %d: the tables differ from version %d's", what, all.version,
+                        cfg.version);
+                f += RandoPalettes_SelfTest();
+                allRuns++;
+                Rando_Start(&cfg);
+            }
+            if (kind == 13)
+            {
+                int rolled;
+
+                /* version 11-14's twins' locks aside (TablesEqualThree) */
+                memcpy(sTestChars, sVanillaChars, sizeof(sTestChars));
+                if (!TablesEqualThree(sTestChars, sVanillaClasses, sVanillaItems, &rolled) || rolled != 0)
+                    f += CheckFail("%s: every feature off, but the tables changed", what);
+            }
             /* the same run again, after another one: the same tables */
             memcpy(sTestChars, gCharacterData, sizeof(sTestChars));
             memcpy(sTestClasses, gClassData, sizeof(sTestClasses));
@@ -1190,6 +1323,178 @@ static int SelfTest(void)
             fails += f;
         }
     }
+    /* versions 9 and 10's FE7 extras (RANDO_VERSION_FE7): for a sample of seeds, the tables of a version 8
+       run and of the same run as version 9 (no FE7 classes) and 10 (FE7 classes) are the same; the version
+       alone decides "FE7 classes" (a version 9 entry that says randomizer_fe7=1 is without them, a version
+       10 entry without the key, as an older build writes it back, with them); and the classes' picks
+       (RandoClasses_Fe7SelfTest: the units, the promotion rows) are version 8's but where an FE7 roll
+       fired in version 10; with the FE7 classes not loaded, all of them */
+    {
+        static const u8 kinds[3] = { 0, 1, 10 };
+        int fired = 0, promoRows = 0, runs = 0, k;
+
+        x = 0x0BADC0DEu;
+        for (s = 0; s < 24; s++)
+        {
+            u32 seed = s == 0 ? 1u : SplitMix32(&x);
+
+            for (k = 0; k < 3; k++)
+            {
+                struct RandoConfig v8, v9, lost;
+
+                TestConfig(kinds[k], seed, &cfg);
+                cfg.version = RANDO_VERSION_FE7;
+                cfg.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = 1;
+                cfg.v[RFO_RANDO_PROMOTIONS - RFO_RANDO_FIRST] = 1;
+                v8 = cfg;
+                v8.version = RANDO_VERSION_NOFE7; /* the option means nothing there */
+                v9 = cfg;
+                v9.version = RANDO_VERSION_FE7 - 1; /* randomizer_fe7=1, but version 9: without */
+                lost = cfg;
+                lost.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = 0; /* the key dropped: version 10 still has them */
+                snprintf(what, sizeof(what), "FE7 extras: seed 0x%08X config %d", (unsigned)seed, kinds[k]);
+                Rando_Start(&v8);
+                if (Rando_Fe7Run() || Rando_Opt(RFO_RANDO_FE7))
+                    fails += CheckFail("%s: version 8 with randomizer_fe7=1 includes the FE7 classes", what);
+                memcpy(sTestChars, gCharacterData, sizeof(sTestChars));
+                memcpy(sTestClasses, gClassData, sizeof(sTestClasses));
+                memcpy(sTestItems, gItemData, sizeof(sTestItems));
+                Rando_Start(&cfg);
+                if (!Rando_Fe7Run() || Rando_Opt(RFO_RANDO_FE7) != 1)
+                    fails += CheckFail("%s: version 10 does not include the FE7 classes", what);
+                if (!TablesEqual(sTestChars, sTestClasses, sTestItems))
+                    fails += CheckFail("%s: version 10 (FE7 classes): the tables differ from version 8's", what);
+                Rando_Start(&v9);
+                if (Rando_Fe7Run() || Rando_Opt(RFO_RANDO_FE7))
+                    fails += CheckFail("%s: version 9 with randomizer_fe7=1 includes the FE7 classes", what);
+                if (!TablesEqual(sTestChars, sTestClasses, sTestItems))
+                    fails += CheckFail("%s: version 9 (no FE7 classes): the tables differ from version 8's", what);
+                Rando_Start(&lost);
+                if (!Rando_Fe7Run() || Rando_Opt(RFO_RANDO_FE7) != 1)
+                    fails += CheckFail("%s: version 10 without its randomizer_fe7 key lost the FE7 classes", what);
+                f = RandoClasses_Fe7SelfTest(&cfg, &fired, &promoRows);
+                if (f)
+                    CheckFail("%s: %d unit or promotion picks wrong (above)", what, f);
+                fails += f;
+                runs++;
+                Rando_Start(NULL);
+            }
+        }
+        PortLog("[rando] self-test: FE7 extras: %d runs as versions 8, 9 and 10 (the version decides FE7 classes): "
+                "version 8's tables and picks kept; %d FE7 unit rolls fired, %d promotion rows got the third choice "
+                "(FE7 classes %s)\n", runs, fired, promoRows,
+            Reforged_Fe7ClassAvailable(REFORGED_FE7_JID_ARCHSAGE) ? "loaded" : "not loaded: none applied");
+    }
+    /* versions 11-14 (RANDO_VERSION_THREE): for a sample of seeds and configs (Random promotions on and off), the
+       tables of the run as version 9 and 10 against 11 and 14: the same but the twins' locks and the players whose
+       foreign roll fired (TablesEqualThree); the version decides the ROM set (14 keeps it without its
+       randomizer_fe7 key, 11 with randomizer_fe7=1 has none); and the classes' picks (RandoClasses_ThreeSelfTest:
+       the units, the players, the promotion rows and lists) */
+    {
+        static const u8 kinds[5] = { 0, 1, 2, 16, 10 }; /* 16: classes with the dancer kept (her Bard roll) */
+        static const char *const sNames[0x10] = { "Nomad", "Nomad F", "Blade Lord", "Blade Lord (Eirika)",
+            "Armor Lord", "Armor Lord (Ephraim)", "Archsage", "Dark Druid", "Bard", "Thief F", "Trooper", "Trooper F",
+            "King", "Lion Lord", "Master Lord", "Divine Dragon" };
+        struct RandoThreeStats st, st18;
+        char seen[512];
+        int k, rolledAll = 0, len = 0, j;
+
+        memset(&st, 0, sizeof(st));
+        memset(&st18, 0, sizeof(st18));
+        x = 0x7E1AF00Du;
+        for (s = 0; s < 16; s++)
+        {
+            u32 seed = s == 0 ? 1u : SplitMix32(&x);
+
+            for (k = 0; k < 5; k++)
+            {
+                struct RandoConfig v9, v10, v11, v14, lost, v15, v18;
+                int rolled;
+
+                TestConfig(kinds[k], seed, &cfg);
+                cfg.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = 1;
+                if (kinds[k] == 2)
+                    cfg.v[RFO_RANDO_RECRUIT - RFO_RANDO_FIRST] = 1; /* recruitment before the foreign rolls */
+                v9 = v10 = v11 = v14 = cfg;
+                v9.version = RANDO_VERSION_FE7 - 1;
+                v10.version = RANDO_VERSION_FE7;
+                v11.version = RANDO_VERSION_THREE;
+                v14.version = RANDO_VERSION_THREE + 3;
+                lost = v14;
+                v15 = v11;
+                v15.version = RANDO_VERSION_ALLCOLOURS;
+                v18 = v14;
+                v18.version = RANDO_VERSION;
+                v18.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = 0; /* (18 keeps both ROMs without the key too) */
+                lost.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = 0; /* the key dropped: version 14 keeps both ROMs */
+                snprintf(what, sizeof(what), "three choices: seed 0x%08X config %d", (unsigned)seed, kinds[k]);
+                Rando_Start(&v9);
+                memcpy(sTestChars, gCharacterData, sizeof(sTestChars));
+                memcpy(sTestClasses, gClassData, sizeof(sTestClasses));
+                memcpy(sTestItems, gItemData, sizeof(sTestItems));
+                Rando_Start(&v11);
+                if (!Rando_ThreeRun() || Rando_ThreeRoms() != 0 || Rando_Opt(RFO_RANDO_FE7) != 0)
+                    fails += CheckFail("%s: version 11 with randomizer_fe7=1 includes a foreign ROM", what);
+                if (!TablesEqualThree(sTestChars, sTestClasses, sTestItems, &rolled) || rolled != 0)
+                    fails += CheckFail("%s: version 11: the tables differ from version 9's", what);
+                f = CheckTables(&v11, what) + RandoClasses_SelfTest() + RandoRecruit_SelfTest() + RandoPalettes_SelfTest();
+                memcpy(sTestChars2, gCharacterData, sizeof(sTestChars2));
+                memcpy(sTestClasses2, gClassData, sizeof(sTestClasses2));
+                memcpy(sTestItems2, gItemData, sizeof(sTestItems2));
+                Rando_Start(&v15); /* version 15 makes version 11's picks */
+                if (!Rando_ThreeRun() || Rando_ThreeRoms() != 0 || !TablesEqual(sTestChars2, sTestClasses2, sTestItems2))
+                    fails += CheckFail("%s: version 15: the tables or ROMs differ from version 11's", what);
+                f += RandoPalettes_SelfTest();
+                Rando_Start(&v10);
+                memcpy(sTestChars, gCharacterData, sizeof(sTestChars));
+                Rando_Start(&lost);
+                if (Rando_ThreeRoms() != (RANDO_ROM_FE7 | RANDO_ROM_FE6) || Rando_Opt(RFO_RANDO_FE7) != 1)
+                    fails += CheckFail("%s: version 14 without its randomizer_fe7 key lost its ROMs", what);
+                if (!TablesEqualThree(sTestChars, sTestClasses, sTestItems, &rolled))
+                    fails += CheckFail("%s: version 14: the tables differ from version 10's but where a foreign roll fired",
+                        what);
+                rolledAll += rolled;
+                f += CheckTables(&v14, what) + RandoClasses_SelfTest() + RandoRecruit_SelfTest() + RandoPalettes_SelfTest();
+                if (f)
+                    CheckFail("%s: %d table checks failed (above)", what, f);
+                fails += f;
+                f = RandoClasses_ThreeSelfTest(&v10, &st);
+                if (f)
+                    CheckFail("%s: %d unit, player or promotion picks wrong (above)", what, f);
+                fails += f;
+                /* version 18 makes version 14's picks: the same tables, ROM set and classes' picks */
+                Rando_Start(&lost); /* (RandoClasses_ThreeSelfTest starts other runs) */
+                memcpy(sTestChars2, gCharacterData, sizeof(sTestChars2));
+                memcpy(sTestClasses2, gClassData, sizeof(sTestClasses2));
+                memcpy(sTestItems2, gItemData, sizeof(sTestItems2));
+                Rando_Start(&v18);
+                if (Rando_ThreeRoms() != (RANDO_ROM_FE7 | RANDO_ROM_FE6) || !TablesEqual(sTestChars2, sTestClasses2, sTestItems2))
+                    fails += CheckFail("%s: version 18: the tables or ROMs differ from version 14's", what);
+                f = RandoPalettes_SelfTest() + RandoClasses_ThreeSelfTestAt(&v10, &st18,
+                    RANDO_VERSION_ALLCOLOURS - RANDO_VERSION_THREE);
+                if (f)
+                    CheckFail("%s: version 18: %d picks or palettes wrong (above)", what, f);
+                fails += f;
+                allRuns++;
+                Rando_Start(NULL);
+            }
+        }
+        seen[0] = '\0';
+        for (j = 0; j < 0x10; j++)
+            if (st.byClass[j] > 0 && len < (int)sizeof(seen) - 40)
+                len += snprintf(seen + len, sizeof(seen) - len, "%s%s %d", len ? ", " : "", sNames[j], st.byClass[j]);
+        PortLog("[rando] self-test: three choices: %d runs as versions 9-14: version 10's tables and picks kept but "
+                "where a foreign roll fired; %d player rolls (%d in the tables), %d unit rolls, %d boss rolls fired; %d "
+                "promotion lists of three (fills: %d foreign, %d random, %d FE8), %d version 9/10 lists under three; "
+                "foreign classes seen: %s (FE7 classes %s, FE6 classes %s)\n",
+            st.runs, st.players, rolledAll, st.units, st.bosses, st.lists, st.promoForeign, st.promoRandom, st.promoFill,
+            st.oldShort, seen[0] ? seen : "none", (Rando_RomsLoaded() & RANDO_ROM_FE7) ? "loaded" : "not loaded",
+            (Rando_RomsLoaded() & RANDO_ROM_FE6) ? "loaded" : "not loaded");
+        PortLog("[rando] self-test: stand-ins: %d player rolls save as their class of the run; %d unit and boss rolls "
+                "as their class of the run, %d as a class of its tier and their weapons; %d foreign promotion choices "
+                "as a class of the row's tier, the unit's sex and their weapons\n", st.standPlayers, st.standUnitsSame,
+            st.standUnitsOther, st.standPromo);
+    }
     /* a run of another algorithm version is refused, and carried until the next start */
     TestConfig(0, 1, &cfg);
     cfg.version = RANDO_VERSION + 1;
@@ -1201,6 +1506,26 @@ static int SelfTest(void)
     Rando_Start(NULL);
     if (gRandoCarriedOn)
         fails += CheckFail("version %d: still carried after another start", cfg.version);
+    /* a version 1 run (v1.1) is still applied, with the same tables as version 2's
+       (the hash mixes in 1 for both; only the map check of the units differs) */
+    {
+        struct RandoConfig v1;
+
+        TestConfig(0, 1, &cfg);
+        cfg.version = RANDO_VERSION_FE7; /* (versions 11-14 add their changes: their own test below) */
+        v1 = cfg;
+        v1.version = 1;
+        Rando_Start(&cfg);
+        memcpy(sTestChars, gCharacterData, sizeof(sTestChars));
+        memcpy(sTestClasses, gClassData, sizeof(sTestClasses));
+        memcpy(sTestItems, gItemData, sizeof(sTestItems));
+        Rando_Start(&v1);
+        if (!gRandoRunOn || gRandoCarriedOn || gRandoRun.version != 1)
+            fails += CheckFail("version 1: not applied");
+        else if (!TablesEqual(sTestChars, sTestClasses, sTestItems))
+            fails += CheckFail("version 1: its tables differ from version %d's", RANDO_VERSION);
+        Rando_Start(NULL);
+    }
     /* a soft reset boots again with a randomized run's tables: the boot puts the
        vanilla ones back and ends the run, and never takes them as the snapshot */
     configs++;
@@ -1227,8 +1552,99 @@ static int SelfTest(void)
     Rando_Start(NULL);
     sQuiet = 0;
     RandoRecruit_SetQuiet(0);
+    RandoClasses_SetQuiet(0);
+    fails += RandoPalettes_AllSelfTest(); /* version 15: every character on every class */
+    PortLog("[rando] self-test: versions 15-18: %d runs with version 11-14's tables (and picks)\n", allRuns);
     PortLog("[rando] self-test: %d configs, %d failures\n", configs, fails);
     return fails;
+}
+
+/* FE8PC_RANDO_SCAN=first[:count] (a test switch, the first boot only; for finding seeds to test with): for each seed
+   from first (count of them, default 100), the Randomizer screen's settings with that seed and the randomizer on, as
+   New Game would record them now (the ROMs loaded), applied and logged: "[rando] scan: seed S vV: ..." with each
+   player whose foreign roll fired (pid:class before->foreign class) and, for each class in FE8PC_RANDO_SCAN_ROWS
+   (comma-separated ids), its three promotion choices for a man and a woman (row/M=a,b,c), and for each "chapter:pid"
+   in FE8PC_RANDO_SCAN_UNITS the class that unit gets as a red definition there (uPID@CH=class; no map: the map checks
+   pass). The vanilla tables are put
+   back after; the settings file is not changed. */
+static void Scan(const char *spec)
+{
+    const char *rows = getenv("FE8PC_RANDO_SCAN_ROWS"), *units = getenv("FE8PC_RANDO_SCAN_UNITS");
+    char *end;
+    int savedCh = gPlaySt.chapterIndex;
+    unsigned long first = strtoul(spec, &end, 0), count = *end == ':' ? strtoul(end + 1, NULL, 0) : 100, n;
+
+    sQuiet = 1;
+    RandoClasses_SetQuiet(1);
+    RandoRecruit_SetQuiet(1);
+    for (n = 0; n < count; n++)
+    {
+        struct RandoConfig cfg;
+        char line[1024];
+        const char *r;
+        int len = 0, pid;
+
+        Rando_ConfigFromSettings(&cfg);
+        cfg.seed = (u32)(first + n);
+        cfg.v[RFO_RANDO_ENABLE - RFO_RANDO_FIRST] = 1;
+        if (cfg.version == RANDO_VERSION)
+        {
+            int roms = Rando_RomsLoaded();
+
+            cfg.version = (u8)Rando_VersionForRoms(roms);
+            cfg.v[RFO_RANDO_FE7 - RFO_RANDO_FIRST] = (u8)(roms != 0);
+        }
+        Rando_Start(&cfg);
+        line[0] = '\0';
+        for (pid = 1; pid <= 0xFF && len < (int)sizeof(line) - 40; pid++)
+            if (RandoClasses_PlayerFe8Class(pid) != 0)
+                len += snprintf(line + len, sizeof(line) - len, " %02X:%02X->%02X", pid, RandoClasses_PlayerFe8Class(pid),
+                    RandoClasses_PlayerClass(pid));
+        for (r = rows; r != NULL && *r != '\0' && len < (int)sizeof(line) - 60;)
+        {
+            int jid = (int)strtol(r, &end, 0), f;
+
+            if (end == r)
+                break;
+            for (f = 0; f < 2; f++)
+            {
+                u8 l[3] = { 0, 0, 0 };
+
+                Rando_PromoList(jid, f, l);
+                len += snprintf(line + len, sizeof(line) - len, " %02X/%c=%02X,%02X,%02X", jid, f ? 'F' : 'M', l[0], l[1],
+                    l[2]);
+            }
+            r = *end == ',' ? end + 1 : end;
+        }
+        for (r = units; r != NULL && *r != '\0' && len < (int)sizeof(line) - 30;)
+        {
+            /* "ch:pid": that boss (or unit) as a chapter's definition gives it, red, its default class */
+            struct UnitDefinition def, buf;
+            const struct UnitDefinition *got;
+            int ch = (int)strtol(r, &end, 0), upid;
+
+            if (end == r || *end != ':')
+                break;
+            upid = (int)strtol(end + 1, &end, 0);
+            memset(&def, 0, sizeof(def));
+            def.charIndex = (u8)upid;
+            def.allegiance = FACTION_ID_RED;
+            def.level = 15;
+            def.xPosition = 2;
+            def.yPosition = 3;
+            gPlaySt.chapterIndex = (u8)ch;
+            got = Reforged_RandoUnitDef(&def, &buf);
+            len += snprintf(line + len, sizeof(line) - len, " u%02X@%d=%02X", upid, ch,
+                got != NULL && got->classIndex ? got->classIndex : (Rando_VanillaChar(upid) ? Rando_VanillaChar(upid)->defaultClass : 0));
+            r = *end == ',' ? end + 1 : end;
+        }
+        PortLog("[rando] scan: seed 0x%08X v%d:%s\n", (unsigned)cfg.seed, cfg.version, line);
+    }
+    Rando_Start(NULL);
+    gPlaySt.chapterIndex = (u8)savedCh;
+    sQuiet = 0;
+    RandoClasses_SetQuiet(0);
+    RandoRecruit_SetQuiet(0);
 }
 
 void Reforged_RandoBoot(void)
@@ -1263,6 +1679,20 @@ void Reforged_RandoBoot(void)
             PortExit(fails ? 1 : 0);
         }
     }
+    check = getenv("FE8PC_PROMO3_CHECK"); /* v1.23.0, "Third promotion": the first boot only */
+    if (check != NULL)
+    {
+        int fails = RandoClasses_Promo3SelfTest();
+
+        if (strcmp(check, "exit") == 0)
+        {
+            fflush(stdout);
+            PortExit(fails ? 1 : 0);
+        }
+    }
+    check = getenv("FE8PC_RANDO_SCAN");
+    if (check != NULL)
+        Scan(check);
 }
 
 #endif /* PORT_PLAYED_BUILD */

@@ -327,7 +327,7 @@ void UpdateDungeonRecordStats() {
     struct Dungeon* record;
     int val;
 
-    current = &gDungeonState.current;
+    current = &gDungeonState.current; RFO_RUINS_RECORDS()
     record = &gDungeonState.dungeon[gDungeonState.type];
 
     if (record->clearCount > 0) {

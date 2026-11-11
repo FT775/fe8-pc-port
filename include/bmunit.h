@@ -493,7 +493,7 @@ void UnitRemoveItem(struct Unit* unit, int slot);
 #define UNIT_MOV_BASE(aUnit) ((aUnit)->pClassData->baseMov)
 
 #define UNIT_CON(aUnit) (UNIT_CON_BASE(aUnit) + (aUnit)->conBonus)
-#define UNIT_MOV(aUnit) ((aUnit)->movBonus + UNIT_MOV_BASE(aUnit))
+#define UNIT_MOV(aUnit) ((aUnit)->movBonus + UNIT_MOV_BASE(aUnit) RFO_SKILL_MOV(aUnit))
 
 #define UNIT_IS_GORGON_EGG(aUnit) (((aUnit)->pClassData->number == CLASS_GORGONEGG) || ((aUnit)->pClassData->number == CLASS_GORGONEGG2))
 #define UNIT_IS_PHANTOM(aUnit) ((aUnit)->pClassData->number == CLASS_PHANTOM)
@@ -526,6 +526,23 @@ void UnitRemoveItem(struct Unit* unit, int slot);
  *   RANDO_PROMOTE_SKIP       there, before the proc: a jid of 0 (never a PROM
  *                            class in vanilla) ends the command with no promotion
  *                            (a randomized unit that is already promoted).
+ *   RFO_PROMOTE_MENU         there, after RANDO_PROMOTE_SKIP: the FE7 classes
+ *                            (port/reforged/reforged_fe7.c, v1.16.1): Chapter 16's
+ *                            PROM of a twin still in their Lord class, with their
+ *                            FE7 lord loaded, opens the brace's class choice
+ *                            instead (the command yields until it ends).
+ *   RFO_PROMO_NO_CANCEL      src/classchg-menuselect.c ClassChgMenuSelOnPressB: B
+ *                            does nothing on that choice (as for a trainee).
+ *   RFO_PROMO_SLOT           src/classchg-sel.c Make6C_PromotionMenuSelect,
+ *                            src/classchg-menuselect.c ClassChgMenuItem_OnSelect: the
+ *                            promotion screen's choice 0-2, in a randomizer version
+ *                            11-14 run the run's three (reforged_rando_classes.c
+ *                            Rando_PromoList), or (v1.23.0) in a game without the
+ *                            randomizer with the Game fix "Third promotion" the
+ *                            owner's three (Promo3ListEx), else the class given.
+ *   RFO_PROMO_THREE          src/classchg-handler.c PromoHandler_SetupAndStartUI: in
+ *                            such a game every promotion opens the choice screen
+ *                            (sel_en), a row with one class too.
  *   RANDO_SKIRMISH_LEADER_CLASS src/eventinfo.c GetChapterSkirmishLeaderClasses:
  *                            the world map's skirmish icons show the leader's
  *                            class of the run.
@@ -548,6 +565,12 @@ void UnitRemoveItem(struct Unit* unit, int slot);
  *                            game's own read of it). Indices 0x80 and up are the
  *                            randomizer's palettes (a character's colours on a
  *                            new class), which gAnimCharaPalIt then points to.
+ *   RANDO_CHARA_ENSURE       src/banim-ekrbattleintro.c, src/banim-ekrmain.c (a
+ *                            triangle attack's partners), src/classchg-sel.c: before
+ *                            a unit's set for its class is looked up, randomizer
+ *                            version 15 ("Keep colours" on every class) puts the
+ *                            set it shows in the unit's row (built when first
+ *                            needed); nothing in any other game.
  *   RANDO_HOOK_TEXT          src/msg.c GetStringFromIndex, after the decode: with
  *                            "Recruitment", each slot's name becomes its fill's.
  *   RANDO_FACE               src/face.c GetPortraitData: a slot's portrait shows
@@ -573,14 +596,36 @@ const u16 *Reforged_RandoShopItems(const u16 *inventory, int shopType);
 int Reforged_RandoMoveGuard(int x, int y, u8 **output, u8 *outputStart); /* 0: stop the walk */
 char *Reforged_RandoCharaPal(int idx);
 #define RANDO_CHARA_PAL(orig, idx) Reforged_RandoCharaPal(idx)
+int Reforged_RandoCharaPalFits(int idx, int bid, int jid);
+#define RANDO_UNIQUE_PAL_FITS(pal, bid, jid) if (!Reforged_RandoCharaPalFits((pal), (bid), (jid))) (pal) = -1;
+void Reforged_RandoCharaEnsure(int valid, int pid0, int jid, int bid, const void *unit);
+#define RANDO_CHARA_ENSURE(valid, pid0, jid, bid, unit) Reforged_RandoCharaEnsure((valid), (pid0), (jid), (bid), (unit));
 void Reforged_RandoText(char *buf, int size);
 int Reforged_RandoFace(int fid);
 #define RANDO_HOOK_TEXT(buf, size) Reforged_RandoText((char *)(buf), (size));
+int Reforged_RandoMapSong(int song);
+int Reforged_RandoBattleSong(int song);
+#define RANDO_MAP_SONG(song) Reforged_RandoMapSong(song)
+int Reforged_RandoMapSongPeek(int song);
+#define RANDO_MAP_SONG_PEEK(song) Reforged_RandoMapSongPeek(song)
+#define RANDO_BATTLE_SONG(song) Reforged_RandoBattleSong(song)
 #define RANDO_FACE(fid) Reforged_RandoFace(fid)
 void Reforged_RandoUnitDied(struct Unit *unit);
 #define RANDO_HOOK_DEATH(unit) Reforged_RandoUnitDied(unit);
 void Reforged_RandoUnitJoined(struct Unit *unit);
 #define RANDO_HOOK_JOINED(unit) Reforged_RandoUnitJoined(unit);
+void Reforged_RandoPromoted(struct Unit *unit);
+void Reforged_RandoPromoting(struct Unit *unit);
+#define RANDO_HOOK_PROMOTING(unit) Reforged_RandoPromoting(unit);
+int Reforged_RandoPromoChoice(struct Unit *unit, int jid);
+int Reforged_BanimFallback(const void *animDef, int idx, u32 *out);
+#define RANDO_BANIM_FALLBACK(animDef, idx, out) Reforged_BanimFallback((animDef), (s16)(idx), (out))
+#define RANDO_PROMO_CHOICE(unit, jid) Reforged_RandoPromoChoice((unit), (jid))
+int Reforged_PromoSlot(struct Unit *unit, int slot, int jid);
+int Reforged_PromoThree(struct Unit *unit);
+#define RFO_PROMO_SLOT(unit, slot, jid) Reforged_PromoSlot((unit), (slot), (jid))
+#define RFO_PROMO_THREE(proc, unit) if (Reforged_PromoThree(unit)) (proc)->sel_en = 1;
+#define RANDO_HOOK_PROMOTED(unit) Reforged_RandoPromoted(unit);
 #define RANDO_HOOK_UNITDEF(uDef, buf) (uDef) = Reforged_RandoUnitDef((uDef), (buf));
 #define RANDO_HOOK_UNITLOADED(unit, uDef) Reforged_RandoUnitLoaded((unit), (uDef));
 #define RANDO_HOOK_WILLREAD(block) Reforged_RandoWillRead(block);
@@ -588,6 +633,10 @@ void Reforged_RandoUnitJoined(struct Unit *unit);
 #define RANDO_GIFT_ITEM(item, target) Reforged_RandoGiftItem((item), (target))
 #define RANDO_PROMOTE_JID(unit, jid) Reforged_RandoPromoteJid((unit), (jid))
 #define RANDO_PROMOTE_SKIP(jid) if ((jid) == 0) return EVC_ADVANCE_CONTINUE;
+int Reforged_Fe7EventPromoMenu(void *evproc, struct Unit *unit, int jid, int item); /* 1: the menu runs */
+int Reforged_Fe7PromoNoCancel(void *handler);
+#define RFO_PROMOTE_MENU(evproc, pid, jid, item) if (Reforged_Fe7EventPromoMenu((evproc), GetUnitStructFromEventParameter(pid), (jid), (item))) return EVC_ADVANCE_YIELD;
+#define RFO_PROMO_NO_CANCEL(handler) || Reforged_Fe7PromoNoCancel(handler)
 #define RANDO_SKIRMISH_LEADER_CLASS(chapterId, uDef, jid) Reforged_RandoSkirmishLeaderClass((chapterId), (const struct UnitDefinition *)(uDef), (jid))
 #define RANDO_STAT_GAIN(stat, gain) Reforged_RandoStatGain((stat), (gain))
 #define RANDO_HOOK_EVTBATTLE_ITEM(unit, item) (item) =Reforged_RandoEventBattleItem((unit), (item));
@@ -596,10 +645,21 @@ void Reforged_RandoUnitJoined(struct Unit *unit);
 #define RANDO_HOOK_MOVESCRIPT(x, y, output, outputStart) Reforged_RandoMoveGuard((x), (y), &(output), (outputStart)) &&
 #else
 #define RANDO_CHARA_PAL(orig, idx) (orig)
+#define RANDO_UNIQUE_PAL_FITS(pal, bid, jid)
+#define RANDO_CHARA_ENSURE(valid, pid0, jid, bid, unit)
 #define RANDO_HOOK_TEXT(buf, size)
+#define RANDO_MAP_SONG(song) (song)
+#define RANDO_MAP_SONG_PEEK(song) (song)
+#define RANDO_BATTLE_SONG(song) (song)
 #define RANDO_FACE(fid) (fid)
 #define RANDO_HOOK_DEATH(unit)
 #define RANDO_HOOK_JOINED(unit)
+#define RANDO_HOOK_PROMOTED(unit)
+#define RANDO_HOOK_PROMOTING(unit)
+#define RANDO_PROMO_CHOICE(unit, jid) (jid)
+#define RFO_PROMO_SLOT(unit, slot, jid) (jid)
+#define RFO_PROMO_THREE(proc, unit)
+#define RANDO_BANIM_FALLBACK(animDef, idx, out) (idx)
 #define RANDO_HOOK_UNITDEF(uDef, buf)
 #define RANDO_HOOK_UNITLOADED(unit, uDef)
 #define RANDO_HOOK_WILLREAD(block)
@@ -607,6 +667,8 @@ void Reforged_RandoUnitJoined(struct Unit *unit);
 #define RANDO_GIFT_ITEM(item, target) (item)
 #define RANDO_PROMOTE_JID(unit, jid) (jid)
 #define RANDO_PROMOTE_SKIP(jid)
+#define RFO_PROMOTE_MENU(evproc, pid, jid, item)
+#define RFO_PROMO_NO_CANCEL(handler)
 #define RANDO_SKIRMISH_LEADER_CLASS(chapterId, uDef, jid) (jid)
 #define RANDO_STAT_GAIN(stat, gain) (gain)
 #define RANDO_HOOK_EVTBATTLE_ITEM(unit, item)
@@ -623,6 +685,8 @@ void Reforged_RandoUnitJoined(struct Unit *unit);
  *                            base class's growths (pClassData is that class for the one call, then put back).
  *                            UnitAutolevelCore never reads its classId, so `call` running after the swap
  *                            (and reading the base class's .promotion there) changes nothing else.
+ *   RFO_JOIN_RANKS(unit)     src/bmunit.c LoadUnit and UnitChangeFaction: "Late joiners' ranks" (a floor, so a
+ *                            second call changes nothing)
  *   RFO_STAFF_DROP_ORDER     src/bmunit.c LoadUnit, after RANDO_HOOK_UNITLOADED: Chapter 15's dropping
  *                            Troubadour carries Mend first, so its status staff is the drop.
  */
@@ -632,9 +696,105 @@ void Reforged_FixStaffDropOrder(struct Unit *unit);
 #define RFO_PROMO_AUTOLEVEL(unit, call) do { const struct ClassData *rfoJob_ = (unit)->pClassData; \
     (unit)->pClassData = Reforged_FixPromoAutolevelClass(unit); call; (unit)->pClassData = rfoJob_; } while (0)
 #define RFO_STAFF_DROP_ORDER(unit) Reforged_FixStaffDropOrder(unit);
+void Reforged_FixJoinRanks(struct Unit *unit);
+#define RFO_JOIN_RANKS(unit) Reforged_FixJoinRanks(unit);
 #else
 #define RFO_PROMO_AUTOLEVEL(unit, call) call
 #define RFO_STAFF_DROP_ORDER(unit)
+#define RFO_JOIN_RANKS(unit)
+#endif
+
+/*
+ * Pair Up (port/reforged/reforged_pairup.c; a game fix, RFO_FIX_PAIR_UP). Same-line hooks: each
+ * expands to the original code (or nothing) on the GBA and in builds that are not played.
+ *   RFO_RESCUE_HALVES(unit)        src/bmunit.c GetUnitSkill/Speed, src/statscreen.c DisplayPage0 and
+ *                                  the blinking arrows: a pair's lead keeps its full Skill and Speed.
+ *   RFO_PAIR_BONUS(unit, stat)     src/bmunit.c, the six stat getters: + the partner's boost.
+ *   RFO_PAIR_ANY_RESCUE(a, t)      src/bmunit.c CanUnitRescue: no Aid >= Con between player units.
+ *   RFO_PAIR_RESET(unit)           src/bmunit.c UnitRescue: a new pair's gauge starts empty.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_RescueHalves(const struct Unit *unit);
+int Reforged_PairBonus(const struct Unit *unit, int stat);
+int Reforged_PairAnyRescue(const struct Unit *actor, const struct Unit *target);
+void Reforged_PairReset(struct Unit *unit);
+#define RFO_RESCUE_HALVES(unit) Reforged_RescueHalves(unit)
+#define RFO_IF_RESCUE_HALVES(unit) if (Reforged_RescueHalves(unit))
+/* src/statscreen.c DisplayPage0, the Cond line with no status: a pair's lead shows its Dual Guard
+   gauge ("Guard" and the percentage where a status shows its turns). */
+const char *Reforged_PairStatusName(const struct Unit *unit, const char *name);
+int Reforged_PairStatusX(const struct Unit *unit, int x);
+void Reforged_PairStatusGauge(const struct Unit *unit);
+#define RFO_PAIR_STATUS_NAME(unit, name) Reforged_PairStatusName((unit), (name))
+#define RFO_PAIR_STATUS_X(unit, x) Reforged_PairStatusX((unit), (x))
+#define RFO_PAIR_STATUS_GAUGE(unit) Reforged_PairStatusGauge(unit);
+#define RFO_PAIR_BONUS(unit, stat) + Reforged_PairBonus((unit), (stat))
+#define RFO_PAIR_ANY_RESCUE(actor, target) || Reforged_PairAnyRescue((actor), (target))
+#define RFO_PAIR_RESET(unit) Reforged_PairReset(unit);
+#else
+#define RFO_RESCUE_HALVES(unit) ((unit)->state & US_RESCUING)
+#define RFO_IF_RESCUE_HALVES(unit)
+#define RFO_PAIR_STATUS_NAME(unit, name) name
+#define RFO_PAIR_STATUS_X(unit, x) x
+#define RFO_PAIR_STATUS_GAUGE(unit)
+#define RFO_PAIR_BONUS(unit, stat)
+#define RFO_PAIR_ANY_RESCUE(actor, target)
+#define RFO_PAIR_RESET(unit)
+#endif
+
+/*
+ * Class skills, the unit side (port/reforged/reforged_skills_unit.c; game fixes RFO_FIX_SKILLS and
+ * RFO_FIX_ENEMY_SKILLS, port/reforged/reforged_skills.h). Same-line hooks: each expands to
+ * nothing on the GBA and in builds that are not played. The stat/HP/Mov ones add nothing on the
+ * battle's unit copies (InitBattleUnit copies the getters' totals into them).
+ *   RFO_SKILL_PASS(uid)            src/bmidoten.c GenerateMovementMap: Pass, no unit blocks the flood
+ *   RFO_SKILL_PASS_ADJ(unit)       src/bmunit.c CanUnitMove: an enemy square next to a Pass unit is open
+ *   RFO_SKILL_PASS_BUMP(unit, pit) src/bmidoten.c UnitApplyWorkingMovementScript: a Pass unit walks past a
+ *                                  hidden (fog) enemy; one on its last square still stops it, on a free one
+ *   RFO_SKILL_STAT(unit, stat)     src/bmunit.c, the six stat getters (Skl/Spd: both branches, a
+ *                                  rescuer's halved stat too): + 2 for Str/Mag/Skl/Spd/Lck/Def/Res +2.
+ *                                  stat: 0 Pow, 1 Skl, 2 Spd, 3 Lck, 4 Def, 5 Res (RFO_PAIR_BONUS's).
+ *   RFO_SKILL_HP(unit)             src/bmunit.c GetUnitMaxHp: + 5 for HP +5 (every HP clamp uses it).
+ *   RFO_SKILL_MOV(unit)            UNIT_MOV above and src/bmpatharrowdisp.c PathArrowDisp_Init (which
+ *                                  open-codes it): + 1 for Celerity, so range, path and AI agree.
+ *   RFO_SKILL_RENEWAL(unit)        src/bmtarget.c MakeTerrainHealTargetList, added to the terrain's
+ *                                  heal percentage in the test and the amount: + 20 for Renewal.
+ *   RFO_SKILL_LTS_HEAL()           src/bmusemind.c ExecStandardHeal: Live to Serve heals the healer.
+ *   RFO_SKILL_LTS_FORTIFY_BEGIN()  src/bmusemind.c ExecFortify, before and after the heal loop: the
+ *   RFO_SKILL_LTS_FORTIFY_END()    healer gets the total its targets gained.
+ */
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+int Reforged_SkillStat(const struct Unit *unit, int stat);
+int Reforged_SkillHp(const struct Unit *unit);
+int Reforged_SkillMov(const struct Unit *unit);
+int Reforged_SkillRenewal(const struct Unit *unit);
+void Reforged_SkillLtsHeal(void);
+void Reforged_SkillLtsFortifyBegin(void);
+void Reforged_SkillLtsFortifyEnd(void);
+int Reforged_SkillPass(int uid);
+int Reforged_SkillPassUnit(const struct Unit *unit);
+int Reforged_SkillPassBump(struct Unit *unit, unsigned char **pit);
+#define RFO_SKILL_PASS(uid) || Reforged_SkillPass(uid)
+#define RFO_SKILL_PASS_ADJ(unit) && !Reforged_SkillPassUnit(unit)
+#define RFO_SKILL_PASS_BUMP(unit, pit) && Reforged_SkillPassBump((unit), (pit))
+#define RFO_SKILL_STAT(unit, stat) + Reforged_SkillStat((unit), (stat))
+#define RFO_SKILL_HP(unit) + Reforged_SkillHp(unit)
+#define RFO_SKILL_MOV(unit) + Reforged_SkillMov(unit)
+#define RFO_SKILL_RENEWAL(unit) + Reforged_SkillRenewal(unit)
+#define RFO_SKILL_LTS_HEAL() Reforged_SkillLtsHeal();
+#define RFO_SKILL_LTS_FORTIFY_BEGIN() Reforged_SkillLtsFortifyBegin();
+#define RFO_SKILL_LTS_FORTIFY_END() Reforged_SkillLtsFortifyEnd();
+#else
+#define RFO_SKILL_PASS(uid)
+#define RFO_SKILL_PASS_ADJ(unit)
+#define RFO_SKILL_PASS_BUMP(unit, pit)
+#define RFO_SKILL_STAT(unit, stat)
+#define RFO_SKILL_HP(unit)
+#define RFO_SKILL_MOV(unit)
+#define RFO_SKILL_RENEWAL(unit)
+#define RFO_SKILL_LTS_HEAL()
+#define RFO_SKILL_LTS_FORTIFY_BEGIN()
+#define RFO_SKILL_LTS_FORTIFY_END()
 #endif
 
 #endif // GUARD_BM_UNIT_H
