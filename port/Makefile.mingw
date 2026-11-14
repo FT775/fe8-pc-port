@@ -160,7 +160,12 @@ WIN_VARS := FULL=1 'CC=$(CC)' BUILD=$(BUILD) PORT_SAFETY_CHECKS=$(WIN_SAFETY_CHE
 
 GAME_OBJS := $(shell $(PORT_MK) $(WIN_VARS) print-GAME_OBJS)
 PORT_OBJS := $(shell $(PORT_MK) $(WIN_VARS) print-PORT_OBJS)
-LINK_OBJS := $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs.o
+# Save states (port/Makefile STATE_LINK_OBJS): port/statemark/begin.o first and end.o last, before
+# WIN_LINK_EXTRA (the resource object and the SDL delay-load library, whose import thunks SDL3.dll fills
+# in at run time: never game state, so outside the bracket). port/tools/check_state_ranges.py checks the map.
+STATE_MARKS := $(BUILD)/port/statemark/begin.o $(BUILD)/port/statemark/end.o
+LINK_OBJS := $(BUILD)/port/statemark/begin.o $(GAME_OBJS) $(filter-out $(STATE_MARKS),$(PORT_OBJS)) \
+             $(BUILD)/romreloc.o $(BUILD)/autostubs.o $(BUILD)/port/statemark/end.o
 EXE       := $(BUILD)/$(EXE_STEM).exe
 BESIDE    := $(if $(filter 1,$(WIN_SDL)),$(BUILD)/SDL3.dll $(if $(SDL3_LICENSE),$(BUILD)/LICENSE-SDL3.txt))
 
@@ -232,6 +237,8 @@ $(EXE): $(LINK_OBJS) $(WIN_LINK_EXTRA) $(BUILD)/gba_mem.ld port/win32/pe_gba.py 
 	$(CC) $(WIN_LDFLAGS) -Wl,-T,$(BUILD)/gba_mem.ld -Wl,-Map,$(BUILD)/$(EXE_STEM).map \
 	    $(LINK_OBJS) $(WIN_LINK_EXTRA) -lm -o $(BUILD)/$(EXE_STEM)-linked.exe
 	$(RAM_CHECK) --binary $(BUILD)/$(EXE_STEM)-linked.exe --map $(BUILD)/$(EXE_STEM).map \
+	    || { rm -f $(BUILD)/$(EXE_STEM)-linked.exe $@; exit 1; }
+	$(PYTHON) port/tools/check_state_ranges.py --map $(BUILD)/$(EXE_STEM).map --build $(BUILD) --pe \
 	    || { rm -f $(BUILD)/$(EXE_STEM)-linked.exe $@; exit 1; }
 	$(PYTHON) port/win32/pe_gba.py strip $(BUILD)/$(EXE_STEM)-linked.exe $@
 	$(if $(SPLIT_DEBUG),$(SPLIT_CMD))

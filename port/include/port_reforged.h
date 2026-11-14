@@ -66,6 +66,7 @@ enum ReforgedOption {
     RFO_REWIND,             /* "Rewind" (reforged_rewind.c): hold the Rewind key to go back a turn */
     RFO_RUINS_SKIP,         /* "Ruin floor select" (reforged_ruins.c): entering the Lagdou Ruins picks the floor to start on */
     RFO_FAST_SUPPORTS,      /* "Faster supports" (reforged_supports.c): 0 off, 1 x2, 2 x3, and units nearby count */
+    RFO_SAVE_STATES,        /* "Save states" (reforged_savestate.c, v1.24.0): Ctrl+S saves the moment, Ctrl+L loads it */
     /* --- Game fixes submenu (port/reforged/reforged_gamefixes*.c): changes to the original's rules,
        each OFF (0) by default. Like the Randomizer's, these are the settings for the NEXT new game:
        a new game copies them into the run (Reforged_RunFix), each save records the run's values
@@ -184,6 +185,9 @@ void Reforged_LoadSettings(void);
 /* Writes every option to the settings file, atomically (a temporary file
    renamed over it, as the save does). 0 on success, -1 (logged) on failure. */
 int Reforged_SaveSettings(void);
+/* After a save state's load (reforged_savestate.c): writes the settings file when it differs from the
+   options and controls in use (a Reforged screen's "changed" flag went back with the load). */
+void Reforged_SettingsAfterStateLoad(void);
 
 /* "Keep game Options" (RFO_KEEP_GAME_OPTIONS): the game's 13 Options rows in the screen's
    order (uiconfig.c gGameOptionsUiOrder), each the screen's value (GetGameOption), kept as
@@ -256,6 +260,8 @@ int Reforged_FastForwardGain(const short *in, short *out, unsigned frames);
    stream then to be emptied (what it holds is the muted samples) and refilled with *silence frames
    of silence, so normal sound comes back at once at normal pitch (no glide down from N times). */
 int Reforged_FastForwardTakeFlush(unsigned *silence);
+/* After a save state's load: the next release's log line gives no frame count (the counter is the photo's). */
+void Reforged_FastForwardAfterStateLoad(void);
 /* reforged_enemyphase.c: the enemy phase's speed now (1, 2, 4; 8 while skipped with Start),
    once per frame step. */
 int Reforged_EnemyPhaseSpeed(void);
@@ -450,6 +456,11 @@ void Reforged_SaveMarkStateGet(void *out);
 void Reforged_SaveMarkStateSet(const void *in);
 void Reforged_SaveMarkStateSetSuspend(const void *in); /* only the two suspend blocks' entries */
 void Reforged_RewindForget(void);
+/* "Save states" (reforged_savestate.c, v1.24.0; port/include/port_state.h): the .sav the game writes
+   ("" when there is none), beside which the state file goes (reforged_savemark.c); the FE7 / FE6 ROM
+   loaded at boot (game 0 FE7, 1 FE6): 1 and its SHA-1 in hex, or 0 (reforged_fe7.c). */
+const char *Reforged_SaveMarkWritePath(void);
+int Reforged_ForeignRomSha1(int game, char out[41]);
 void Reforged_ApplyDisplay(int option);
 /* Option sets (reforged_settings.c; their screen: reforged_display_menu.c): the options
    (not the controls or the Display options) saved to / loaded from option-set-N.txt

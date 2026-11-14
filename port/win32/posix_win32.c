@@ -57,6 +57,7 @@
 #include "signal.h"
 #include "sys/mman.h"
 #include "ucontext.h"
+#include "port_state.h"
 
 /* ------------------------------------------------------------------------- */
 /* The exe image: the fault filter and the backtrace need its bounds.        */
@@ -484,9 +485,11 @@ int munmap(void *addr, size_t length)
  * linked) and fsync (absent) became silent gen_host_link stubs, and msvcrt's
  * rename would not replace an existing save file.
  */
+static LARGE_INTEGER freq; /* (file scope for save states: port_state.h, below) */
+static HANDLE timer;
+
 static int64_t NowNs(void)
 {
-    static LARGE_INTEGER freq;
     LARGE_INTEGER now;
 
     if (freq.QuadPart == 0)
@@ -515,7 +518,6 @@ int PortWin32ClockGetTime(int clock, struct timespec *ts)
    it) sleeps to about 1 ms before the deadline; the rest is a yielding wait. */
 int PortWin32ClockNanosleep(int clock, int flags, const struct timespec *request, struct timespec *remain)
 {
-    static HANDLE timer;
     int64_t deadline = (int64_t)request->tv_sec * 1000000000 + request->tv_nsec, left;
 
     (void)remain;
@@ -821,6 +823,14 @@ static int ExeDirA(char *dir, size_t dirSize)
     return 1;
 }
 
+/* Save states (port/reforged/reforged_savestate.c, port_hw.h): this exe's path, to take its build id. */
+int PortExePath(char *out, size_t outSize)
+{
+    DWORD n = GetModuleFileNameA(NULL, out, (DWORD)outSize);
+
+    return n != 0 && n < outSize;
+}
+
 /* In dir: 1: out is the original FE8 (USA) ROM (baserom.gba first, then any
    .gba file); else fallback gets the first file with only the FE8 (USA)
    header, when it is still empty; 0. */
@@ -970,3 +980,18 @@ int __wrap_main(int argc, char **argv)
 #endif
     return rc;
 }
+
+/* Save states (port/include/port_state.h): not game state: the exe image's bounds, the signal emulation,
+   the clock's frequency and the sleep timer (a handle of this process). */
+PORT_STATE_SESSION(sImageLo)
+PORT_STATE_SESSION(sImageHi)
+PORT_STATE_SESSION(sTextLo)
+PORT_STATE_SESSION(sTextHi)
+PORT_STATE_SESSION(sLinkStamp)
+PORT_STATE_SESSION(sExeName)
+PORT_STATE_SESSION(sActions)
+PORT_STATE_SESSION(sHandlersInstalled)
+PORT_STATE_SESSION(sInDispatch)
+PORT_STATE_SESSION(sFaultContext)
+PORT_STATE_SESSION(freq)
+PORT_STATE_SESSION(timer)

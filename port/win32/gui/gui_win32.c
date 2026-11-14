@@ -72,6 +72,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "port_state.h"
 
 #define LOG_NAME L"fe8pc-sdl"
 #define BOX_TITLE L"FE8 PC port"
@@ -631,3 +632,9 @@ void __wrap__exit(int code)
     Stopped(code);
     __real__exit(code);
 }
+
+/* Save states (port/include/port_state.h): not game state: the log file and the message boxes. */
+PORT_STATE_SESSION(sBoxes)
+PORT_STATE_SESSION(sBoxShown)
+PORT_STATE_SESSION(sLogPathW)
+PORT_STATE_SESSION(sLogPath)

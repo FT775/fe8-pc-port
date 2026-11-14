@@ -31,6 +31,23 @@
 #include "port_reforged.h"
 #endif
 
+/*
+ * Save states (Reforged Options, Helpers: "Save states", v1.24.0; port/reforged/reforged_savestate.c):
+ * the played builds only (PORT_RFO_STATE). With the row on, Ctrl+S asks for a save and Ctrl+L for a
+ * load (either Ctrl; on the press of S or L, or of Ctrl with S or L held). While a Ctrl is held, S and
+ * L reach no GBA button, fast-forward or rewind binding, and a key that made the combination stays
+ * away from them until it is let go. After a load (Platform_ReleaseKeys) every key and gamepad input
+ * held then is ignored until it is released. Platform_AudioJoin: the sound of the state just loaded
+ * follows without a click. FE8PC_TEST_HOLD_KEYS (a test switch, PB-9): keys held as if pressed on the
+ * keyboard, "STEP:KEY[+KEY...]:STEPS[,...]" (SDL key names; LCtrl / RCtrl for Left Ctrl / Right Ctrl),
+ * counted in frame steps since the start (Platform_PollEvents calls, which a load does not put back, so a
+ * key can be held across a load); before any load a step is the frame of that number.
+ */
+#include "port_state.h"
+#if PORT_STATE_ON
+#define PLATFORM_SAVE_STATES 1
+#endif
+
 #ifdef _WIN32
 /* port/win32/posix_win32.c */
 int PortWin32RoamingDir(char *out, size_t outSize);
@@ -514,6 +531,10 @@ static int PadDown(const struct Pad *p, int code)
     }
 }
 
+#ifdef PLATFORM_SAVE_STATES
+static int sPadWait; /* save states: after a load, the gamepads count again once nothing on them is held */
+#endif
+
 /* An action's keys or buttons (on any pad) held now. */
 static int ActionHeld(const bool *state, int action)
 {
@@ -523,6 +544,10 @@ static int ActionHeld(const bool *state, int action)
     for (k = 0; k < 2; k++)
         if (sBound.key[action][k] != SDL_SCANCODE_UNKNOWN && state[sBound.key[action][k]])
             return 1;
+#ifdef PLATFORM_SAVE_STATES
+    if (sPadWait)
+        return 0;
+#endif
     for (i = 0; i < MAX_PADS; i++)
         if (sPads[i].pad != NULL)
             for (k = 0; k < 2; k++)
@@ -749,6 +774,163 @@ int Platform_PollEvents(void)
     return sQuit;
 }
 
+#ifdef PLATFORM_SAVE_STATES
+/* Save states: the keyboard as the game sees it this frame step (the real one, the test switch's keys,
+   minus what is held back), and the keys held back until they are let go. */
+static bool sStateKeys[SDL_SCANCODE_COUNT];
+static bool sKeyHeldBack[SDL_SCANCODE_COUNT];
+static int sComboWas[2]; /* Ctrl+S, Ctrl+L held at the last frame step */
+#define HOLD_MAX 16
+static struct HoldKey
+{
+    uint32_t from, to;
+    SDL_Scancode sc[4];
+    int n, done;
+} sHold[HOLD_MAX];
+static int sHoldCount = -1;
+
+static SDL_Scancode HoldKeyCode(const char *name)
+{
+    if (SDL_strcasecmp(name, "LCtrl") == 0)
+        return SDL_SCANCODE_LCTRL;
+    if (SDL_strcasecmp(name, "RCtrl") == 0)
+        return SDL_SCANCODE_RCTRL;
+    return SDL_GetScancodeFromName(name);
+}
+
+/* FE8PC_TEST_HOLD_KEYS=FRAME:KEY[+KEY...]:FRAMES[,...] (a test switch): read once. */
+static void ReadHoldKeys(void)
+{
+    const char *s = getenv("FE8PC_TEST_HOLD_KEYS");
+
+    sHoldCount = 0;
+    while (s != NULL && *s != '\0' && sHoldCount < HOLD_MAX)
+    {
+        struct HoldKey *h = &sHold[sHoldCount];
+        char *end;
+        unsigned long from = SDL_strtoul(s, &end, 10), len;
+
+        if (end == s || *end != ':')
+            break;
+        s = end + 1;
+        h->n = 0;
+        while (*s != '\0' && *s != ':')
+        {
+            char name[32];
+            size_t k = 0;
+
+            while (*s != '\0' && *s != ':' && *s != '+' && k + 1 < sizeof(name))
+                name[k++] = *s++;
+            name[k] = '\0';
+            if (*s == '+')
+                s++;
+            if (h->n < 4 && HoldKeyCode(name) != SDL_SCANCODE_UNKNOWN)
+                h->sc[h->n++] = HoldKeyCode(name);
+            else
+                Log("[sdl] FE8PC_TEST_HOLD_KEYS: key '%s' unknown (or more than 4)\n", name);
+        }
+        if (*s != ':')
+            break;
+        len = SDL_strtoul(s + 1, &end, 10);
+        s = *end == ',' ? end + 1 : end;
+        h->from = (uint32_t)from;
+        h->to = (uint32_t)(from + (len ? len : 1));
+        h->done = 0;
+        if (h->n > 0)
+            sHoldCount++;
+    }
+    if (sHoldCount > 0)
+        Log("[sdl] FE8PC_TEST_HOLD_KEYS: %d key windows\n", sHoldCount);
+}
+
+/* Any gamepad input a binding or the left stick reads. */
+static int AnyPadInput(void)
+{
+    unsigned i;
+    int a, k;
+
+    for (i = 0; i < MAX_PADS; i++)
+    {
+        if (sPads[i].pad == NULL)
+            continue;
+        for (a = 0; a < CTL_COUNT; a++)
+            for (k = 0; k < 2; k++)
+                if (PadDown(&sPads[i], sBound.pad[a][k]))
+                    return 1;
+        if (SDL_abs(SDL_GetGamepadAxis(sPads[i].pad, SDL_GAMEPAD_AXIS_LEFTX)) > STICK_THRESHOLD ||
+            SDL_abs(SDL_GetGamepadAxis(sPads[i].pad, SDL_GAMEPAD_AXIS_LEFTY)) > STICK_THRESHOLD)
+            return 1;
+    }
+    return 0;
+}
+
+/* Once per frame step, before the bindings read the keyboard: Ctrl+S / Ctrl+L (the row on), and the
+   keyboard the bindings then see. */
+static const bool *StateKeys(const bool *real)
+{
+    static const SDL_Scancode comboKey[2] = { SDL_SCANCODE_S, SDL_SCANCODE_L };
+    int i, ctrl;
+
+    if (sHoldCount < 0)
+        ReadHoldKeys();
+    SDL_memcpy(sStateKeys, real, sizeof(sStateKeys));
+    for (i = 0; i < sHoldCount; i++)
+    {
+        struct HoldKey *h = &sHold[i];
+        int k;
+
+        if (h->done)
+            continue;
+        if (sPolls >= h->to)
+        {
+            h->done = 1;
+            continue;
+        }
+        if (sPolls >= h->from)
+            for (k = 0; k < h->n; k++)
+                sStateKeys[h->sc[k]] = true;
+    }
+    if (sPadWait && !AnyPadInput())
+        sPadWait = 0;
+    for (i = 0; i < SDL_SCANCODE_COUNT; i++)
+        if (sKeyHeldBack[i] && !sStateKeys[i])
+            sKeyHeldBack[i] = false;
+    ctrl = sStateKeys[SDL_SCANCODE_LCTRL] || sStateKeys[SDL_SCANCODE_RCTRL];
+    if (PortState_KeysOn())
+    {
+        for (i = 0; i < 2; i++)
+        {
+            int combo = ctrl && sStateKeys[comboKey[i]];
+
+            if (combo && !sComboWas[i])
+                PortState_Request(i + 1); /* 1 save, 2 load */
+            if (combo)
+                sKeyHeldBack[comboKey[i]] = true;
+            sComboWas[i] = combo;
+        }
+        if (ctrl)
+            sStateKeys[SDL_SCANCODE_S] = sStateKeys[SDL_SCANCODE_L] = false;
+    }
+    else
+        sComboWas[0] = sComboWas[1] = 0;
+    for (i = 0; i < SDL_SCANCODE_COUNT; i++)
+        if (sKeyHeldBack[i])
+            sStateKeys[i] = false;
+    return sStateKeys;
+}
+
+/* After a load: what is held now reaches the game only once let go and pressed again. */
+void Platform_ReleaseKeys(void)
+{
+    int i;
+
+    for (i = 0; i < SDL_SCANCODE_COUNT; i++)
+        if (sStateKeys[i] || SDL_GetKeyboardState(NULL)[i])
+            sKeyHeldBack[i] = true;
+    sPadWait = 1;
+}
+#endif
+
 uint16_t Platform_ReadKeys(void)
 {
     const bool *state = SDL_GetKeyboardState(NULL);
@@ -757,6 +939,9 @@ uint16_t Platform_ReadKeys(void)
     int a;
 
     ResolveBindings();
+#ifdef PLATFORM_SAVE_STATES
+    state = StateKeys(state);
+#endif
     for (a = 0; a < CTL_GBA_KEYS; a++)
         if (ActionHeld(state, a))
             keys |= (uint16_t)(PLATFORM_KEY_A << a);
@@ -773,6 +958,10 @@ uint16_t Platform_ReadKeys(void)
 
         if (pad == NULL)
             continue;
+#ifdef PLATFORM_SAVE_STATES
+        if (sPadWait)
+            continue;
+#endif
         x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
         y = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
         if (x > STICK_THRESHOLD)
@@ -884,6 +1073,36 @@ int Platform_OpenAudio(uint32_t rateHz, uint32_t channels)
     return 1;
 }
 
+#ifdef PLATFORM_SAVE_STATES
+/* Save states: the stream's last stereo frame put in, and the frames still to fade in after a load. A
+   load changes the sound at once (the state's own music and effects go on from where they were then),
+   so the stream gets a 64-frame ramp from its last frame down to silence (about 5 ms), then the loaded
+   state's sound fades in over 256 frames (about 19 ms): no step in the wave, so no click. */
+#define AUDIO_JOIN_RAMP 64
+#define AUDIO_FADE_IN 256
+static int16_t sLastLr[2];
+static int sFadeIn;
+
+void Platform_AudioJoin(void)
+{
+    int16_t ramp[2 * AUDIO_JOIN_RAMP];
+    int i;
+
+    if (sAudio == NULL)
+        return;
+    for (i = 0; i < AUDIO_JOIN_RAMP; i++)
+    {
+        int g = AUDIO_JOIN_RAMP - 1 - i;
+
+        ramp[2 * i] = (int16_t)(sLastLr[0] * g / AUDIO_JOIN_RAMP);
+        ramp[2 * i + 1] = (int16_t)(sLastLr[1] * g / AUDIO_JOIN_RAMP);
+    }
+    SDL_PutAudioStreamData(sAudio, ramp, (int)sizeof(ramp));
+    sLastLr[0] = sLastLr[1] = 0;
+    sFadeIn = AUDIO_FADE_IN;
+}
+#endif
+
 void Platform_QueueAudio(const int16_t *lr, uint32_t frames)
 {
 #ifdef PLATFORM_FAST_FORWARD
@@ -898,6 +1117,31 @@ void Platform_QueueAudio(const int16_t *lr, uint32_t frames)
     }
     if (sAudio != NULL && Reforged_FastForwardGain(lr, buf, frames))
         lr = buf;
+#endif
+#if defined(PLATFORM_SAVE_STATES) && defined(PLATFORM_FAST_FORWARD)
+    /* save states (Platform_AudioJoin): the first frames after a load fade in */
+    if (sAudio != NULL && frames > 0)
+    {
+        if (sFadeIn > 0)
+        {
+            uint32_t i;
+
+            if (lr != buf)
+            {
+                SDL_memcpy(buf, lr, frames * 2 * sizeof(int16_t));
+                lr = buf;
+            }
+            for (i = 0; i < frames && sFadeIn > 0; i++, sFadeIn--)
+            {
+                int g = AUDIO_FADE_IN - sFadeIn;
+
+                buf[2 * i] = (int16_t)(buf[2 * i] * g / AUDIO_FADE_IN);
+                buf[2 * i + 1] = (int16_t)(buf[2 * i + 1] * g / AUDIO_FADE_IN);
+            }
+        }
+        sLastLr[0] = lr[2 * (frames - 1)];
+        sLastLr[1] = lr[2 * (frames - 1) + 1];
+    }
 #endif
     if (sAudio != NULL && !SDL_PutAudioStreamData(sAudio, lr, (int)(frames * 2 * sizeof(int16_t))))
     {
@@ -1011,12 +1255,11 @@ int Platform_SaveFileAtomic(const char *path, const char *tmp, const void *data,
  * (port/save/savefile_pc.c). FE8PC_USER_DIR, when set, names it instead (a test switch).
  */
 static char sUserDir[4096];
+static int sAsked;
+static const char *sDir;
 
 const char *Platform_UserDir(void)
 {
-    static int sAsked;
-    static const char *sDir;
-
     if (sAsked)
         return sDir;
     sAsked = 1;
@@ -1117,3 +1360,36 @@ int Platform_MakeUserDir(void)
 #endif
     return 0;
 }
+
+#ifdef PLATFORM_SAVE_STATES
+/* Save states (port/include/port_state.h): nothing of this file is game state. A load keeps this
+   process's window, renderer, audio stream, gamepads, bindings, title note, per-user folder and input. */
+PORT_STATE_SESSION(sWindow)
+PORT_STATE_SESSION(sRenderer)
+PORT_STATE_SESSION(sTexture)
+PORT_STATE_SESSION(sAudio)
+PORT_STATE_SESSION(sQuit)
+PORT_STATE_SESSION(sFullscreen)
+PORT_STATE_SESSION(sPads)
+PORT_STATE_SESSION(sBound)
+PORT_STATE_SESSION(sTitleNote)
+PORT_STATE_SESSION(sPadWait)
+PORT_STATE_SESSION(sCapPrevKeys)
+PORT_STATE_SESSION(sCapPrevPad)
+PORT_STATE_SESSION(sCapturing)
+PORT_STATE_SESSION(sFullscreenPadHeld)
+PORT_STATE_SESSION(sPolls)
+PORT_STATE_SESSION(sCapturePolled)
+PORT_STATE_SESSION(sFullscreenGeneration)
+PORT_STATE_SESSION(sPendingScale)
+PORT_STATE_SESSION(sStateKeys)
+PORT_STATE_SESSION(sKeyHeldBack)
+PORT_STATE_SESSION(sComboWas)
+PORT_STATE_SESSION(sHold)
+PORT_STATE_SESSION(sHoldCount)
+PORT_STATE_SESSION(sLastLr)
+PORT_STATE_SESSION(sFadeIn)
+PORT_STATE_SESSION(sUserDir)
+PORT_STATE_SESSION(sAsked)
+PORT_STATE_SESSION(sDir)
+#endif

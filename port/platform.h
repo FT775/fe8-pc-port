@@ -78,6 +78,13 @@ uint32_t Platform_AudioQueued(void);                        /* frames waiting */
 void Platform_SetAudioRatio(double ratio);
 void Platform_PauseAudio(int pause);
 
+/* Save states (played builds; port/reforged/reforged_savestate.c), right after a state is loaded:
+   Platform_ReleaseKeys: every key and gamepad input held now is ignored until it is let go, so nothing
+   held carries over into the loaded state. Platform_AudioJoin: the sound already queued ends in a short
+   ramp to silence and the loaded state's sound fades in (no click). The headless backend has neither. */
+void Platform_ReleaseKeys(void);
+void Platform_AudioJoin(void);
+
 /* Monotonic clock in nanoseconds (any epoch), and a sleep until a time on it. */
 uint64_t Platform_NowNs(void);
 void Platform_SleepUntilNs(uint64_t deadlineNs);

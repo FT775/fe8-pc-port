@@ -129,6 +129,15 @@ void Platform_PauseAudio(int pause)
     (void)pause;
 }
 
+/* Save states: no live keys and no device headless. */
+void Platform_ReleaseKeys(void)
+{
+}
+
+void Platform_AudioJoin(void)
+{
+}
+
 uint64_t Platform_NowNs(void)
 {
     struct timespec ts;

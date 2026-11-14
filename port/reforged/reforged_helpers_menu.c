@@ -19,6 +19,8 @@
  *     node held by monsters instead of stopping there for a skirmish
  *     (worldmap_main.c WorldMap_MuWalkLoop). Ending the move on such a node, A on the
  *     lord's own node, or monsters walking onto it still start the fight.
+ * Rewind, Ruin floor select and Faster supports have their own files; so has "Save states"
+ * (RFO_SAVE_STATES, reforged_savestate.c, v1.24.0: Ctrl+S / Ctrl+L, one slot; marks a save as Rewind does).
  */
 
 #if PORT_PLAYED_BUILD
@@ -50,6 +52,7 @@ static const struct RandoRow sHelperRows[] = {
     { RR_CHOICE, RFO_FAST_SUPPORTS, 3, 0, 0, 0, "Faster supports", "Support points x2 or x3, and units\nwithin 3 squares count, not only next to.",
       { "Off", "x2", "x3" }, { 0, 1, 2 }, NULL, NULL, 0 },
     RR_SWITCH(RFO_REWIND, "Rewind", "Hold Backspace on the map: back to the\nstart of the turn (again: one more)."),
+    RR_SWITCH(RFO_SAVE_STATES, "Save states", "Ctrl+S saves this moment, Ctrl+L loads\nit again. One slot; not with Nuzlocke."),
     RR_SWITCH(RFO_KEEP_GAME_OPTIONS, "Keep game Options", "New games start with the Options you\nlast set in a game (speeds, animation)."),
 };
 

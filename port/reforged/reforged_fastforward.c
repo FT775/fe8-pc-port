@@ -84,6 +84,7 @@
 
 #include "port_hw.h"
 #include "port_reforged.h"
+#include "port_state.h"
 #include "../platform.h"
 
 #define FF_RAMP_FRAMES 160u   /* gain ramp: 160 GBA sound frames (12 ms) of real time */
@@ -121,6 +122,7 @@ static double sRatioBase = 1.0;         /* audio_out's own ratio (drift control)
 static int sGain = FF_GAIN_ONE;         /* Q15 gain on the pushed samples */
 static uint32_t sPressFrame, sLogged;
 static uint64_t sPressReal;
+static int sLoadSincePress; /* a save state was loaded since the press: the frame counter went back or on */
 static int sHoldCount = -1;
 static uint32_t sHoldFrom[FF_HOLD_MAX], sHoldTo[FF_HOLD_MAX];
 static FILE *sCheck;
@@ -381,11 +383,15 @@ int Reforged_FastForwardFrame(int keyHeld, unsigned queued, uint64_t realNs)
         sShown = 0;
         sPressFrame = gPortFrameCount;
         sPressReal = realNs;
+        sLoadSincePress = 0;
         if (sLogged++ < FF_LOG_MAX)
             PortLog("[ff] fast-forward %dx from frame %u (sound %s; queue %u, glide %.1f ms)\n", want,
                 gPortFrameCount, SoundHeard(want) ? "sped up" : Reforged_GetOption(RFO_FF_SOUND) ? "muted at 8x" : "muted",
                 queued, sGlideNs / 1e6);
     }
+    else if (sLogged <= FF_LOG_MAX && sLoadSincePress)
+        PortLog("[ff] normal speed from frame %u: a state was loaded since the press, so no frame count (queue %u, "
+                "glide %.1f ms)\n", gPortFrameCount, queued, sGlideNs / 1e6);
     else if (sLogged <= FF_LOG_MAX)
     {
         double ms = (double)(realNs - sPressReal) / 1e6;
@@ -395,6 +401,13 @@ int Reforged_FastForwardFrame(int keyHeld, unsigned queued, uint64_t realNs)
             gPortFrameCount, frames, ms, ms > 0 ? frames * 16.742706 / ms : 0.0, queued, sGlideNs / 1e6);
     }
     return 1;
+}
+
+/* Save states (reforged_savestate.c StLoad): the frame counter is the photo's now, the press frame this
+   session's, so the release line has no frame count to give. */
+void Reforged_FastForwardAfterStateLoad(void)
+{
+    sLoadSincePress = 1;
 }
 
 int Reforged_FastForwardTakeFlush(unsigned *silence)
@@ -464,5 +477,36 @@ int Reforged_FastForwardGain(const short *in, short *out, unsigned frames)
     }
     return 1;
 }
+
+/* Save states (port/include/port_state.h): not game state: fast-forward: real time, the audio stream's rate and
+   gain, the key, its test switches. */
+PORT_STATE_SESSION(sFlush)
+PORT_STATE_SESSION(sPressHoldUntil)
+PORT_STATE_SESSION(sSpeed)
+PORT_STATE_SESSION(sMul)
+PORT_STATE_SESSION(sGlideNs)
+PORT_STATE_SESSION(sGlideAt)
+PORT_STATE_SESSION(sShown)
+PORT_STATE_SESSION(sBaseReal)
+PORT_STATE_SESSION(sBaseVirt)
+PORT_STATE_SESSION(sRatioBase)
+PORT_STATE_SESSION(sGain)
+PORT_STATE_SESSION(sPressFrame)
+PORT_STATE_SESSION(sLogged)
+PORT_STATE_SESSION(sPressReal)
+PORT_STATE_SESSION(sLoadSincePress)
+PORT_STATE_SESSION(sHoldCount)
+PORT_STATE_SESSION(sHoldFrom)
+PORT_STATE_SESSION(sHoldTo)
+PORT_STATE_SESSION(sCheck)
+PORT_STATE_SESSION(sCheckOn)
+PORT_STATE_SESSION(sSndHash)
+PORT_STATE_SESSION(sShortCount)
+PORT_STATE_SESSION(sShortBytes)
+PORT_STATE_SESSION(sShortBig)
+PORT_STATE_SESSION(sShortMax)
+PORT_STATE_SESSION(sShortLogged)
+PORT_STATE_SESSION(sCheckReal)
+PORT_STATE_SESSION(sCheckQueued)
 
 #endif /* PORT_PLAYED_BUILD */

@@ -8,6 +8,7 @@
 #include "port_hw.h"
 #include "audio_pc.h"
 #include "psg.h"
+#include "port_state.h"
 
 /*
  * The FIFO model (port-plan/audio-design.md 1.2-1.4; DIVERGENCES H-6, which
@@ -280,3 +281,11 @@ void PortAudio_Report(void)
         fclose(sRecord);
     sDumpLr = sDumpFifo = sRecord = NULL;
 }
+
+/* Save states (port/include/port_state.h): not game state: the dump and record files (test switches); the FIFO's
+   own state is the game's. */
+PORT_STATE_SESSION(sDumpLr)
+PORT_STATE_SESSION(sDumpFifo)
+PORT_STATE_SESSION(sRecord)
+PORT_STATE_SESSION(sRecordFrom)
+PORT_STATE_SESSION(sSongLog)

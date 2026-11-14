@@ -116,6 +116,7 @@
 
 #include "port_hw.h"
 #include "port_reforged.h"
+#include "port_state.h"
 #include "reforged_rando.h"
 #include "reforged_skills.h"
 #include "../platform.h"
@@ -1024,6 +1025,24 @@ void Reforged_SaveMarkSetWritePath(const char *savPath)
     if (savPath != NULL)
         snprintf(sSavPath, sizeof(sSavPath), "%s", savPath);
 }
+
+/* "Save states" (reforged_savestate.c): the state file goes beside the .sav, as this file's does. */
+const char *Reforged_SaveMarkWritePath(void)
+{
+    return sSavPath;
+}
+
+/* Save states (port/include/port_state.h): the mark mirrors the .sav, which a load never touches, so it
+   is not game state: each block's entry, the Nuzlocke graveyards (written at once, through any reset),
+   the paths and the text the file holds. What the game being played carries (its run's fixes and
+   randomizer, Casual mode's fallen, the kept skills, the ruins) lives in the files that own it and is
+   restored with the state. */
+PORT_STATE_SESSION(sBlocks)
+PORT_STATE_SESSION(sGraves)
+PORT_STATE_SESSION(sGraveCount)
+PORT_STATE_SESSION(sSavPath)
+PORT_STATE_SESSION(sLastText)
+PORT_STATE_SESSION(sScratch)
 
 void Reforged_SaveMarkWritten(const char *savPath)
 {

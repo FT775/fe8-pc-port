@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "port_hw.h"
+#include "port_state.h"
 #include "bg_line.h"
 #include "obj_line.h"
 #include "render.h"
@@ -135,9 +136,30 @@ void RenderEndFrame(void)
     if (sDumpOn && gPortFrameCount >= sDumpFirst && gPortFrameCount <= sDumpLast)
     {
         char path[512];
+        const char *dir = sDumpDir;
 
-        snprintf(path, sizeof(path), "%s/frame%06u.ppm", sDumpDir, gPortFrameCount);
+#if PORT_STATE_ON
+        /* save states' test switches: after a load, frames go to FE8PC_TEST_STATE_DUMP_DIR (a load puts
+           the frame counter back, so they would replace the ones before); the toast only with
+           FE8PC_TEST_STATE_TOAST_DUMP=1 (the hash above is taken first either way) */
+        if (PortState_DumpDir() != NULL)
+            dir = PortState_DumpDir();
+        PortState_ToastDump555(&gRenderFrame555[0][0]);
+#endif
+        snprintf(path, sizeof(path), "%s/frame%06u.ppm", dir, gPortFrameCount);
         if (RenderDumpPpm555(path, &gRenderFrame555[0][0]) != 0)
             PortLog("[render] cannot write %s\n", path);
     }
 }
+
+/* Save states (port/include/port_state.h): the frame buffers are drawn whole every frame, and the rest
+   is the renderer's settings (FE8PC_RENDER, FE8PC_DUMP_FRAMES / _DIR); none of it is game state. */
+PORT_STATE_SESSION(gRenderFrame555)
+PORT_STATE_SESSION(gRenderFrameRgba)
+PORT_STATE_SESSION(gRenderFrameHash)
+PORT_STATE_SESSION(gRenderFramesDone)
+PORT_STATE_SESSION(gRenderEnabled)
+PORT_STATE_SESSION(sDumpOn)
+PORT_STATE_SESSION(sDumpFirst)
+PORT_STATE_SESSION(sDumpLast)
+PORT_STATE_SESSION(sDumpDir)

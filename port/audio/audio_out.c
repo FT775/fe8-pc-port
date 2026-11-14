@@ -6,6 +6,7 @@
 #include "port_hw.h"
 #include "audio_pc.h"
 #include "../platform.h"
+#include "port_state.h"
 
 /*
  * Audio output queue (port-plan/audio-design.md section 3; decision D4: the
@@ -136,3 +137,19 @@ void PortAudioOut_Report(void)
         PortLog("[audio] queue after each push: %u to %u frames (target %u); ratio %.4f now, %.4f to %.4f, "
                 "set %u times\n", sQMin, sQMax, Q_TARGET, sRatio, sRatioMin, sRatioMax, sRatioSets);
 }
+
+/* Save states (port/include/port_state.h): not game state: the audio device queue (this process's device). */
+PORT_STATE_SESSION(sRatioMax)
+PORT_STATE_SESSION(sRatioMin)
+PORT_STATE_SESSION(sQMin)
+PORT_STATE_SESSION(sRatio)
+PORT_STATE_SESSION(sPushes)
+PORT_STATE_SESSION(sQMax)
+PORT_STATE_SESSION(sRatioSets)
+PORT_STATE_SESSION(sUnderruns)
+PORT_STATE_SESSION(sDropped)
+PORT_STATE_SESSION(sQueued)
+PORT_STATE_SESSION(sQs)
+PORT_STATE_SESSION(sDropping)
+PORT_STATE_SESSION(sPlaying)
+PORT_STATE_SESSION(sDevice)

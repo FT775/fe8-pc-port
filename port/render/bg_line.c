@@ -7,6 +7,7 @@
 
 #include "port_hw.h"
 #include "bg_line.h"
+#include "port_state.h"
 
 /*
  * Software renderer, background half: the per-line entry point, the register
@@ -463,3 +464,7 @@ void RenderBgLine(int line, const struct RenderLineRegs *regs, struct RenderBgLi
 
     RenderAffineStep(regs);
 }
+
+/* Save states (port/include/port_state.h): not game state: FE8PC_RENDER_LAYERS and FE8PC_MGBA_BGCLIP (settings). */
+PORT_STATE_SESSION(sLayerMask)
+PORT_STATE_SESSION(gRenderMgbaBgClip)

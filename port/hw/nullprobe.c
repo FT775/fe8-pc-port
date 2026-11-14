@@ -81,6 +81,7 @@
 #include <sys/mman.h>
 #include <ucontext.h>
 #include <unistd.h>
+#include "port_state.h"
 
 #define NP_LOW_END      0x02000000u /* EWRAM starts here */
 #define NP_NEG_START    0xFFFF0000u
@@ -976,6 +977,19 @@ int PortNullProbe_Init(void)
             sOutPath ? sOutPath : "(stdout summary only)");
     return 1;
 }
+
+/* Save states (port/include/port_state.h): not game state: FE8PC_NULLPROBE (a diagnostic): its settings, sites
+   and output. */
+PORT_STATE_SESSION(sPend)
+PORT_STATE_SESSION(sKeys)
+PORT_STATE_SESSION(sRoute)
+PORT_STATE_SESSION(sOutPath)
+PORT_STATE_SESSION(sShadow)
+PORT_STATE_SESSION(sOn)
+PORT_STATE_SESSION(sHits)
+PORT_STATE_SESSION(sSitesLost)
+PORT_STATE_SESSION(sSiteCount)
+PORT_STATE_SESSION(sSites)
 
 #else /* not Linux i386: the probe is not available */
 

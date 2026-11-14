@@ -8,6 +8,7 @@
 #include <strings.h>
 
 #include "port_controls.h"
+#include "port_state.h"
 
 /* The keys and buttons the port has always used. */
 static const char *const sDefaults[CTL_COUNT][CTL_SLOTS] = {
@@ -201,3 +202,8 @@ const char *Controls_ActionLabel(int action)
 {
     return action >= 0 && action < CTL_COUNT ? sLabels[action] : "";
 }
+
+/* Save states (port/include/port_state.h): not game state: the key bindings (the settings file). */
+PORT_STATE_SESSION(sGeneration)
+PORT_STATE_SESSION(sInit)
+PORT_STATE_SESSION(sBind)

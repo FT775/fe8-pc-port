@@ -187,10 +187,22 @@ endif
 # rule below), and empty in every test build (PORT_PLAYED_BUILD).
 PORT_SRCS := $(wildcard port/hw/*.c port/bios/*.c port/asm/*.c port/save/*.c port/audio/*.c) \
              $(filter-out port/render/test_%.c,$(wildcard port/render/*.c)) \
-             $(wildcard port/reforged/*.c)
+             $(wildcard port/reforged/*.c) port/statemark/begin.c port/statemark/end.c
 
 GAME_OBJS := $(GAME_SRCS:%.c=$(BUILD)/%.o)
 PORT_OBJS := $(PORT_SRCS:%.c=$(BUILD)/%.o)
+
+# Save states (v1.24.0; port/include/port_state.h): port/statemark/begin.o is the first object on the
+# link line and end.o the last, so their markers bracket the host .data and .bss of the game's and the
+# port's objects (the C runtime's and the libraries' lie outside; port/tools/check_state_ranges.py
+# checks it in the link map). STATE_LINK_OBJS: the objects in that order, without the closing marker,
+# which goes after autostubs.o. Port objects get PORT_RFO_STATE=1 in the played builds (their
+# PORT_STATE_SESSION lines); every test build compiles them without it (empty markers).
+STATE_MARK_BEGIN = $(BUILD)/port/statemark/begin.o
+STATE_MARK_END   = $(BUILD)/port/statemark/end.o
+STATE_LINK_OBJS  = $(STATE_MARK_BEGIN) $(GAME_OBJS) $(filter-out $(STATE_MARK_BEGIN) $(STATE_MARK_END),$(PORT_OBJS))
+RFO_STATE_DEFS   = $(if $(filter -DFE8PC_DEBUG=1 -DFE8PC_TESTBUILD=1,$(HOST_CPPFLAGS) $(PORT_CFLAGS)),,-DPORT_RFO_STATE=1)
+STATE_CHECK      = $(PYTHON) port/tools/check_state_ranges.py
 
 # hardware.c:818 has asm("swi 3") inside EnterSleepMode (debug menu only).
 # The flags this file adds for single objects are named variables, because the
@@ -314,9 +326,9 @@ endif
 # .c did not change kept their old, shorter tables in an incremental build, so
 # leaving them read past those tables and called what was there (a crash on B).
 $(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/port_reforged.h \
-    port/include/port_controls.h $(wildcard port/reforged/*.h) port/platform.h $(COMPILE_STAMP)
+    port/include/port_controls.h port/include/port_state.h $(wildcard port/reforged/*.h) port/platform.h $(COMPILE_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_CFLAGS) $(HOST_CPPFLAGS) -c $< -o $@ $(WARNLOG)
+	$(CC) $(HOST_CFLAGS) $(HOST_CPPFLAGS) $(RFO_STATE_DEFS) -c $< -o $@ $(WARNLOG)
 
 # Reforged Options' save mark (port-rfo-casual): a played build's savefile_pc.o
 # gets PORT_RFO_SAVEMARK=1, its two calls into port/reforged/reforged_savemark.c
@@ -327,7 +339,7 @@ $(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/p
 RFO_SAVEMARK_DEFS = $(if $(filter -DFE8PC_DEBUG=1 -DFE8PC_TESTBUILD=1,$(HOST_CPPFLAGS) $(PORT_CFLAGS)),,-DPORT_RFO_SAVEMARK=1)
 $(BUILD)/port/save/savefile_pc.o: port/save/savefile_pc.c port/include/port_reforged.h $(COMPILE_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(PORT_CFLAGS) $(RFO_SAVEMARK_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
+	$(CC) $(PORT_CFLAGS) $(RFO_SAVEMARK_DEFS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
 
 # Reforged Options' fast-forward (port-rfo-ff): the window builds'
 # port/sdl3/platform_sdl3.o gets PORT_RFO_FASTFORWARD=1, its fast-forward
@@ -341,7 +353,7 @@ $(BUILD)/port/save/savefile_pc.o: port/save/savefile_pc.c port/include/port_refo
 RFO_FF_DEFS = $(if $(filter -DFE8PC_DEBUG=1 -DFE8PC_TESTBUILD=1,$(HOST_CPPFLAGS) $(PORT_CFLAGS)),,-DPORT_RFO_FASTFORWARD=1)
 $(BUILD)/port/sdl3/platform_sdl3.o: port/sdl3/platform_sdl3.c port/include/port_reforged.h $(COMPILE_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(PORT_CFLAGS) $(RFO_FF_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
+	$(CC) $(PORT_CFLAGS) $(RFO_FF_DEFS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
 
 # Reforged Options' map HP bars & warnings (port-rfo-hpbars): the renderer's
 # port/render/obj_line.o gets PORT_RFO_MAPOVERLAY=1, the pass that draws
@@ -353,11 +365,11 @@ $(BUILD)/port/sdl3/platform_sdl3.o: port/sdl3/platform_sdl3.c port/include/port_
 RFO_OVL_DEFS = $(if $(filter -DFE8PC_DEBUG=1 -DFE8PC_TESTBUILD=1,$(HOST_CPPFLAGS) $(PORT_CFLAGS)),,-DPORT_RFO_MAPOVERLAY=1)
 $(BUILD)/port/render/obj_line.o: port/render/obj_line.c port/include/port_reforged.h $(COMPILE_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(PORT_CFLAGS) $(RFO_OVL_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
+	$(CC) $(PORT_CFLAGS) $(RFO_OVL_DEFS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
 
 $(BUILD)/port/%.o: port/%.c $(COMPILE_STAMP)
 	@mkdir -p $(@D)
-	$(CC) $(PORT_CFLAGS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
+	$(CC) $(PORT_CFLAGS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
 
 # Renderer unit tests (host only, no game code or ROM): make -f port/Makefile render-tests
 RENDER_TEST_CFLAGS := $(HOST_ARCH) -std=gnu11 -O1 -g -Wall -Werror -fno-pie -no-pie -funsigned-char \
@@ -434,8 +446,9 @@ RAM_CHECK = $(PYTHON) port/tools/check_ram_addrs.py --gba-map $(GBA_MAP) --gba-e
 $(BUILD)/fe8pc: $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs.o $(BUILD)/gba_mem.ld \
                 port/tools/check_ram_addrs.py
 	$(CC) $(HOST_LDFLAGS) -Wl,-T,$(BUILD)/gba_mem.ld -Wl,-Map,$(BUILD)/fe8pc.map \
-	    $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs.o -lm -o $@
+	    $(STATE_LINK_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs.o $(STATE_MARK_END) -lm -o $@
 	$(RAM_CHECK) --binary $@ --map $(BUILD)/fe8pc.map || { rm -f $@; exit 1; }
+	$(STATE_CHECK) --map $(BUILD)/fe8pc.map --build $(BUILD) || { rm -f $@; exit 1; }
 
 .PHONY: ram-check
 ram-check: $(BUILD)/fe8pc

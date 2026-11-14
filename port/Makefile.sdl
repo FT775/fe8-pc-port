@@ -75,8 +75,11 @@ $(BUILD)/autostubs-sdl.o: $(BUILD)/autostubs-sdl.c $(COMPILE_STAMP)
 	$(CC) $(PORT_CFLAGS) -w -c $< -o $@ $(WARNLOG)
 
 # RAM_CHECK (port/Makefile, B-12): every RAM symbol at its GBA address, or the link fails.
+# STATE_LINK_OBJS, STATE_MARK_END and STATE_CHECK (port/Makefile): the save states' marker objects first
+# and last on the link line, checked in the map.
 $(SDL_EXE): $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs-sdl.o $(BUILD)/gba_mem.ld \
             port/tools/check_ram_addrs.py
 	$(CC) $(HOST_LDFLAGS) -Wl,-T,$(BUILD)/gba_mem.ld -Wl,-Map,$(BUILD)/fe8pc-sdl.map \
-	    $(GAME_OBJS) $(PORT_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs-sdl.o $(SDL_LIBS) -lm -o $@
+	    $(STATE_LINK_OBJS) $(BUILD)/romreloc.o $(BUILD)/autostubs-sdl.o $(STATE_MARK_END) $(SDL_LIBS) -lm -o $@
 	$(RAM_CHECK) --binary $@ --map $(BUILD)/fe8pc-sdl.map || { rm -f $@; exit 1; }
+	$(STATE_CHECK) --map $(BUILD)/fe8pc-sdl.map --build $(BUILD) || { rm -f $@; exit 1; }

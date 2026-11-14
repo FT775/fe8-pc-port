@@ -129,6 +129,7 @@ static const struct RandoRow sFieldRows[] = {
     { RR_CHOICE, RFO_FAST_SUPPORTS, 3, 0, 0, 0, "Faster supports", "Support points x2 or x3, and units\nwithin 3 squares count, not only next to.",
       { "Off", "x2", "x3" }, { 0, 1, 2 }, NULL, NULL, 0 },
     RR_SWITCH(RFO_REWIND, "Rewind", "Hold Backspace on the map: back to the\nstart of the turn (again: one more)."),
+    RR_SWITCH(RFO_SAVE_STATES, "Save states", "Ctrl+S saves this moment, Ctrl+L loads\nit again. One slot; not with Nuzlocke."),
     RR_SWITCH(RFO_KEEP_GAME_OPTIONS, "Keep game Options",
         "New games start with this game's Options\n(speeds, animation), and later changes."),
     RR_HEAD("-- This run --"),

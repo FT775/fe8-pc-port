@@ -92,7 +92,8 @@
  *   count at 0x6A0000, the animation table's literal at 0x4B0F8) and the SHA-1 of the four tables read here
  *   (classes, battle animations, moving sprites, map sprite palettes); its size may be 8 to 32 MiB (the
  *   owner's translated copy is 16 MiB + 316 bytes, and its tail is used data). The whole file is read into
- *   heap memory (the 32 MiB host ROM window is full: FE8 at 0x08000000, FE7 at 0x09000000; 0x0A000000 and up
+ *   host memory (sFe6Rom, a static buffer since v1.24.0's save states; heap memory before; the 32 MiB host
+ *   ROM window is full: FE8 at 0x08000000, FE7 at 0x09000000; 0x0A000000 and up
  *   is a ROM mirror to nullprobe.c), and FE6's pointers are rebased onto that copy (GamePtr). Audit of the
  *   window assumption: the FE7 code read FE7 data only through Fe7Ptr and plain host pointers (romreloc, the
  *   guarded loads of gbabus.c and nullprobe.c never see it: they know the FE8 ROM only); the battle animation
@@ -192,6 +193,7 @@
 
 #include "port_hw.h"
 #include "port_reforged.h"
+#include "port_state.h"
 
 extern UnitIconWait unit_icon_wait_table[]; /* src/unit_icon_wait_data.c */
 extern UnitIconMove unit_icon_move_table[]; /* src/unit_icon_move_data.c (mu.h's gMuInfoTable) */
@@ -271,7 +273,7 @@ typedef char Fe6First[FE6_JID_THIEF_F == FE6_FIRST_JID ? 1 : -1];
 typedef char PoolBelow100[POOL_FIRST + POOL_SIZE <= 0xFF ? 1 : -1]; /* a list index (slot + 1) fits a byte */
 
 /* The two source games. base: the host address of the game's 0x08000000 (FE7: the window at 0x09000000;
-   FE6: its heap copy), size: the bytes there; then where its tables are and its class row layout. */
+   FE6: its copy, sFe6Rom), size: the bytes there; then where its tables are and its class row layout. */
 enum { GAME_FE7, GAME_FE6, GAME_COUNT };
 struct Game {
     const char *tag;
@@ -433,7 +435,7 @@ static const struct Fe7Spec {
 /* ------------------------------------------------------------------ the ROM window */
 
 /* Game g's pointer p as a host pointer into its loaded copy (FE7: the window, FE7's 0x08xxxxxx + 0x01000000;
-   FE6: its heap copy), or NULL when p is not into that game's ROM. */
+   FE6: its copy, sFe6Rom), or NULL when p is not into that game's ROM. */
 static const u8 *GamePtr(const struct Game *g, u32 p)
 {
     return g->base != NULL && p - 0x08000000u < g->size ? g->base + (p - 0x08000000u) : NULL;
@@ -519,7 +521,18 @@ static const struct { const char *what; u32 start, end; const char *sha1; } sFe6
     { "map sprite palettes", 0x100968, 0x100A08, "d1e76801fe33e50e8900d27bb0dfb01a1fee9458" },
 };
 
-/* Reads path into heap memory; 1 when it is an FE6 ROM this loader knows (header, structure probes, table
+/* v1.24.0: the FE6 copy is a static buffer (it was heap memory). The game keeps pointers into it (battle
+   animation frames, the sheets a frame names, map sprites) in GBA RAM and host tables, and a save state
+   (reforged_savestate.c) holds those: in this exe the buffer has the same address in every run, so a state
+   saved with the FE6 ROM loaded still points into the copy after a restart. Not part of a state (it is
+   the ROM: a state names the FE6 ROM's SHA-1 and loads only with the same one). In ".bss" by name: this
+   file's -fdata-sections would give it a ".data$sFe6Rom" section on Windows, which MinGW stores in the
+   exe (32 MiB of zeros); .bss costs memory only where a ROM is read into it. */
+#define REFORGED_BSS __attribute__((section(".bss"), aligned(16)))
+static u8 sFe6Rom[FE6_MAX_SIZE] REFORGED_BSS;
+static char sFe6Sha1[41]; /* the whole file's, taken the first time it is asked for */
+
+/* Reads path into the static copy; 1 when it is an FE6 ROM this loader knows (header, structure probes, table
    hashes), else 0 with why set (nothing kept). The whole file is kept: a translation's data may lie past
    16 MiB. */
 static int Fe6TryLoad(const char *path, char *why, size_t whySize)
@@ -561,7 +574,7 @@ static int Fe6TryLoad(const char *path, char *why, size_t whySize)
         fclose(fp);
         return 0;
     }
-    buf = malloc((size_t)size);
+    buf = sFe6Rom; /* v1.24.0: a static copy, at the same address in every run (save states) */
     if (buf == NULL)
     {
         snprintf(why, whySize, "out of memory for its %ld bytes", size);
@@ -573,7 +586,7 @@ static int Fe6TryLoad(const char *path, char *why, size_t whySize)
     if (r != (size_t)size)
     {
         snprintf(why, whySize, "the FE6 header, but only %u of its %ld bytes could be read", (unsigned)r, size);
-        free(buf);
+        buf = NULL; /* (the static copy: nothing to free) */
         return 0;
     }
     /* structure: the class table's literal (the table minus one row), the animation count, the animation
@@ -582,7 +595,7 @@ static int Fe6TryLoad(const char *path, char *why, size_t whySize)
     {
         snprintf(why, whySize, "the FE6 header, but its tables are not where FE6 (Japan) has them (0x%08X 0x%X 0x%08X)",
             (unsigned)Rd32(buf + 0x176E0), (unsigned)Rd32(buf + 0x6A0000), (unsigned)Rd32(buf + 0x4B0F8));
-        free(buf);
+        buf = NULL; /* (the static copy: nothing to free) */
         return 0;
     }
     for (n = 0; n < sizeof(sFe6Regions) / sizeof(sFe6Regions[0]); n++)
@@ -592,7 +605,7 @@ static int Fe6TryLoad(const char *path, char *why, size_t whySize)
         {
             snprintf(why, whySize, "the FE6 header, but its %s differ (SHA-1 %s): another version or a changed ROM",
                 sFe6Regions[n].what, sha1);
-            free(buf);
+            buf = NULL; /* (the static copy: nothing to free) */
             return 0;
         }
     }
@@ -944,6 +957,27 @@ static u8 *PackLiteral(const u8 *raw, u32 n)
     return lz;
 }
 
+/* v1.24.0: the pool's packed scripts and fixed mode tables (they were heap memory): banim_data points into
+   it, and a battle animation's state in GBA RAM too, so a save state (reforged_savestate.c) needs them at
+   the same address in every run of this exe; part of a state (a slot converted later is in the state
+   that follows). The most the pool can hold: each slot's script at most SCRIPT_MAX, packed (header, a flag
+   byte per 8, 8 bytes of slack), and a mode table. */
+#define KEEP_SLOT (4 + SCRIPT_MAX + SCRIPT_MAX / 8 + 8 + 8 + 12 * 4)
+static u8 sKeep[POOL_SIZE * KEEP_SLOT] REFORGED_BSS;
+static u32 sKeepUsed;
+
+static void *KeepAlloc(u32 size)
+{
+    void *p;
+
+    size = (size + 8 + 3) & ~3u; /* 8 bytes of slack (the decompressor's), 4-byte aligned */
+    if (size > sizeof(sKeep) - sKeepUsed)
+        return NULL;
+    p = sKeep + sKeepUsed;
+    sKeepUsed += size;
+    return p;
+}
+
 /* Game g's animation id as an FE8 animation list index (banim_data slot + 1), converting it the first time
    (the pool is shared by both games: FE7's classes are built first, so their slots are v1.18.0's); 0 when it
    cannot be used (why set). fixModes (v1.20.0, the Myrrh look's godd_hk1): modes that start past the script
@@ -999,6 +1033,30 @@ static int ForeignBanim(struct Game *g, int id, int fixModes, char *why, size_t 
         free(modes);
         snprintf(why, whySize, "out of memory");
         return 0;
+    }
+    {
+        /* v1.24.0: what the game keeps a pointer to (the packed script, the fixed modes) goes into sKeep, at
+           the same address in every run of this exe (save states; the heap's addresses differ) */
+        u32 lzSize = 4 + n + (n + 7) / 8;
+        u8 *keptLz = KeepAlloc(lzSize);
+        int *keptModes = modes != NULL ? KeepAlloc(12 * sizeof(int)) : NULL;
+
+        if (keptLz == NULL || (modes != NULL && keptModes == NULL))
+        {
+            free(lz);
+            free(modes);
+            snprintf(why, whySize, "animation 0x%X: no room left for its script", id);
+            return 0;
+        }
+        memcpy(keptLz, lz, lzSize);
+        free(lz);
+        lz = keptLz;
+        if (modes != NULL)
+        {
+            memcpy(keptModes, modes, 12 * sizeof(int));
+            free(modes);
+            modes = keptModes;
+        }
     }
     k = sPoolUsed++;
     sPoolId[k] = (u16)id;
@@ -1456,7 +1514,7 @@ static void Fe7AfterRomLoad(const char *romPath)
                     "banims 0x%02X / 0x%02X / 0x%02X (FE8's 0x%02X / 0x%02X / 0x%02X)\n", sMyrrhBanim[0], sMyrrhBanim[1],
                 sMyrrhBanim[2], BANIM_INDEX_MYRRH_INTRO - 1, BANIM_INDEX_MYRRH_MAIN - 1, BANIM_INDEX_MYRRH_EXIT - 1);
         PortLog("[fe6] FE6 ROM '%s' loaded (%u bytes, header FIREEMBLEM6/AFEJ, structure and table checks OK; read into "
-                "the heap at %p): %d of %d FE6 classes (0x89-0x8F: %s, %s, %s, %s, %s, %s, %s), %d of %d animation slots in "
+                "its copy at %p):%d of %d FE6 classes (0x89-0x8F: %s, %s, %s, %s, %s, %s, %s), %d of %d animation slots in "
                 "use, %d C3D (to C2B), %d C43 and %d C47 (to C00) commands rewritten\n",
             sGames[GAME_FE6].path, (unsigned)sGames[GAME_FE6].size, (const void *)sGames[GAME_FE6].base, built[GAME_FE6],
             FOREIGN_COUNT - FE7_CLASS_COUNT, sName[9], sName[10], sName[11], sName[12], sName[13], sName[14], sName[15],
@@ -2118,5 +2176,35 @@ void Reforged_TestUnitClass(void)
         item > 0 && item <= 0xCD ? ", item given" : "", unit->ranks[0], unit->ranks[1], unit->ranks[2], unit->ranks[3],
         unit->ranks[4], unit->ranks[5], unit->ranks[6], unit->ranks[7]);
 }
+
+/* "Save states" (reforged_savestate.c): which foreign ROM was read at boot (game 0 FE7, 1 FE6), with its
+   SHA-1: FE7's is the one TryLoad accepts; FE6's is taken from the copy the first time (a translation has
+   its own). A state loads only with the same ROMs. */
+int Reforged_ForeignRomSha1(int game, char out[41])
+{
+    out[0] = '\0';
+    if (game == GAME_FE7 && sGames[GAME_FE7].loaded)
+    {
+        memcpy(out, FE7_SHA1, 41);
+        return 1;
+    }
+    if (game == GAME_FE6 && sGames[GAME_FE6].loaded && sGames[GAME_FE6].base != NULL)
+    {
+        if (sFe6Sha1[0] == '\0')
+            PortSha1Hex(sGames[GAME_FE6].base, sGames[GAME_FE6].size, sFe6Sha1);
+        memcpy(out, sFe6Sha1, 41);
+        return 1;
+    }
+    return 0;
+}
+
+/* Save states (port/include/port_state.h): the loader's own record (the ROMs found, their paths) and the
+   FE6 copy are not game state: a state names the ROMs, and loads only where they are the same. What was
+   built from them (the class rows, names, animation pool and sKeep, the Myrrh look's slots) is the same in
+   every run with those ROMs, and is restored with the rest. */
+PORT_STATE_SESSION(sGames)
+PORT_STATE_SESSION(sFe6Rom)
+PORT_STATE_SESSION(sFe6Sha1)
+
 
 #endif /* PORT_PLAYED_BUILD */

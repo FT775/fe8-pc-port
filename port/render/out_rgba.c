@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "obj_line.h"
+#include "port_state.h"
 
 /*
  * Software renderer, output step (port-plan/render-design-obj.md section 9).
@@ -89,3 +90,7 @@ int RenderDumpPpm555(const char *path, const uint16_t *frame555)
     }
     return fclose(f) == 0 ? 0 : -1;
 }
+
+/* Save states (port/include/port_state.h): not game state: a colour table built once. */
+PORT_STATE_SESSION(sLutReady)
+PORT_STATE_SESSION(sRgbaLut)

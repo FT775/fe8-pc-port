@@ -7,9 +7,13 @@
 #include "hardware.h"
 
 #include "port_hw.h"
+#include "port_state.h"
 #include "render.h"
 #include "../platform.h"
 #include "../audio/audio_pc.h"
+#if PORT_STATE_ON
+#include "bm.h" /* gBmSt.main_loop_ended: save states' program point */
+#endif
 
 /*
  * Frame step (PLAN.md section 3.4). VBlankIntrWait advances the simulated
@@ -527,6 +531,9 @@ void PortRunFrame(void)
 #endif
 
     /* The frame drawn on lines 0-159 is finished: show it (headless: no-op). */
+#if PORT_STATE_ON
+    PortState_ToastRgba(gRenderFrameRgba); /* save states' "State saved" etc., on the window only */
+#endif
     Platform_PresentFrame(gRenderFrameRgba, RENDER_FRAME_WIDTH, RENDER_FRAME_HEIGHT);
 
     gPortFrameCount++;
@@ -550,6 +557,12 @@ void VBlankIntrWait(void)
 {
     int spins = 0;
 
+#if PORT_STATE_ON
+    /* Save states (port/include/port_state.h): the end of a main callback, which returns right after
+       this call, is the one place a state is taken or put back. */
+    if (gBmSt.main_loop_ended)
+        PortState_Point();
+#endif
     INTR_CHECK &= (u16)~INTR_FLAG_VBLANK;
     do
     {
@@ -612,3 +625,22 @@ int PortTest_KonamiStep(u16 newKeys)
     return 1;
 }
 #endif
+
+/* Save states (port/include/port_state.h): the frame counter and the IRQ depth are the game's (a load
+   puts the photo's frame number back, so a key file goes on from there); these are not: the frame
+   limit, the test switches' parsed keys and the key file, and the key log. */
+PORT_STATE_SESSION(gPortFrameLimit)
+PORT_STATE_SESSION(sPressMask)
+PORT_STATE_SESSION(sPressPeriod)
+PORT_STATE_SESSION(sPressStart)
+PORT_STATE_SESSION(sPressHold)
+PORT_STATE_SESSION(sPressParsed)
+PORT_STATE_SESSION(sScriptFrame)
+PORT_STATE_SESSION(sScriptMask)
+PORT_STATE_SESSION(sScriptCount)
+PORT_STATE_SESSION(sKeyFile)
+PORT_STATE_SESSION(sKeyFileTicks)
+PORT_STATE_SESSION(sKeyFileRead)
+PORT_STATE_SESSION(sAutoHeld)
+PORT_STATE_SESSION(sKeyLog)
+PORT_STATE_SESSION(sLoggedHeld)

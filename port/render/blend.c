@@ -1,4 +1,5 @@
 #include "obj_line.h"
+#include "port_state.h"
 
 /*
  * Software renderer, layer search and blend unit
@@ -266,3 +267,6 @@ void RenderComposeLine(int line, const struct RenderFxRegs *fx, const struct Ren
         dst[x] = out & 0x7FFF;
     }
 }
+
+/* Save states (port/include/port_state.h): not game state: the blend math setting (FE8PC_RENDER_BLEND). */
+PORT_STATE_SESSION(gRenderBlendMode)

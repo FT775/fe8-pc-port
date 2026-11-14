@@ -128,6 +128,7 @@
 #undef SoundMainBTM
 
 #include "m4a_1_pc.h"
+#include "port_state.h"
 
 _Static_assert(sizeof(void *) == 4, "m4a_1_pc.c needs ILP32 (D1-a)");
 _Static_assert(sizeof(struct SoundChannel) == 0x40, "SoundChannel layout");
@@ -1518,3 +1519,7 @@ void SoundMain(void)
 
     soundInfo->ident = ID_NUMBER;
 }
+
+/* Save states (port/include/port_state.h): not game state: the exe image bounds, found at boot. */
+PORT_STATE_SESSION(gPortM4aHostImageHi)
+PORT_STATE_SESSION(gPortM4aHostImageLo)

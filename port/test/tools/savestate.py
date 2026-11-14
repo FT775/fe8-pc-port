@@ -168,7 +168,7 @@ PORT_TABLE = {
     # in every test build. Host timing, the key's state and the test hooks' settings: the new process's own.
     "port/reforged/reforged_fastforward.o": {n: SESSION for n in (
         "sSpeed", "sShown", "sBaseReal", "sBaseVirt", "sRatioBase", "sGain", "sPressFrame", "sLogged",
-        "sPressReal", "sHoldCount", "sHoldFrom", "sHoldTo", "sCheck", "sCheckOn", "sSndHash", "sMul",
+        "sPressReal", "sLoadSincePress", "sHoldCount", "sHoldFrom", "sHoldTo", "sCheck", "sCheckOn", "sSndHash", "sMul",
         "sGlideAt", "sShortCount", "sShortBytes", "sShortLogged", "sCheckReal", "sShortBig",
         "sShortMax", "sGlideNs", "sCheckQueued")},
     "port/render/bg_affine.o": {"sAffineRawY": STATE, "sAffineRawX": STATE, "sAffineRefY": STATE,
@@ -192,7 +192,7 @@ PORT_TABLE = {
     # descriptor of this process and must never come from a photo; GCC drops
     # it from the Gate 0 build, where it is only written), the log-once flags.
     "port/save/savefile_pc.o": {n: SESSION for n in (
-        "sFailRun", "sFailures", "sWrites", "sRetryFrame", "sFileImage", "sTitleFailed", "sFailNote",
+        "sFailRun", "sFailures", "sWrites", "sRetryLeft", "sFileImage", "sTitleFailed", "sFailNote",
         "sTitleNote", "sTmpPath", "sWritePath", "sPath", "sOn", "sLockPath", "sCheckBuf", "sStamp", "sLock",
         "sLockErr", "sNoSaving", "sTouchedLogged", "sGoneLogged", "sLockFd", "sLoggedErr", "other")},
     # Reforged Options, casual mode and saves marked (port-rfo-casual; played builds only: the objects

@@ -59,6 +59,7 @@ The `.debug` file that the build also produces is for developers. You do not nee
   - another program changed the save while the game runs (that copy stops saving).
 - `--save PATH` uses another file. `--no-save` keeps no save.
 - **Reforged Options side file:** a file such as `FE8.sav.reforged` can appear beside the save. See "The side file next to your save" below.
+- **Save state:** with Save states on (Helpers), Ctrl+S writes `FE8.sav.state` beside the save. It is never part of the `.sav`. See "Save states" below.
 
 ## Reforged Options
 
@@ -484,7 +485,7 @@ Choose **Display >** in Reforged Options. A change shows at once and is written 
 
 ### Helpers
 
-Choose **Helpers >** in Reforged Options (the in-chapter Reforged screen lists the same rows). Enemy phase, True hit, Arena odds, Skill banners, Myrrh look and Keep game Options only change how things look or how fast they go, so they never mark a save. Convoy anywhere, Pass skirmishes, Ruin floor select and Faster supports change play: a save made with one on is marked, as with Casual mode. Every row acts at once.
+Choose **Helpers >** in Reforged Options (the in-chapter Reforged screen lists the same rows). Enemy phase, True hit, Arena odds, Skill banners, Myrrh look and Keep game Options only change how things look or how fast they go, so they never mark a save. Convoy anywhere, Pass skirmishes, Ruin floor select, Faster supports, Rewind and Save states change play: a save made with one on is marked, as with Casual mode. Every row acts at once.
 
 | Row | Choices (the default in bold) | What it does |
 |---|---|---|
@@ -495,10 +496,24 @@ Choose **Helpers >** in Reforged Options (the in-chapter Reforged screen lists t
 | Myrrh look | On / **Off** | Needs your own FE6 ROM (see FE6 classes below; without it the row is grey and Myrrh keeps FE8's look). Myrrh's dragon form in battle animations becomes FE6's Divine Dragon: its own transformation, the white dragon and its way back, in place of FE8's. Everything else about her fights stays the same (hits, damage, the order of the strikes); only Myrrh changes, and map animations are unchanged. Display only. |
 | Convoy anywhere | On / **Off** | Every unit's menu has Supply wherever the chapter has the convoy, not only the lord's and the units next to the lord. |
 | Rewind | On / **Off** | **Hold Backspace** (the Rewind key, under Controls) for a moment on the map, with no unit picked and no menu open, to go back to the start of your turn: everything done since is undone. Hold it again right away to go one more turn back (up to 8 turns in a chapter). It uses the save the game makes at the start of every turn. Not with Nuzlocke (its deaths stay), and not in the tutorial chapters. |
+| Save states | On / **Off** | **Ctrl+S** saves this moment, **Ctrl+L** goes back to it, anywhere: on the map, in a battle animation, in a menu, during an event, on the world map, in the preparations. One slot: a new Ctrl+S replaces it. A small note in the top-left corner says "State saved", "State loaded", "No state" or "Refused (other version)". Not with Nuzlocke (its deaths stay). See "Save states" below. |
 | Pass skirmishes | On / **Off** | On the world map, your army walks through a place held by monsters instead of stopping for a skirmish. Ending your move there, pressing A on your own place while monsters are on it, or monsters walking onto you still starts the fight. |
 | Ruin floor select | On / **Off** | Entering the Lagdou Ruins asks which floor to start on: Left/Right picks from floor 1 up to one past the best floor you have ever cleared (at most 10), A goes in, B goes back to the map. Floor 1 is the original's full run (its records and Lyon's three full runs count as before). A run started higher up only adds its kills to the Ruins' total: the best records and clear counts stay. Glen (floor 5) and Valter (floor 7) join when their floor is played after you beat the game, so pick it then. The best floor is kept with each save (in the `.reforged` file beside it), even while the option is off; that alone does not mark the save. |
 | Faster supports | **Off** / x2 / x3 | Support points come 2 or 3 times as fast, and two units who can support each other gain them when they end a turn within 3 squares, not only side by side (from turn 2, as in the original). Pairs (Pair Up) still gain twice as fast as two units side by side. Support conversations still need the two next to each other. |
 | Keep game Options | On / **Off** | Every New Game starts with the game's own Options (Animation, Game Speed, Text Speed and the other rows of the in-game Options screen) as you last set them, instead of the original's defaults. They are remembered each time you leave the Options screen in a game, and at once when you switch this on in a chapter's Reforged screen (where it is also listed). Saves you already have keep their own Options. |
+
+### Save states
+
+Turn on **Save states** under Helpers. Then:
+
+- **Ctrl+S** (either Ctrl) saves the game as it is at that moment: everything on screen, every unit, the music, a battle animation half way through. **Ctrl+L** puts that moment back. It works everywhere, also in a battle animation, a menu, an event, the world map and the preparations.
+- **One slot.** Each Ctrl+S replaces the last one. The state is a file beside your save: for `FE8.sav` it is `FE8.sav.state` (in the per-user folder when the game keeps no save file). It is about 1 MB.
+- **Your save is never touched.** Loading a state does not change your `.sav`, your save slots or your suspended chapter: the game's own saves stay exactly as they were, until the game itself saves again. Saving in the game, suspending and resuming all work as usual after a load. (So after a load, "Resume chapter" at the title still resumes the last suspend the game wrote, not the state.)
+- **Keys:** while Ctrl is held, the S and L keys do not press any button you bound to them (Controls), and after a load every key you are still holding is ignored until you let go of it, so nothing carries over. That includes Space: holding it does not stop Ctrl+S or Ctrl+L from working, but fast-forward stops at a load and starts again when you let go of Space and press it again. On a gamepad, nothing counts after a load until nothing on any gamepad is held.
+- **What comes back with a state:** the whole game, including the run's randomizer and Game fixes, Casual mode's retreated units, Rewind's kept turns (so Rewind afterwards goes back through the turns of the game you loaded) and the sound. **What does not:** your options and controls (as they are now), the window, and your save file. An option or key you changed in a Reforged screen is written to the settings file when you load, so it is kept; if the loaded moment has a Reforged screen open, that screen shows the values it had when you saved the state until you leave it and open it again.
+- **The marked save:** like Rewind, a save the game writes while the row is on is marked (in the `.reforged` file), whether or not you used a state.
+- **Not with Nuzlocke:** in a Nuzlocke run Ctrl+S and Ctrl+L do nothing but show "Not in Nuzlocke".
+- **States are for this version only.** A state loads only in the same game version (the same exe) with the same ROMs: a state saved before an update, or with another set of FE7/FE6 ROMs (or without one you had then), is refused with "Refused (other version)" or "Refused (other ROMs)" (a damaged or cut-short file with "Refused (damaged)"), and nothing changes. Updating the game does not touch your saves; it only makes old states unusable.
 
 ### Option sets
 

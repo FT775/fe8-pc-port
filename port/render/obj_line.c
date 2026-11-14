@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "port_state.h"
 #include <string.h>
 
 #include "port_hw.h"
@@ -553,3 +554,6 @@ void RenderObjFxLine(int line, const struct RenderFxRegs *fx, const struct Rende
     ScreenOvlLine(line, dst);
 #endif
 }
+
+/* Save states (port/include/port_state.h): not game state: the tripwire log hook. */
+PORT_STATE_SESSION(gRenderFxTripHook)

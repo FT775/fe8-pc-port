@@ -18,6 +18,7 @@
 
 #include "port_hw.h"
 #include "../platform.h"
+#include "port_state.h"
 #ifdef PORT_RFO_SAVEMARK
 /* Reforged Options' save mark, the sidecar <sav>.reforged (played builds only:
    port/Makefile gives this object PORT_RFO_SAVEMARK=1 there, never in a test
@@ -210,7 +211,9 @@ static int sTouchedLogged, sGoneLogged;
 #ifndef _WIN32
 static int sLockFd = -1;           /* open for the whole run: closing it would let the lock go */
 #endif
-static uint32_t sRetryFrame;
+/* frame steps left before a failed write is tried again: counted down here, not compared with
+   gPortFrameCount, which a save state's load puts back (v1.24.0) */
+static uint32_t sRetryLeft;
 static unsigned sWrites, sFailures, sFailRun;
 
 static uint8_t *Sram(void)
@@ -945,7 +948,7 @@ static void Write(void)
         }
         if (!sTitleFailed)
             SetFailNote(readOnly ? "read-only file" : "cannot write", sWritePath);
-        sRetryFrame = gPortFrameCount + RETRY_FRAMES;
+        sRetryLeft = RETRY_FRAMES;
         return;
     }
     memcpy(sFileImage, sram, SAVE_SIZE);
@@ -968,14 +971,20 @@ static void Write(void)
         ShowTitle();
     }
     sFailRun = 0;
-    sRetryFrame = 0;
+    sRetryLeft = 0;
 }
 
 void PortSave_Frame(void)
 {
-    if (!sOn || sNoSaving != SAVING || memcmp(Sram(), sFileImage, SAVE_SIZE) == 0)
+    if (!sOn)
         return;
-    if (sRetryFrame != 0 && (int32_t)(gPortFrameCount - sRetryFrame) < 0)
+    /* once a frame step, whatever SRAM holds: a load of a save state to an earlier frame does not
+       hold the retry back (the frame counter goes back with it, this count does not) */
+    if (sRetryLeft != 0)
+        sRetryLeft--;
+    if (sNoSaving != SAVING || memcmp(Sram(), sFileImage, SAVE_SIZE) == 0)
+        return;
+    if (sRetryLeft != 0)
         return;
     Write();
 }
@@ -996,3 +1005,27 @@ void PortSave_Flush(void)
                                           : "",
             behind ? "; THE LAST SRAM CHANGES ARE NOT IN THE FILE" : "");
 }
+
+/* Save states (port/include/port_state.h): not game state: the save file: its paths, lock, what the file holds
+   and the write state. A load never touches SRAM or the .sav. */
+PORT_STATE_SESSION(sSaveBase)
+PORT_STATE_SESSION(sFailRun)
+PORT_STATE_SESSION(sFailures)
+PORT_STATE_SESSION(sWrites)
+PORT_STATE_SESSION(sRetryLeft)
+PORT_STATE_SESSION(sGoneLogged)
+PORT_STATE_SESSION(sTouchedLogged)
+PORT_STATE_SESSION(sNoSaving)
+PORT_STATE_SESSION(sLockErr)
+PORT_STATE_SESSION(sLock)
+PORT_STATE_SESSION(sStamp)
+PORT_STATE_SESSION(sCheckBuf)
+PORT_STATE_SESSION(sFileImage)
+PORT_STATE_SESSION(sTitleFailed)
+PORT_STATE_SESSION(sFailNote)
+PORT_STATE_SESSION(sTitleNote)
+PORT_STATE_SESSION(sLockPath)
+PORT_STATE_SESSION(sTmpPath)
+PORT_STATE_SESSION(sWritePath)
+PORT_STATE_SESSION(sPath)
+PORT_STATE_SESSION(sOn)

@@ -19,6 +19,7 @@
 #include "render.h"
 #include "../platform.h"
 #include "../audio/audio_pc.h"
+#include "port_state.h"
 
 /*
  * Host entry point. Replaces src/crt0.s: reserve the GBA memory map, load the
@@ -112,6 +113,20 @@ void __wrap_OnMain(void)
     }
     __real_OnMain();
 }
+
+#ifndef _WIN32
+/* Save states (port/reforged/reforged_savestate.c, port_hw.h): this binary's path, to take its build id
+   (Windows: port/win32/posix_win32.c). */
+int PortExePath(char *out, size_t outSize)
+{
+    ssize_t n = readlink("/proc/self/exe", out, outSize - 1);
+
+    if (n <= 0 || (size_t)n >= outSize - 1)
+        return 0;
+    out[n] = '\0';
+    return 1;
+}
+#endif
 
 void PortSoftReset(void)
 {
@@ -462,3 +477,13 @@ int main(int argc, char **argv)
     PortLog("[port] AgbMain returned (should never happen)\n");
     return 2;
 }
+
+/* Save states (port/include/port_state.h): not game state: the command line, the soft-reset jump buffer (host
+   stack addresses), the dropped BIOS writes log, FE8PC_DROP_BIOS_WRITES. */
+PORT_STATE_SESSION(sDropBiosWrites)
+PORT_STATE_SESSION(sKeptArgs)
+PORT_STATE_SESSION(sArgSetBuf)
+PORT_STATE_SESSION(sDroppedCount)
+PORT_STATE_SESSION(sDroppedSites)
+PORT_STATE_SESSION(sResetJmp)
+PORT_STATE_SESSION(sStubsHit)

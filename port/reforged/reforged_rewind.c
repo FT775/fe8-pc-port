@@ -44,6 +44,7 @@
 
 #include "port_hw.h"
 #include "port_reforged.h"
+#include "port_state.h"
 
 #define REWIND_MAX   8
 #define REWIND_HOLD  45 /* frame steps: three quarters of a second */
@@ -136,12 +137,21 @@ void Reforged_RewindSnapshot(void)
     Reforged_SaveMarkStateGet(p->marks);
 }
 
+/* FE8PC_REWIND_AT, read once (file scope for save states, below). */
+static int atRead;
+static unsigned at;
+
+/* Save states (port/include/port_state.h): the kept turns and a rewind under way are the game's (they
+   come back with a state, so a rewind after a load goes back through the loaded game's own turns, never
+   the abandoned ones); the key and the test switch are not. */
+PORT_STATE_SESSION(sHeldFrames)
+PORT_STATE_SESSION(sWaitRelease)
+PORT_STATE_SESSION(atRead)
+PORT_STATE_SESSION(at)
+
 /* The platform, once per frame step: is the Rewind key held. */
 void Reforged_RewindKey(int held)
 {
-    static int atRead;
-    static unsigned at;
-
     if (!atRead)
     {
         const char *s = getenv("FE8PC_REWIND_AT");

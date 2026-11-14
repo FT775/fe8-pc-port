@@ -7,6 +7,7 @@
 
 #include "port_hw.h"
 #include "../audio/psg.h"
+#include "port_state.h"
 
 /*
  * D1-a memory model: every GBA region lives at its GBA address in this 32-bit
@@ -90,6 +91,11 @@ static int ReserveRegion(const struct PortRegion *r)
  */
 #define FE8_USA_SIZE 0x1000000u
 static const char sFe8UsaSha1[] = "c25b145e37456171ada4b0d440bf88a19f4d509f";
+
+const char *PortRomSha1(void)
+{
+    return sFe8UsaSha1;
+}
 
 struct Sha1
 {
@@ -338,3 +344,9 @@ int PortMemInit(const char *romPath)
     PortApplyRomRelocs(); /* risk 12: ROM code pointers -> host functions (romreloc.c) */
     return 0;
 }
+
+/* Save states (port/include/port_state.h): not game state: the GBA map this process reserved, the ROM size, the
+   FE7 loader hook. */
+PORT_STATE_SESSION(gPortAfterRomLoad)
+PORT_STATE_SESSION(sMapped)
+PORT_STATE_SESSION(sRomSize)

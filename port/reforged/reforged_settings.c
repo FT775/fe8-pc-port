@@ -57,6 +57,7 @@
 
 #include "port_hw.h"
 #include "port_reforged.h"
+#include "port_state.h"
 #include "port_controls.h"
 #include "../platform.h"
 
@@ -94,6 +95,7 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_REWIND] = "rewind",
     [RFO_RUINS_SKIP] = "skip_ruin_floors",
     [RFO_FAST_SUPPORTS] = "faster_supports",
+    [RFO_SAVE_STATES] = "save_states",
     /* --- Game fixes submenu (reforged_gamefixes.c): 0 off (the default), 1 on --- */
     [RFO_FIX_EARLY_EXP] = "fix_early_kill_exp",
     [RFO_FIX_PROMO_LEVELS] = "fix_promoted_enemy_levels",
@@ -1137,7 +1139,27 @@ int Reforged_LoadOptionSet(int n)
     return 1;
 }
 
+static int WriteSettings(const char *path, int onlyIfChanged);
+
 static int WriteSettingsTo(const char *path)
+{
+    return WriteSettings(path, 0);
+}
+
+/* Save states (reforged_savestate.c StLoad): the options and controls are session data (a load keeps them as
+   they are now), but a Reforged screen writes the file only when it is left with its "changed" flag set, and
+   that flag lives in the screen's proc in GBA RAM, which the load puts back (or takes away). So after a load
+   the file is written here whenever it differs from what a screen's leaving would write: a change made
+   since the photo is kept on disk, as in memory. Nothing written when they are the same. */
+void Reforged_SettingsAfterStateLoad(void)
+{
+    char path[4096];
+
+    if (SettingsPath(path, sizeof(path)) && WriteSettings(path, 1) == 0)
+        PortLog("[reforged] options file brought in line with the options in use after a state load\n");
+}
+
+static int WriteSettings(const char *path, int onlyIfChanged)
 {
     char tmp[4200], buf[RFO_SAVE_BUF];
     int len, id;
@@ -1232,6 +1254,17 @@ static int WriteSettingsTo(const char *path)
         return -1;
     }
 
+    if (onlyIfChanged)
+    {
+        size_t size = 0;
+        void *old = Platform_LoadFile(path, &size);
+        int same = old != NULL && size == (size_t)len && memcmp(old, buf, size) == 0;
+
+        if (old != NULL)
+            Platform_FreeFile(old);
+        if (same)
+            return 1;
+    }
     Platform_MakeUserDir();
     if (Platform_SaveFileAtomic(path, tmp, buf, (size_t)len) != 0)
     {
@@ -1274,5 +1307,14 @@ int Reforged_FixPierceFreeze(void)
     return 1;
 }
 /* --- end of the original-game bug fixes block --- */
+
+/* Save states (port/include/port_state.h): not game state: the options as the settings file and the menus have
+   them (the run-fixed ones live in the run: reforged_gamefixes.c sRunFix, reforged_rando.c gRandoRun), the
+   randomizer seed for the next new game, the remembered game Options. */
+PORT_STATE_SESSION(sValues)
+PORT_STATE_SESSION(sRandoSeed)
+PORT_STATE_SESSION(sSawRewindKey)
+PORT_STATE_SESSION(sGameOpts)
+PORT_STATE_SESSION(sGameOptsSet)
 
 #endif /* PORT_PLAYED_BUILD */

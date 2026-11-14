@@ -3,6 +3,7 @@
 
 #include "port_hw.h"
 #include "../platform.h"
+#include "port_state.h"
 
 /*
  * Frame pacing (port-plan/PLAN.md phase 4, checkpoint P4.4).
@@ -107,3 +108,12 @@ void PortPaceFrame(void)
         PortExit(0);
     }
 }
+
+/* Save states (port/include/port_state.h): not game state: the pacer: real time, not game state. */
+PORT_STATE_SESSION(sRestarts)
+PORT_STATE_SESSION(sFrames)
+PORT_STATE_SESSION(sFrac)
+PORT_STATE_SESSION(sLimitNs)
+PORT_STATE_SESSION(sDeadlineNs)
+PORT_STATE_SESSION(sStartNs)
+PORT_STATE_SESSION(sPaceOn)

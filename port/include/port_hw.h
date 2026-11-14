@@ -57,6 +57,10 @@ void PortStubHit(const char *name, unsigned gbaAddr, unsigned *count);
 void PortLog(const char *fmt, ...);
 void PortExit(int code);
 void PortSoftReset(void);
+/* This binary's path (save states' build id): 1 and out filled, or 0 (main_pc.c; posix_win32.c on Windows). */
+int PortExePath(char *out, size_t outSize);
+/* The loaded FE8 ROM's SHA-1 (the only one PortMemInit accepts), in hex (memory.c). */
+const char *PortRomSha1(void);
 
 /* nullprobe.c: FE8PC_NULLPROBE=1, a diagnostic mode in which BIOS-area and
    NULL-page reads return the open-bus latch, integer division traps get the
