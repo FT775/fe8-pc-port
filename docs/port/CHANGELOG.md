@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.24.1 (2026-11-20)
+
+### Changed
+- **Save states is on by default** (the owner: "make the default option for the savestates working to be ON"; an exception to the rule that new options start off). A settings file without the `save_states` line (every file from before v1.24.1 that never turned the row on) gets it on; `save_states = 0` keeps it off.
+- **A save is marked only after a state was loaded.** With the row on by default, v1.24.0's rule (every save written while the row is on is marked) would have marked everyone's saves for nothing. Now the saves and suspends a game writes are marked `save_states=1` only once a state has been **loaded** in that game (loading is what changes play); the mark goes on through that game's later saves and suspends (resuming or loading a marked save and saving again keeps it, a rewind keeps it), and a state saved in a game that was already marked stays marked. Saving a state alone marks nothing; a new game, or loading a save that was never marked, starts unmarked. A save v1.24.0 marked stays marked. Nuzlocke is unchanged: Ctrl+S and Ctrl+L show "Not in Nuzlocke".
+- **A hint with the row off** (the owner: "Yes, add the hint"): Ctrl+S or Ctrl+L (either Ctrl) shows "Save states are off (Helpers)" in the corner of the window for a moment, once per press (not again while held), and nothing else: the keys reach their bindings exactly as in v1.24.0 with the row off (a GBA button bound to S or L is still pressed).
+- With the row on and Ctrl+S / Ctrl+L never pressed, the game, its saves (now without a mark) and every frame are the same as v1.24.0 with the row off and v1.23.0.
+
+### Technical
+- `reforged_settings.c` `RFO_DEFAULTS`: `[RFO_SAVE_STATES] = 1`. `reforged_savemark.c`: `sStateLoaded` (session data, `PORT_STATE_SESSION`), set by `Reforged_SaveMarkStateLoaded(1)` after a successful load (`reforged_savestate.c` `StLoad`), cleared at New Game (`Reforged_GameFixesNewGame`), written into a block as its `save_states` value (`Reforged_SaveBlockWritten`) and taken back from the block read (`Reforged_SaveBlockRead`; a rewind's own restart, `Reforged_RewindRestarting`, keeps a load made since). For `RFO_SAVE_STATES` the mark is the stored value 1, not "differs from the default" (`ValueMarked`), so the file format is v1.24.0's. Because the flag is session data, a load sets it after the state is put back and `FE8PC_STATE_CHECK`'s digest is unchanged.
+- `PortState_OffHint` (`reforged_savestate.c`), from `platform_sdl3.c` `StateKeys`: on the press of Ctrl+S or Ctrl+L with the row off (edge-triggered per combination), the toast only; the keyboard the bindings see is not changed. The toast is drawn on the window's picture only, as the others (in dumped frames only with `FE8PC_TEST_STATE_TOAST_DUMP=1`).
+
 ## v1.24.0 (2026-11-14)
 
 ### New

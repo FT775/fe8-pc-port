@@ -34,7 +34,9 @@
 /*
  * Save states (Reforged Options, Helpers: "Save states", v1.24.0; port/reforged/reforged_savestate.c):
  * the played builds only (PORT_RFO_STATE). With the row on, Ctrl+S asks for a save and Ctrl+L for a
- * load (either Ctrl; on the press of S or L, or of Ctrl with S or L held). While a Ctrl is held, S and
+ * load (either Ctrl; on the press of S or L, or of Ctrl with S or L held). With the row off (v1.24.1) the
+ * same press only shows the hint "Save states are off" (PortState_OffHint), once per press; the keys then
+ * reach their bindings exactly as before. While a Ctrl is held (the row on), S and
  * L reach no GBA button, fast-forward or rewind binding, and a key that made the combination stays
  * away from them until it is let go. After a load (Platform_ReleaseKeys) every key and gamepad input
  * held then is ignored until it is released. Platform_AudioJoin: the sound of the state just loaded
@@ -780,6 +782,7 @@ int Platform_PollEvents(void)
 static bool sStateKeys[SDL_SCANCODE_COUNT];
 static bool sKeyHeldBack[SDL_SCANCODE_COUNT];
 static int sComboWas[2]; /* Ctrl+S, Ctrl+L held at the last frame step */
+static int sHintWas[2];  /* the same, for the row-off hint (v1.24.1) */
 #define HOLD_MAX 16
 static struct HoldKey
 {
@@ -913,6 +916,15 @@ static const bool *StateKeys(const bool *real)
     }
     else
         sComboWas[0] = sComboWas[1] = 0;
+    /* v1.24.1: the row off, a press of Ctrl+S or Ctrl+L shows a hint (display only; the keys are left alone) */
+    for (i = 0; i < 2; i++)
+    {
+        int combo = ctrl && sStateKeys[comboKey[i]];
+
+        if (combo && !sHintWas[i] && !PortState_KeysOn())
+            PortState_OffHint(i + 1);
+        sHintWas[i] = combo;
+    }
     for (i = 0; i < SDL_SCANCODE_COUNT; i++)
         if (sKeyHeldBack[i])
             sStateKeys[i] = false;

@@ -51,6 +51,9 @@ void PortState_ToastDump555(uint16_t *frame555);
 /* The platform: Ctrl+S (save 1) or Ctrl+L (load 2) was pressed; acted on at the next program point.
    Ignored with the row off. */
 void PortState_Request(int what);
+/* The platform, v1.24.1: Ctrl+S (1) or Ctrl+L (2) pressed with the row off: the toast "Save states are off"
+   only (display; nothing saved or loaded). Ignored with the row on. */
+void PortState_OffHint(int what);
 /* 1 when the row is on (the platform then keeps Ctrl+S / Ctrl+L away from the GBA buttons). */
 int PortState_KeysOn(void);
 /* render.c: the folder frame dumps go to after a load (FE8PC_TEST_STATE_DUMP_DIR), or NULL. */

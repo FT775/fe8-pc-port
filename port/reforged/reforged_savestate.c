@@ -2,10 +2,13 @@
 
 /*
  * Reforged Options, Helpers: "Save states" (RFO_SAVE_STATES, v1.24.0; the owner's request of 2026-11-14:
- * "can we add a save state option? ctrl+S = save, ctrl+L = load"; one slot, off by default). With the row
+ * "can we add a save state option? ctrl+S = save, ctrl+L = load"; one slot; on by default since v1.24.1,
+ * the owner: "make the default option for the savestates working to be ON"). With the row
  * on, Ctrl+S takes a photo of the whole game and Ctrl+L puts it back, anywhere: the map, a battle
- * animation, a menu, an event, the world map, preparations. Like Rewind it changes play, so a save the
- * game writes while the row is on is marked (Reforged_OptionIsGameplay; reforged_savemark.c), and it does
+ * animation, a menu, an event, the world map, preparations. Loading a state changes play, so once one was
+ * loaded the saves that game writes are marked save_states=1 (v1.24.1: Reforged_SaveMarkStateLoaded,
+ * carried through the game's later saves and suspends; v1.24.0 marked every save written with the row
+ * on; reforged_savemark.c), and it does
  * nothing in a Nuzlocke run (Reforged_RandoNuzlocke). port/include/port_state.h has the overview.
  *
  * Where. A key press only asks (PortState_Request, from the platform once a frame step); the photo is
@@ -56,7 +59,9 @@
  * and changes nothing. States do not survive an update.
  *
  * Feedback: a toast in the window's top-left corner for 90 frame steps: "State saved", "State loaded",
- * "No state", "Refused (other version)" ("other ROMs", "damaged"), "Not in Nuzlocke", "State not saved".
+ * "No state", "Refused (other version)" ("other ROMs", "damaged"), "Not in Nuzlocke", "State not saved";
+ * with the row off (v1.24.1, the owner: "Yes, add the hint"), a press of Ctrl+S or Ctrl+L shows
+ * "Save states are off (Helpers)" and does nothing else (PortState_OffHint).
  * It is drawn on the window's picture only (port/hw/frame.c), never into GBA memory nor a dumped frame.
  *
  * Test switches (DIVERGENCES.md PB-9; each does nothing unless set, and acts only with the row on, but
@@ -495,6 +500,16 @@ void PortState_Request(int what)
         what == 1 ? "save" : "load");
 }
 
+/* v1.24.1: the row off, Ctrl+S or Ctrl+L pressed: say where the row is, nothing else (display only). */
+void PortState_OffHint(int what)
+{
+    if (PortState_KeysOn() || (what != 1 && what != 2))
+        return;
+    StToast("Save states are off (Helpers)", 1);
+    PortLog("[savestate] Ctrl+%c at frame %u: the Save states row is off (hint shown)\n", what == 1 ? 'S' : 'L',
+        gPortFrameCount);
+}
+
 /* ------------------------------------------------------------------ the file */
 
 struct Buf
@@ -887,6 +902,7 @@ static void StLoad(void)
     Platform_AudioJoin();
     Reforged_FastForwardAfterStateLoad();
     Reforged_SettingsAfterStateLoad(); /* a Reforged screen's unsaved change: its flag went back with the load */
+    Reforged_SaveMarkStateLoaded(1); /* v1.24.1: this game's saves are marked from now on */
     S.loads++;
     S.exitCountdown = S.exitAfter;
     if (S.dumpBase != NULL)

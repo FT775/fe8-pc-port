@@ -110,6 +110,12 @@ void Reforged_RewindForget(void)
         sCount = 0;
 }
 
+/* The save mark (Reforged_SaveBlockRead, v1.24.1): 1 while a rewind's own restart reads its suspend. */
+int Reforged_RewindRestarting(void)
+{
+    return sPending != 0;
+}
+
 /* bm.c, right after the phase change's suspend save: a player phase begins. */
 void Reforged_RewindSnapshot(void)
 {

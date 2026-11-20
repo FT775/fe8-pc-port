@@ -17,7 +17,9 @@
  *   - the gameplay options that were not at their defaults
  *     (Reforged_OptionIsGameplay, the settings table's "gameplay" column:
  *     everything but the display-only options, so every cheat counts;
- *     Reforged_OptionDefault), with their values;
+ *     Reforged_OptionDefault), with their values; but Save states (on by
+ *     default since v1.24.1): save_states=1 only when a state was LOADED in
+ *     that game (sStateLoaded below), carried through its later saves;
  *     The Game fixes (RFO_FIX_*) on that line are the run's, fixed at New Game
  *     (reforged_gamefixes.c Reforged_RunFix), not the menu's; loading the block puts
  *     them back as the run's (none recorded: every fix off).
@@ -209,10 +211,29 @@ static int BlockFingerprint(int block, u32 *out)
     return 1;
 }
 
+/* "Save states" (v1.24.1): a state was loaded in the game being played since it was started or read
+   from a block (Reforged_SaveMarkStateLoaded). The row is on by default, so its value says nothing about
+   play; loading a state is what changes it. A block written with this set records save_states=1 (as
+   v1.24.0 wrote for every block written with the row on, which still reads as marked), and reading a
+   block takes its value back, so the mark goes on through that game's later saves and suspends. A new
+   game starts without it (reforged_gamefixes.c Reforged_GameFixesNewGame). Session data: a load sets it
+   after the state is put back, so a state never takes it away (one taken before any load included). */
+static u8 sStateLoaded;
+
+void Reforged_SaveMarkStateLoaded(int loaded)
+{
+    if (loaded && !sStateLoaded)
+        PortLog("[reforged] save mark: a state was loaded: this game's saves are marked save_states=1 from now on\n");
+    sStateLoaded = (u8)(loaded != 0);
+}
+
 /* 1 when the block was written with this option changed from its default
-   (a gameplay option only). */
+   (a gameplay option only). Save states: when a state had been loaded (its stored value 1; the
+   option's default, On, says nothing). */
 static int ValueMarked(const struct MarkBlock *b, int id)
 {
+    if (id == RFO_SAVE_STATES)
+        return b->values[id] != 0;
     return Reforged_OptionIsGameplay(id) && b->values[id] != Reforged_OptionDefault(id);
 }
 
@@ -247,6 +268,7 @@ static void ClearBlock(struct MarkBlock *b)
     memset(b, 0, sizeof(*b));
     for (id = 0; id < RFO_COUNT; id++)
         b->values[id] = (u8)Reforged_OptionDefault(id);
+    b->values[RFO_SAVE_STATES] = 0; /* no state loaded (ValueMarked) */
 }
 
 void Reforged_SaveBlockWritten(int block)
@@ -262,6 +284,7 @@ void Reforged_SaveBlockWritten(int block)
     /* the Game fixes: the run's (fixed at New Game), never the menu's */
     for (id = RFO_FIX_FIRST; id <= RFO_FIX_LAST; id++)
         b->values[id] = (u8)Reforged_RunFix(id);
+    b->values[RFO_SAVE_STATES] = sStateLoaded; /* Save states: a state was loaded in this game, not the row */
     b->fallenCount = (u8)Reforged_CasualGetFallen(b->fallen, MARK_FALLEN);
     /* the run being played, never the menu's settings (those are for the next new game);
        with none, a run carried (refused: another randomizer version) is kept, not erased */
@@ -301,6 +324,9 @@ void Reforged_SaveBlockRead(int block)
 
     if (block < 0 || block >= MARK_BLOCKS)
         return;
+    /* Save states: the block's game had a state loaded (or v1.24.0 wrote it with the row on). A rewind's
+       own restart keeps a load made since (the kept turn's suspend was written before it). */
+    sStateLoaded = (u8)(sBlocks[block].values[RFO_SAVE_STATES] != 0 || (Reforged_RewindRestarting() && sStateLoaded));
     /* the Game fixes this block's run was started with (none recorded: every fix off). FE8PC_FIXES_FORCE
        (a test switch, for scripted runs on saves with no save mark): the Game fixes screen's instead. */
     for (i = RFO_FIX_FIRST; i <= RFO_FIX_LAST; i++)
@@ -1043,6 +1069,7 @@ PORT_STATE_SESSION(sGraveCount)
 PORT_STATE_SESSION(sSavPath)
 PORT_STATE_SESSION(sLastText)
 PORT_STATE_SESSION(sScratch)
+PORT_STATE_SESSION(sStateLoaded) /* set after a load (Reforged_SaveMarkStateLoaded), never taken back by one */
 
 void Reforged_SaveMarkWritten(const char *savPath)
 {

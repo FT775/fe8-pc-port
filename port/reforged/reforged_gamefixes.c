@@ -155,6 +155,7 @@ void Reforged_GameFixesNewGame(void)
     }
     Reforged_SkillKeptReset(); /* Skills: no promoted character keeps a skill yet */
     Reforged_RuinsSet(0); /* Ruin floor select (reforged_ruins.c): no floor cleared yet */
+    Reforged_SaveMarkStateLoaded(0); /* Save states (v1.24.1): no state loaded in this game yet */
     PortLog("[reforged] game fixes: the new game has %d of %d on (kept with its saves)\n", n,
         RFO_FIX_LAST - RFO_FIX_FIRST + 1);
 }

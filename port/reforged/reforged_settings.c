@@ -10,8 +10,8 @@
  * A value is 1/on/yes/true or 0/off/no/false (any case). Unknown keys, bad
  * values and lines without "=" are skipped (logged); an option the file does
  * not set keeps its default. A missing or unreadable file means every option
- * at its default: OFF, but fast-forward (ON, 4x, muted; sDefaults below) and
- * the original-game bug fixes (ON).
+ * at its default: OFF, but fast-forward (ON, 4x, muted; sDefaults below),
+ * the original-game bug fixes (ON) and Save states (ON, v1.24.1).
  *
  * "fast_forward = 0" counts only in a file written by a build that has
  * fast-forward (it writes "format = 2" and fast_forward_speed; either one
@@ -174,10 +174,14 @@ static const char *const sKeys[RFO_COUNT] = {
 
 /* Each option's default: 0 (OFF) but the fast-forward block's (fast-forward
    ON at 4x, sound muted; DECISIONS.md 2026-10-28), the original-game bug
-   fixes (ON; DECISIONS.md 2026-10-30, U10) and the Randomizer's amounts (UFER's
+   fixes (ON; DECISIONS.md 2026-10-30, U10), Save states (ON since v1.24.1, the owner's
+   exception to "new options off": "make the default option for the savestates working to be
+   ON"; a file with "save_states = 0" keeps it off; it marks a save only once a state was loaded,
+   reforged_savemark.c) and the Randomizer's amounts (UFER's
    defaults, port_reforged.h; they act only with the randomizer and their mode on).
    A missing file or key, or a bad value, gives the default. */
 #define RFO_DEFAULTS { [RFO_FAST_FORWARD] = 1, [RFO_FF_SPEED] = 4, [RFO_BUG_FIXES] = 1, [RFO_ENEMY_SPEED] = 4, [RFO_TRUE_HIT] = 1, [RFO_ARENA_ODDS] = 1, [RFO_SKILL_BANNERS] = 1, \
+    [RFO_SAVE_STATES] = 1, \
     [RFO_RANDO_GROWTH_VAR] = 30, [RFO_RANDO_GROWTH_MIN] = 5, [RFO_RANDO_GROWTH_MAX] = 80, \
     [RFO_RANDO_BASE_VAR] = 5, [RFO_RANDO_GENDER] = 1, [RFO_RANDO_PALETTES] = 1, [RFO_RANDO_ENEMY_GROWTH_AMT] = 10, \
     [RFO_RANDO_BOSS_BUFF_AMT] = 5 }

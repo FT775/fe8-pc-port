@@ -456,6 +456,10 @@ void Reforged_SaveMarkStateGet(void *out);
 void Reforged_SaveMarkStateSet(const void *in);
 void Reforged_SaveMarkStateSetSuspend(const void *in); /* only the two suspend blocks' entries */
 void Reforged_RewindForget(void);
+int Reforged_RewindRestarting(void); /* 1 while a rewind's restart reads its suspend (v1.24.1) */
+/* "Save states" (v1.24.1): a state was loaded (1, reforged_savestate.c) or a new game started (0); a block
+   written then is marked save_states=1 only after a load (reforged_savemark.c). */
+void Reforged_SaveMarkStateLoaded(int loaded);
 /* "Save states" (reforged_savestate.c, v1.24.0; port/include/port_state.h): the .sav the game writes
    ("" when there is none), beside which the state file goes (reforged_savemark.c); the FE7 / FE6 ROM
    loaded at boot (game 0 FE7, 1 FE6): 1 and its SHA-1 in hex, or 0 (reforged_fe7.c). */
