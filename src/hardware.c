@@ -4,6 +4,10 @@
 #include "ctc.h"
 #include "hardware.h"
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h" /* PC played builds: Reforged Options, mouse controls */
+#endif
+
 s8 EWRAM_DATA gFadeComponentStep[0x20] = { 0 };
 s8 EWRAM_DATA gFadeComponents[0x600] = { 0 };
 u16 EWRAM_DATA gPaletteBuffer[0x200] = { 0 };
@@ -351,6 +355,9 @@ void UpdateKeyStatus(struct KeyStatusBuffer *keyStatus)
     if ((keys & (A_BUTTON | B_BUTTON | START_BUTTON | SELECT_BUTTON)) != (A_BUTTON | B_BUTTON | START_BUTTON | SELECT_BUTTON))
         keys &= ~gKeyStatusIgnoredSt;
     _UpdateKeyStatus(keyStatus, keys);
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_MouseKeyRead(); /* PC played builds: the mouse planner's clock (a host counter; nothing written) */
+#endif
 }
 
 // unreferenced

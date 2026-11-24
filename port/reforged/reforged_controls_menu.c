@@ -19,6 +19,10 @@
  * seconds it gives up); Select clears the cell; A on "Reset to defaults" resets
  * them all; B goes back. While it waits, the game's own buttons do nothing here.
  *
+ * v1.29.0: a "Mouse" row (Reforged option RFO_MOUSE, port/reforged/reforged_mouse.c) between the
+ * actions and "Reset to defaults": A, Left or Right switch it On / Off (written with the bindings when
+ * the screen is left). It is not a binding: "Reset to defaults" leaves it as it is.
+ *
  * Protection: a key or button is bound once (binding it again moves it, and the
  * cell it came from gets this cell's old binding: a swap). A, B, Start and the
  * four directions always keep at least one key and one gamepad button: a clear
@@ -56,8 +60,9 @@ enum {
                             the hand (DisplayUiHand draws 14 pixels left of x) stands
                             after the longest label */
     CTM_RESET_X = 4,     /* "Reset to defaults": in from the frame, room for the hand */
-    CTM_ROW_COUNT = CTL_COUNT + 1, /* the actions, then "Reset to defaults" */
-    CTM_ROW_RESET = CTL_COUNT,
+    CTM_ROW_COUNT = CTL_COUNT + 2, /* the actions, "Mouse" (v1.29.0), then "Reset to defaults" */
+    CTM_ROW_MOUSE = CTL_COUNT,
+    CTM_ROW_RESET = CTL_COUNT + 1,
     CTM_CAPTURE_FRAMES = 600,
     /* Text tiles (InitText, from VRAM 0x6001000): title 18x2, help 24x2, column
        titles 18x2 in all, 5 row slots of an 11x2 label and 18x2 of cells: 416 tiles,
@@ -168,6 +173,23 @@ static void DrawRow(struct ReforgedControlsProc *proc, int row)
         BG_EnableSyncByMask(BG0_SYNC_BIT);
         return;
     }
+    if (row == CTM_ROW_MOUSE)
+    {
+        /* v1.29.0: the mouse switch, its value in the first column (the other cells empty) */
+        Text_InsertDrawString(label, 0, TEXT_COLOR_SYSTEM_WHITE, "Mouse");
+        PutText(label, TILEMAP_LOCATED(gBG0TilemapBuffer, CTM_LABEL_X, y));
+        for (s = 0; s < CTL_SLOTS; s++)
+        {
+            struct Text *t = &sCellText[slot][s];
+
+            ClearText(t);
+            if (s == 0)
+                Text_InsertDrawString(t, 8, TEXT_COLOR_SYSTEM_BLUE, Reforged_GetOption(RFO_MOUSE) ? "On" : "Off"); /* (clear of the hand) */
+            PutText(t, TILEMAP_LOCATED(gBG0TilemapBuffer, ColX(s), y));
+        }
+        BG_EnableSyncByMask(BG0_SYNC_BIT);
+        return;
+    }
     Text_InsertDrawString(label, 0, TEXT_COLOR_SYSTEM_WHITE, sRowLabels[row]);
     PutText(label, TILEMAP_LOCATED(gBG0TilemapBuffer, CTM_LABEL_X, y));
     for (s = 0; s < CTL_SLOTS; s++)
@@ -216,6 +238,8 @@ static void DrawRowHelp(struct ReforgedControlsProc *proc)
 {
     if (proc->cursor == CTM_ROW_RESET)
         DrawHelp("A: every key and button back to default.");
+    else if (proc->cursor == CTM_ROW_MOUSE)
+        DrawHelp("Click: move and choose. Right-click: back.");
     else
         DrawHelp("A: bind. Select: clear. B: back.");
 }
@@ -359,6 +383,11 @@ static void Controls_Loop(struct ReforgedControlsProc *proc)
 {
     int prevRow = proc->cursor, prevCol = proc->column, y;
 
+    /* v1.29.0, mouse controls (off by default; reforged_mouse.c): a left click is A only on the hand's row
+       (2 tiles tall), nothing while a key is awaited */
+    y = proc->capturing || proc->waitRelease ? -1 : RowY(proc->cursor, proc->top);
+    Reforged_MouseHandRow(y >= 0 ? y * 8 : 0, y >= 0 ? y * 8 + 16 : 0);
+
     if (proc->capturing)
     {
         Controls_Capture(proc);
@@ -375,9 +404,19 @@ static void Controls_Loop(struct ReforgedControlsProc *proc)
             proc->cursor = proc->cursor > 0 ? proc->cursor - 1 : CTM_ROW_COUNT - 1;
         else if (gKeyStatusPtr->repeatedKeys & DPAD_DOWN)
             proc->cursor = proc->cursor < CTM_ROW_COUNT - 1 ? proc->cursor + 1 : 0;
-        else if ((gKeyStatusPtr->repeatedKeys & DPAD_LEFT) && proc->column > 0)
+        else if (proc->cursor == CTM_ROW_MOUSE && (gKeyStatusPtr->newKeys & (DPAD_LEFT | DPAD_RIGHT | A_BUTTON)))
+        {
+            /* v1.29.0: the mouse switch (the column stays where it was) */
+            Reforged_SetOption(RFO_MOUSE, !Reforged_GetOption(RFO_MOUSE));
+            proc->dirty = 1;
+            PlaySoundEffect(SONG_SE_SYS_CURSOR_LR1);
+            DrawRow(proc, proc->cursor);
+            goto hand;
+        }
+        else if (proc->cursor != CTM_ROW_MOUSE && (gKeyStatusPtr->repeatedKeys & DPAD_LEFT) && proc->column > 0)
             proc->column--;
-        else if ((gKeyStatusPtr->repeatedKeys & DPAD_RIGHT) && proc->column < CTL_SLOTS - 1)
+        else if (proc->cursor != CTM_ROW_MOUSE && (gKeyStatusPtr->repeatedKeys & DPAD_RIGHT) &&
+                 proc->column < CTL_SLOTS - 1)
             proc->column++;
 
         if (prevRow != proc->cursor || prevCol != proc->column)
@@ -417,6 +456,10 @@ static void Controls_Loop(struct ReforgedControlsProc *proc)
                 DrawHelp("Every key and button is back to default.");
             }
         }
+        else if (proc->cursor == CTM_ROW_MOUSE)
+        {
+            /* (the switch above; Select clears nothing here) */
+        }
         else if (gKeyStatusPtr->newKeys & A_BUTTON)
         {
             proc->capturing = 1;
@@ -431,9 +474,11 @@ static void Controls_Loop(struct ReforgedControlsProc *proc)
             BindCell(proc, "");
     }
 
+hand:
     y = RowY(proc->cursor, proc->top);
     if (y >= 0)
-        DisplayUiHand(proc->cursor == CTM_ROW_RESET ? CTM_RESET_X * 8 : ColX(proc->column) * 8, y * 8);
+        DisplayUiHand(proc->cursor == CTM_ROW_RESET ? CTM_RESET_X * 8
+                      : proc->cursor == CTM_ROW_MOUSE ? ColX(0) * 8 : ColX(proc->column) * 8, y * 8);
 }
 
 static void Controls_End(struct ReforgedControlsProc *proc)

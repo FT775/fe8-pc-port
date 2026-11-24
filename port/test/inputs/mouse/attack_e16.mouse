@@ -1,0 +1,47 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenario "attack": FE8PC_TEST_MOUSE events, picture pixels
+# (FE8PC_TEST_MOUSE_PICTURE=1). Start: e16_start.sav, route_f_lordpromo_e16.keys's first 7925 ticks (Chapter 16,
+# turn 2, the free map at frame 7923: cursor (16,24), camera (112,272)). Lines: "POLL event ..." (poll P sees the
+# picture dumped as frame P, the log's frame P + 1); "#expect REGEX": log lines (FE8PC_MOUSE_LOG=1) that must appear, in this order;
+# "#count N REGEX": exactly N log lines match.
+#
+# Select Ephraim's ally 0x02 at (18,23) by a click (the cursor travels there, then A), the destination (20,22) by
+# a click, hover over Wait (the hand moves), click Attack, click the second weapon, the wheel in the target list,
+# the target (19,22) clicked twice (the first chooses it, the second is A): the battle, the target's HP lower;
+# then the unit's square clicked (A on a unit that acted: the map menu) and its End clicked: the enemy phase (the
+# game writes its suspend save, which the KEYREC replay must match).
+7940 click left 184 104
+8000 click left 216 88
+8100 move 30 72
+8130 click left 30 40
+8200 click left 30 40
+8260 wheel -1
+8300 click left 200 88
+8340 click left 200 88
+9200 click left 216 88
+9240 click left 30 124
+#expect click: map, the cursor to \(18,23\), then A$
+#expect press A
+#expect screen: move cursor \(18,23\) unit 0x02 at \(18,23\)
+#expect click: move, the cursor to \(20,22\), then A$
+#expect screen: menu [0-9]+: 3 items, hand on 0, box 1,3 7x8; unit 0x02 at \(20,22\); items 0:0x67B@4 1:0x68D@6 2:0x695@8
+#expect hover: menu item 2
+#expect screen: menu [0-9]+: 3 items, hand on 2
+#expect click: menu item 0, then A
+#expect screen: menu [0-9]+: 3 items, hand on 0
+#expect press A
+#expect screen: menu [0-9]+: 2 items, hand on 0, box 1,1 14x6
+#expect click: menu item 1, then A
+#expect screen: targets [0-9]+: 1, current \(19,22\) unit 0x94 hp 27
+#expect wheel y -1
+#expect press Down
+#expect click: targets, the current target chosen \(click again: A\)
+#expect click: targets, the chosen target again: A
+#expect press A
+#expect screen: other screen
+#expect screen: map cursor \(20,22\) camera \(112,272\) done 1; last target 0x94 hp 0 \(was 27\)
+#expect click: map, the cursor to \(20,22\), then A$
+#expect screen: menu [0-9]+: 7 items, hand on 0, box 1,2 7x16; .* 6:0x6A0@15
+#expect click: menu item 6, then A
+#expect screen: other screen
+#count 7 press A$
+#count 0 plan dropped

@@ -45,8 +45,10 @@ void PortState_Exclude(const void *p, unsigned long size, const char *name);
    switch); nothing otherwise. */
 void PortState_Point(void);
 /* frame.c, just before the frame is shown: the confirmation toast on the window's picture. render.c,
-   before a frame is dumped: the same on the 555 picture, only with FE8PC_TEST_STATE_TOAST_DUMP=1. */
-void PortState_ToastRgba(uint32_t *rgba);
+   before a frame is dumped: the same on the 555 picture, only with FE8PC_TEST_STATE_TOAST_DUMP=1.
+   ToastRgba's picture is stride pixels wide with the game's 240 strip at x0 (Widescreen: render.h
+   RENDER_WIDE_W, RENDER_WIDE_MARGIN; else 240, 0); the toast stays inside that strip. */
+void PortState_ToastRgba(uint32_t *rgba, int stride, int x0);
 void PortState_ToastDump555(uint16_t *frame555);
 /* The platform: Ctrl+S (save 1) or Ctrl+L (load 2) was pressed; acted on at the next program point.
    Ignored with the row off. */

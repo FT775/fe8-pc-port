@@ -40,6 +40,7 @@ enum ReforgedOption {
                                shape), 2 stretch */
     RFO_SCALE_SMOOTH,       /* "Smoothing": 0 sharp [0], 1 smooth (filtered; only for fill and stretch) */
     RFO_FULLSCREEN,         /* "Fullscreen": 0 [0], 1 (the window starts fullscreen; F11 still toggles) */
+    RFO_WIDESCREEN,         /* "Widescreen" (v1.25.0): 0 [0], 1 (a 284x160 picture, the game centred; render.h) */
     /* "Keep game Options" (reforged_gameoptions.c; Display screen and the in-chapter screen):
        0 [0]; 1: each New Game starts with the game's Options last chosen. Display-only. */
     RFO_KEEP_GAME_OPTIONS,
@@ -60,6 +61,10 @@ enum ReforgedOption {
     /* "Myrrh look" (reforged_fe7.c, v1.20.0): Myrrh's dragon form in battle animations is FE6's Divine Dragon
        (needs the player's own FE6 ROM), 1, or FE8's, 0 [0]. Display-only. */
     RFO_MYRRH_LOOK,
+    /* "Mouse" (reforged_mouse.c, v1.29.0; the Controls screen's row): 0 [0], 1 (clicks, the wheel and menu
+       hover become key presses, the same ones a pad would make). Input only: never marks a save, never in
+       an option set. */
+    RFO_MOUSE,
     /* "Helpers >" (reforged_helpers_menu.c), each 0 [0] or 1; they change play (a save is marked) */
     RFO_CONVOY_ANYWHERE,    /* "Convoy anywhere": every unit has Supply where the chapter has the convoy */
     RFO_SKIRMISH_PASS,      /* "Pass skirmishes": the world-map army walks through monster nodes */
@@ -383,6 +388,137 @@ extern struct ReforgedOverlay gReforgedOverlay; /* the one shown now */
 void Reforged_MapHpBarsCollect(void);
 void Reforged_MapHpBarsVBlank(void);
 /* --- end of the map HP bars block --- */
+
+/* --- Widescreen on the battle map (v1.26.0, milestone M1; port/reforged/reforged_wide.c, port/render/wide.c) ---
+   With the Display screen's "Widescreen" row on (render.h gRenderWideOn), the 22-pixel sides of the 284x160
+   picture show more of the battle map: its terrain and the standing units and their icons. Display only:
+   nothing here writes GBA memory (EWRAM, IWRAM, VRAM, OAM, I/O, gBmSt); the game, the 240x160 frame and the
+   saves are the same with the row on or off.
+   - src/bmudisp.c calls PortWide_PushObj before each of its 240-pixel culls, with the arguments of the
+     CallARM_PushToSecondaryOAM call that follows but with whole x and y: a sprite reaching into a side is
+     kept in a host list (never in OAM).
+   - src/bm.c OnVBlank calls PortWide_VBlankLatch right after SyncHiOam (beside Reforged_MapHpBarsVBlank):
+     the list becomes the shown one with the camera, the map's ring origin and the side squares' BG3 words
+     (the tile rule of src/bmmap.c DisplayBmTile, through PortWide_BmTileWords, inside the map only) for the
+     frame drawn next, and whether the battle map is up (its main proc, no BMapDispSuspend).
+   - port/render/wide.c (played builds, PORT_RFO_WIDE) checks at the start of each frame that BG3 in VRAM
+     still holds that map at the latched ring origin (else, and on every other screen, the sides are black)
+     and draws the sides line by line. Session data (PORT_STATE_SESSION): rebuilt at every VBlank. */
+#define PORT_WIDE_PW      32  /* the latched squares: 32 columns ... */
+#define PORT_WIDE_PH      16  /* ... by 16 rows around the camera */
+#define PORT_WIDE_OBJ_MAX 128 /* pushes kept per frame (as OAM's 128 entries) */
+#define PORT_WIDE_HP_MAX  48  /* v1.27.0: HP bar pictures kept per frame for units reaching into a side */
+struct PortWideObj {
+    short x, y;                 /* the push's whole x and y, on the game's 240x160 screen */
+    unsigned short oam2;        /* its oam2 */
+    unsigned short a0or;        /* v1.27.0: attr0 bits the push adds to each entry (OAM0_BLEND of a dying MU) */
+    const unsigned short *list; /* its object list (count, then attr0-2 triples) */
+};
+/* v1.27.0: one unit's HP bar / "!" picture (port/reforged/reforged_hpbars.c) for a unit whose square reaches
+   into a side: drawn there over its own sprite's pixels and pixels no sprite drew (as obj_line.c does in the
+   middle). The owner is the side sprite pushed with the same x, y, list and oam2. */
+struct PortWideHp {
+    short sqx, sqy;             /* the unit's square on the game's screen (whole x and y) */
+    short ox, oy;               /* the owner sprite's push x and y */
+    unsigned short oam2;        /* ... its oam2 */
+    short owner;                /* the latched obj index of the owner, -1 if none (set by the latch) */
+    const unsigned short *list; /* ... its object list */
+    unsigned short pix[16][16]; /* RFO_OVERLAY_OPAQUE | BGR555, 0 = not drawn */
+};
+struct PortWideLatch {
+    unsigned frame;            /* gPortFrameCount at the latch; the renderer drops one more than 2 frame steps old */
+    int ok;                    /* the battle map is up and the latch is usable */
+    int suspended;             /* ... but BMapDispSuspend is in force (gameGfxSemaphore): the battle animation
+                                  over the map (v1.28.0: black sides, the strip slid to the middle) */
+    int reason;                /* why not (PORT_WIDE_NO_*), for the log */
+    short camX, camY;          /* gBmSt.camera */
+    unsigned short ox, oy;     /* gBmSt.mapRenderOrigin: the BG3 ring's square 0 */
+    short mapW, mapH;          /* gBmMapSize (squares) */
+    int off;                   /* where the game's x = 0 sits in the wide picture, 0 .. 2 x margin */
+    int rangeView;             /* gBmSt.gameStateBits BM_FLAG_0: BG2 is the range layer following the camera
+                                  (move/attack ranges, the danger zone), drawn in the sides from rangeClass
+                                  (v1.27.0) when VRAM's squares on screen are of the same classes */
+    short sx0, sy0;            /* the map square of words[0][0] */
+    unsigned short words[PORT_WIDE_PH][PORT_WIDE_PW][4]; /* each square's four BG3 screen entries */
+    unsigned char inMap[PORT_WIDE_PH][PORT_WIDE_PW];     /* 0: outside the map (drawn black) */
+    /* v1.27.0, only while rangeView: each square's class by src/bmmap.c DisplayMovementViewTile's rule from
+       gMapMovementSigned / gMapRangeSigned (inside the map only): PORT_WIDE_RANGE_* */
+    unsigned char rangeClass[PORT_WIDE_PH][PORT_WIDE_PW];
+    int objCount;
+    struct PortWideObj obj[PORT_WIDE_OBJ_MAX];
+    int hpCount;               /* v1.27.0: HP bar pictures of units reaching into a side */
+    struct PortWideHp hp[PORT_WIDE_HP_MAX];
+    int muCount;               /* v1.28.0: pushes of moving units among obj (wide.log, port/tools/widecheck.sh) */
+    int muFogCount;            /* v1.28.0: moving enemies reaching a side that the fog hid (src/mu.c PutMu) */
+};
+enum { PORT_WIDE_RANGE_NONE, PORT_WIDE_RANGE_MOVE, PORT_WIDE_RANGE_ATTACK };
+/* (v1.28.0 PORT_WIDE_NO_WEATHER: a weather of particle sprites, which the retail chapters never set: the map
+   is shown with black sides rather than with particles in the middle only) */
+enum { PORT_WIDE_NO_NONE, PORT_WIDE_NO_PROC, PORT_WIDE_NO_SUSPEND, PORT_WIDE_NO_SIZE, PORT_WIDE_NO_CAMERA,
+       PORT_WIDE_NO_WEATHER, PORT_WIDE_NO_COUNT };
+extern struct PortWideLatch gPortWide; /* the shown one (read by port/render/wide.c) */
+int PortWide_On(void);
+void PortWide_PushObj(int x, int y, const unsigned short *list, int oam2);
+/* v1.28.0: src/mu.c, after a moving unit's side push (kind 0, kept 1/0) or when the fog hid one (kind 1):
+   counts for wide.log only */
+void PortWide_NoteMu(int kind, int kept);
+/* v1.28.0: src/phasechangefx.c PhaseIntroUnk_Loop, after the phase banner's band sprite (PutSpriteExt at y,
+   oam2, affine group 0): copies of the band's outer 8-pixel columns across the sides, for the side list only */
+void PortWide_PushPhaseBand(int y, int oam2);
+/* v1.27.0: the same with attr0 bits added to every entry (src/mu.c: OAM0_BLEND of a dying unit). The movement
+   arrow (src/bmpatharrowdisp.c DrawPathArrow) and the moving units (src/mu.c PutMu / PutMuSMS, before their
+   cull, with the AP handle's current frame, which the AP display step would push; no AP state is advanced)
+   push here too. sideOnly: the game culls this push (draws none of it in its 240 strip), so it is kept only
+   if none of its on-screen objects falls on the strip (no half sprite at a seam). */
+int PortWide_PushObjEx(int x, int y, const unsigned short *list, int oam2, int a0or, int sideOnly); /* 1 = kept */
+/* v1.27.0: reforged_hpbars.c, for a unit whose square (sqx, sqy) reaches into a side: its picture, and the
+   push its sprite makes (ox, oy, list, oam2). */
+void PortWide_PushHpBar(int sqx, int sqy, int ox, int oy, const unsigned short *list, int oam2,
+    const unsigned short pix[16][16]);
+/* v1.27.0: whether a box at the game's x, w wide, reaches into a side (x < 0 or x + w > 240, within the
+   sides' reach); 0 with the row off. */
+int PortWide_ReachesSide(int x, int w);
+/* v1.27.0: src/bmudisp.c, PutStandingMuSprite's push for the sides (src/mu.c PutMuSMS; sideOnly as above) */
+int PortWide_PutStandingMuSprite(int x, int y, int oam2, int jid, int idx, int sideOnly); /* v1.28.0: 1 = kept */
+void PortWide_VBlankLatch(void);
+/* src/bmmap.c: the four BG3 screen entries DisplayBmTile writes for map square (x, y), for a square inside
+   the map; 0 (nothing written) outside it. */
+int PortWide_BmTileWords(int x, int y, unsigned short *out);
+/* --- end of the Widescreen block --- */
+
+/* --- Mouse controls (v1.29.0; port/reforged/reforged_mouse.c; RFO_MOUSE, off by default) ---
+   The mouse never touches game memory: clicks, the wheel and menu hover are turned into GBA key presses
+   (D-pad taps, A, B, R), ORed into the live keys where the keyboard's and gamepads' go (the window
+   builds' Platform_ReadKeys, port/sdl3/platform_sdl3.c), so every mouse session is a key sequence a pad
+   could have pressed (FE8PC_KEYREC records it as a key file; port/tools/mousecheck.sh). To know what to
+   press, the planner reads game state read-only and four hooks in the game code (each under
+   #if defined(PC_PORT) && PORT_PLAYED_BUILD) say which input screen ran its idle loop in this OnMain,
+   with a host copy of its geometry. With the row off the hooks return at once and Reforged_MouseKeys
+   gives 0. Session data (PORT_STATE_SESSION).
+   - The platform, once per frame step: Reforged_MouseEvent for each mouse event (picture pixels of the
+     presented picture, presentW wide; kind REFORGED_MOUSE_*; button 1 left, 2 middle, 3 right; steps:
+     the wheel's whole notches, + up / right), then keys |= Reforged_MouseKeys(keys) (keys: the real
+     keyboard and gamepad keys; any of them cancels the mouse's plan). Reforged_MouseReset: after a save
+     state's load (Platform_ReleaseKeys). Reforged_MouseOn: the row.
+   - src/hardware.c UpdateKeyStatus: Reforged_MouseKeyRead, the planner's clock (one per key read).
+   - src/playerphase.c PlayerPhase_MainIdle (0) / PlayerPhase_RangeDisplayIdle (1): Reforged_MouseMapIdle;
+     src/uimenu.c Menu_OnIdle (after its frozen/doomed returns): Reforged_MouseMenu; src/uiselecttarget.c
+     TargetSelection_Loop (after its frozen return): Reforged_MouseTargets. */
+enum { REFORGED_MOUSE_MOTION, REFORGED_MOUSE_DOWN, REFORGED_MOUSE_WHEEL, REFORGED_MOUSE_WHEEL_X };
+struct MenuProc;
+struct SelectTargetProc;
+int Reforged_MouseOn(void);
+void Reforged_MouseEvent(int kind, int button, int px, int py, int steps, int presentW);
+unsigned short Reforged_MouseKeys(unsigned short realKeys);
+void Reforged_MouseReset(void);
+void Reforged_MouseKeyRead(void);
+void Reforged_MouseMapIdle(int move);
+void Reforged_MouseMenu(struct MenuProc *proc);
+void Reforged_MouseTargets(struct SelectTargetProc *proc);
+/* port/reforged/reforged_controls_menu.c Controls_Loop: a left click there is A only on the hand's row (game-screen
+   pixel rows y0 <= y < y1; y0 >= y1: nowhere), so a stray click neither switches the Mouse row nor starts a capture. */
+void Reforged_MouseHandRow(int y0, int y1);
+/* --- end of the Mouse controls block --- */
 
 /* --- Original-game bug fixes (port/reforged/reforged_settings.c; RFO_BUG_FIXES, on by default) ---
    Fixes for retail bugs that stop the game for good (a freeze or a softlock), each reproduced on the GBA

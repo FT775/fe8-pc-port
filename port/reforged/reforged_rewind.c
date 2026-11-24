@@ -185,6 +185,7 @@ static void Rewind_Restart(ProcPtr proc)
     EndBMapMain();
     ReadSuspendSave(SAVE_ID_SUSPEND); /* sPending still set: the kept turns stay (Reforged_RewindForget) */
     sPending = 0;
+    Reforged_MouseReset(); /* mouse controls: a plan in flight is dropped, as after a save-state load */
     RestartGameAndGoto8();
 }
 

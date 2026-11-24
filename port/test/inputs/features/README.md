@@ -36,3 +36,10 @@ character (`IsExtraSupportViewerEnabled`); the viewer lists the conversations of
 
     MGBA_RUN_BP=<GBA_BP of port/test/Makefile> GATE0_SRAM_IN=e_clear.sav GATE0_KEYS=port/test/inputs/route_f_supports_tower_e.keys \
       SRAM_AT=tick:120069 SRAM_OUT=sv_e_start.sav build/gate0/mgba_lua_run fireemblem8.gba port/test/oracle/sram_capture.lua 40000000
+
+**`wide_e16.ks` / `wide_e16.keys`** (v1.27.0; PC only, never run on the GBA): not a coverage-12 file but
+the Widescreen check's route `e16wide` (`port/tools/widecheck.sh`, run with the Widescreen row off and on,
+with `map_hp_bars_warnings = 3` and `danger_zone_select = 1`). From `e16_start`: `route_f_lordpromo_e16.keys`
+to Chapter 16's first free cursor (tick 5,882), Gerik selected, the camera to the map's left edge (Gerik and
+his range in the right side bar), the arrow and his move across the bar's seam, the danger zone on Select
+and off, End and the first enemy phase (8,495 ticks). Rebuilt with `keyscript.py` as above.

@@ -117,6 +117,9 @@ void TargetSelection_Loop(struct SelectTargetProc* proc) {
     }
 
 #if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* PC played builds, "Mouse" (off by default; port/reforged/reforged_mouse.c): the target list takes
+       input now; a host copy of the targets' squares (nothing written) */
+    Reforged_MouseTargets(proc);
     /* PC played builds only, Reforged Options "Danger zone on Select" (off by
        default; port/reforged/reforged_dangerzone.c): Select shows or hides the
        enemies' danger zone; A, B, R or L first restore the screen exactly. */

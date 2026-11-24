@@ -14,6 +14,9 @@
 #include "phasechangefx.h"
 #include "constants/video-global.h"
 #include "constants/songs.h"
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h"
+#endif
 
 /*
  * The nice phase changing animation thing and related procs/functions
@@ -264,6 +267,12 @@ void PhaseIntroUnk_Loop(struct PhaseIntroSubProc *proc)
         obj_0859AEC8,
         0x2600
     );
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* PC played builds only, Widescreen (port/reforged/reforged_wide.c): copies
+       of the band's outer columns across the picture's sides, into the host
+       list of side sprites (never OAM). Nothing with the row off. */
+    PortWide_PushPhaseBand(0x44, 0x2600);
+#endif
 }
 
 void PhaseIntroSquares_Init(struct PhaseIntroSubProc *proc)

@@ -91,6 +91,38 @@ int RenderDumpPpm555(const char *path, const uint16_t *frame555)
     return fclose(f) == 0 ? 0 : -1;
 }
 
+/* Widescreen (render.c): the same conversion and dump for a picture of any size. */
+void RenderPixelsToRgba8888(const uint16_t *src555, uint32_t *dst, int count)
+{
+    int i;
+
+    if (!sLutReady)
+        RenderOutInit();
+    for (i = 0; i < count; i++)
+        dst[i] = sRgbaLut[src555[i] & 0x7FFF];
+}
+
+int RenderDumpPpm555Size(const char *path, const uint16_t *pix555, int width, int height)
+{
+    FILE *f = fopen(path, "wb");
+    int i;
+
+    if (f == NULL)
+        return -1;
+    fprintf(f, "P6\n%d %d\n255\n", width, height);
+    for (i = 0; i < width * height; i++)
+    {
+        uint32_t c = RenderBgr555ToRgba8888(pix555[i]);
+        unsigned char rgb[3];
+
+        rgb[0] = (unsigned char)(c >> 24);
+        rgb[1] = (unsigned char)(c >> 16);
+        rgb[2] = (unsigned char)(c >> 8);
+        fwrite(rgb, 1, 3, f);
+    }
+    return fclose(f) == 0 ? 0 : -1;
+}
+
 /* Save states (port/include/port_state.h): not game state: a colour table built once. */
 PORT_STATE_SESSION(sLutReady)
 PORT_STATE_SESSION(sRgbaLut)

@@ -21,6 +21,9 @@
 #include "ctc.h"
 #include "soundwrapper.h"
 #include "spellassoc.h"
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h"
+#endif
 
 EWRAM_OVERLAY(0) int Unk_2004BDC = 0;
 EWRAM_OVERLAY(0) u8 gMUGfxBuffer[MU_GFX_MAX_SIZE * MU_MAX_COUNT] = { 0 };
@@ -1003,8 +1006,101 @@ u8 GetMuDisplayPosition(struct MuProc * proc, struct Vec2 * out)
     return true;
 }
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/*
+ * PC played builds only, Widescreen (port/include/port_reforged.h,
+ * port/reforged/reforged_wide.c): a moving unit reaching into the picture's
+ * sides, before GetMuDisplayPosition's cull, into the host list of side
+ * sprites (never OAM). PutMu: the AP handle's current frame, the one the AP
+ * display step (AP_Display) would push now, with PutMu's own tests (the
+ * enemy hidden in fog, the death fade's blend); the AP is never run (no
+ * timer, frame or graphics queue moves), so a unit wholly in a side keeps
+ * the walking frame it last showed in the middle, as on the GBA, where it
+ * is not drawn there at all. PutMuSMS: the standing sprite through
+ * PortWide_PutStandingMuSprite (src/bmudisp.c), without
+ * SyncStandingMuFacing. A push the game itself culls (it draws none of it
+ * in the 240 strip) is kept only if no part of it falls on the strip, so no
+ * half sprite shows at a seam. Plain reads (the fog map only where PutMu
+ * itself reads it, or inside the map); nothing with the row off.
+ */
+static int PortWide_MuPosition(struct MuProc * proc, int * x, int * y)
+{
+    if (!PortWide_On() || proc->hidden_b || proc->state == MU_STATE_DISPLAY_UI)
+        return FALSE;
+
+    *x = ((proc->x_q4 + proc->x_offset_q4) >> MU_SUBPIXEL_PRECISION) - gBmSt.camera.x + 8;
+    *y = ((proc->y_q4 + proc->y_offset_q4) >> MU_SUBPIXEL_PRECISION) - gBmSt.camera.y + 8;
+
+    if (*y < -0x10 || *y > 0xB0)
+        return FALSE;
+
+    /* the sprite (x - 8 .. x + 24 at most) reaches a side */
+    return PortWide_ReachesSide(*x - 16, 48);
+}
+
+static void PortWide_PutMu(struct MuProc * proc)
+{
+    struct APHandle * ap = proc->sprite_anim;
+    int x, y, gameDraws, col, row;
+
+    if (!PortWide_MuPosition(proc, &x, &y))
+        return;
+
+    if (ap == NULL || ap->pDefinition == NULL || ap->pCurrentObjData == NULL)
+        return;
+
+    /* GetMuDisplayPosition's cull (y is already inside it) */
+    gameDraws = x >= -0x10 && x <= 0x100;
+    col = MU_GetDisplayXOrg(proc) >> 4;
+    row = MU_GetDisplayYOrg(proc) >> 4;
+
+    /* a unit off the map's squares that only the sides could show: off-map side pixels are black anyway,
+       and the fog map is never read further out than PutMu itself reads it */
+    if (!gameDraws && (col < 0 || row < 0 || col >= gBmMapSize.x || row >= gBmMapSize.y))
+        return;
+
+    if (proc->unit && UNIT_FACTION(proc->unit) == FACTION_RED)
+        if (gPlaySt.chapterVisionRange != 0)
+            if (gBmMapFog[row][col] == 0)
+            {
+                PortWide_NoteMu(1, 0); /* v1.28.0: wide.log's count only */
+                return;
+            }
+
+    PortWide_NoteMu(0, PortWide_PushObjEx(x, y + 8, ap->pCurrentObjData, ap->tileBase,
+        proc->state == MU_STATE_DEATHFADE ? OAM0_BLEND : 0, !gameDraws));
+}
+
+static void PortWide_PutMuSMS(struct MuProc * proc)
+{
+    int x, y, gameDraws;
+
+    if (!PortWide_MuPosition(proc, &x, &y))
+        return;
+
+    /* PutMuSMS ORs OAM0_BLEND into the y it hands PutStandingMuSprite in the death fade, whose y cull then
+       drops the sprite: the game shows nothing of it, nor do the sides */
+    if (proc->state == MU_STATE_DEATHFADE)
+        return;
+
+    /* PutMuSMS hands PutStandingMuSprite the 9-bit x and the 8-bit y, so it draws nothing for x < 0 or
+       x > 248, y + 8 < 0 or y > 168; such a sprite is drawn in the sides only if no part of it falls on
+       the 240 strip (PortWide_PutStandingMuSprite, by the class's sprite size: no half sprite at a seam) */
+    gameDraws = x >= 0 && x <= 248 && y >= -8 && y <= 168;
+
+    PortWide_NoteMu(0, PortWide_PutStandingMuSprite(x - 8, y + 8 - 16,
+        ((((unsigned)(proc->pGfxVRAM - OBJ_VRAM0) & 0x1FFFF) >> 5)
+            | ((proc->config->pal & 0xF) << 12))
+            + proc->layer,
+        proc->jid, proc->slot, !gameDraws)); /* (no blend bit: the death fade is left out above) */
+}
+#endif
+
 void PutMuSMS(struct MuProc * proc)
 {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    PortWide_PutMuSMS(proc); /* Widescreen: the sides (above) */
+#endif
     if (!proc->hidden_b)
     {
         struct Vec2 pos;
@@ -1041,6 +1137,9 @@ void PutMuSMS(struct MuProc * proc)
 
 void PutMu(struct MuProc * proc)
 {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    PortWide_PutMu(proc); /* Widescreen: the sides (above) */
+#endif
     if (!proc->hidden_b)
     {
         struct Vec2 pos;

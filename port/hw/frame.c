@@ -437,6 +437,62 @@ static u16 KeyFileHeld(void)
 static u16 sAutoHeld; /* this frame step's FE8PC_AUTOPRESS keys */
 
 /*
+ * FE8PC_KEYREC=PATH (v1.29.0, any build; port/tools/mousecheck.sh): the keys each OnMain is given (the live
+ * keys of UpdateLiveKeys after frame N was drawn, with the key file's, as tick N, the slot FE8PC_KEYFILE fills
+ * for that OnMain) written to PATH as a key file ("mask[*count]" lines), the whole run from its first frame.
+ * A run played with the keyboard, a gamepad or the mouse replays from it with FE8PC_KEYFILE alone (nothing
+ * but UpdateKeyStatus reads REG_KEYINPUT). Written when the mask changes, and the last run at exit (PortExit ->
+ * PortKeyRec_Close). Unset: nothing.
+ */
+static FILE *sKeyRecFile;
+static int sKeyRecRead;
+static u16 sKeyRecMask;
+static uint32_t sKeyRecCount;
+
+static void KeyRecPut(void)
+{
+    if (sKeyRecFile == NULL || sKeyRecCount == 0)
+        return;
+    if (sKeyRecCount == 1)
+        fprintf(sKeyRecFile, "%03X\n", sKeyRecMask);
+    else
+        fprintf(sKeyRecFile, "%03X*%u\n", sKeyRecMask, sKeyRecCount);
+    fflush(sKeyRecFile);
+    sKeyRecCount = 0;
+}
+
+void PortKeyRec_Close(void)
+{
+    KeyRecPut();
+    if (sKeyRecFile != NULL)
+        fclose(sKeyRecFile);
+    sKeyRecFile = NULL;
+}
+
+static void KeyRec(u16 held)
+{
+    if (!sKeyRecRead)
+    {
+        const char *path = getenv("FE8PC_KEYREC");
+
+        sKeyRecRead = 1;
+        if (path != NULL && (sKeyRecFile = fopen(path, "w")) != NULL)
+        {
+            fprintf(sKeyRecFile, "# FE8PC_KEYREC: the keys each OnMain read, from frame %u\n", gPortFrameCount - 1);
+            PortLog("[keys] recording the keys to '%s'\n", path);
+        }
+        else if (path != NULL)
+            PortLog("[keys] FE8PC_KEYREC '%s' cannot be written\n", path);
+    }
+    if (sKeyRecFile == NULL)
+        return;
+    if (sKeyRecCount != 0 && held != sKeyRecMask)
+        KeyRecPut();
+    sKeyRecMask = held;
+    sKeyRecCount++;
+}
+
+/*
  * FE8PC_KEYLOG=1: log each change of the keys written to REG_KEYINPUT, and
  * each frame step in which the game's own UpdateKeyStatus (hardware.c:340,
  * called from OnMain) reported newly pressed keys, so a key press can be
@@ -503,6 +559,7 @@ static void UpdateLiveKeys(void)
     live = Platform_ReadKeys() & PLATFORM_KEY_MASK;
     held = sAutoHeld | live;
     REG_KEYINPUT = (u16)(0x03FF & ~held); /* active low */
+    KeyRec(held); /* FE8PC_KEYREC (above) */
     if (KeyLogOn() && held != sLoggedHeld)
         PortLog("[keys] frame %u: REG_KEYINPUT 0x%03X (held 0x%03X, live 0x%03X)\n",
             gPortFrameCount, REG_KEYINPUT, held, live);
@@ -531,10 +588,21 @@ void PortRunFrame(void)
 #endif
 
     /* The frame drawn on lines 0-159 is finished: show it (headless: no-op). */
+    /* Widescreen (render.h, played builds): the pillarboxed picture instead, the toast in its middle strip. */
+    if (gRenderWideOn)
+    {
 #if PORT_STATE_ON
-    PortState_ToastRgba(gRenderFrameRgba); /* save states' "State saved" etc., on the window only */
+        PortState_ToastRgba(gRenderWideRgba, RENDER_WIDE_W, gRenderWideOff); /* the 240 strip's x (v1.26.0) */
 #endif
-    Platform_PresentFrame(gRenderFrameRgba, RENDER_FRAME_WIDTH, RENDER_FRAME_HEIGHT);
+        Platform_PresentFrame(gRenderWideRgba, RENDER_WIDE_W, RENDER_FRAME_HEIGHT);
+    }
+    else
+    {
+#if PORT_STATE_ON
+        PortState_ToastRgba(gRenderFrameRgba, RENDER_FRAME_WIDTH, 0); /* save states' "State saved" etc., on the window only */
+#endif
+        Platform_PresentFrame(gRenderFrameRgba, RENDER_FRAME_WIDTH, RENDER_FRAME_HEIGHT);
+    }
 
     gPortFrameCount++;
 
@@ -644,3 +712,7 @@ PORT_STATE_SESSION(sKeyFileRead)
 PORT_STATE_SESSION(sAutoHeld)
 PORT_STATE_SESSION(sKeyLog)
 PORT_STATE_SESSION(sLoggedHeld)
+PORT_STATE_SESSION(sKeyRecFile)
+PORT_STATE_SESSION(sKeyRecRead)
+PORT_STATE_SESSION(sKeyRecMask)
+PORT_STATE_SESSION(sKeyRecCount)

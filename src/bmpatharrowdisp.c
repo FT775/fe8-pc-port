@@ -10,6 +10,9 @@
 #include "bmlib.h"
 #include "bmmind.h"
 #include "variables.h"
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h"
+#endif
 
 EWRAM_DATA struct PathArrowProc gPathArrowProc = { 0 };
 
@@ -296,6 +299,15 @@ void DrawPathArrow(void) {
     for (i = gpPathArrowProc->pathLen; i >= 0; i--) {
         s16 xp = 16 * gpPathArrowProc->pathX[i];
         s16 yp = 16 * gpPathArrowProc->pathY[i];
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        /* PC played builds only, Widescreen (port/reforged/reforged_wide.c):
+           an arrow square reaching into the picture's sides, before the
+           240-pixel cull, into the host list of side sprites (never OAM).
+           The direction lookups are plain reads. Nothing with the row off. */
+        if (PortWide_ReachesSide(xp - gBmSt.camera.x, 16))
+            PortWide_PushObj(xp - gBmSt.camera.x, yp - gBmSt.camera.y, gObject_16x16,
+                gPathArrowOAMTable[GetDirectionOfPathAfterIndex(i)][GetDirectionOfPathBeforeIndex(i)]);
+#endif
         if (PointInCameraBounds(xp, yp, 16, 16)) {
             u16 oam2 = PATH_ARROW_OAM_AT(
                 GetDirectionOfPathAfterIndex(i),

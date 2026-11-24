@@ -1,0 +1,22 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenarios "pixel", "fill" and "stretch" (format:
+# attack_e16.mouse): WINDOW pixels, the same file under each Scaling mode, with the window made 1200x500 first.
+# Start: as attack_e16.mouse (camera (112,272)). mousecheck.sh writes MODE lines' events for its mode only
+# ("@pixel", "@fill", "@stretch" prefixes; the others for all). Picture pixel (200,40), square (19,19), is window
+# pixel (240 + 3 x 200 + 1.5, 10 + 3 x 40 + 1.5) in Pixel (3x, 720x480 at 240,10), (225 + 3.125 x 200 + 1.5,
+# 3.125 x 40 + 1.5) in Fill (3.125x, 750x500 at 225,0), (5 x 200 + 2.5, 3.125 x 40 + 1.5) in Stretch. Window
+# pixel (100,250) is on the left black bar in Pixel and Fill (no key), and picture pixel (20,80) in Stretch.
+7930 size 1200 500
+@pixel 7940 click left 841.5 131.5
+@fill 7940 click left 851.5 126.5
+@stretch 7940 click left 1002.5 126.5
+7990 click left 100 250
+#expect window size 1200x500 asked \(now 1200 wide\)
+#expect left click at picture \(200,40\): game \(200,40\), square \(19,19\)$
+#expect click: map, the cursor to \(19,19\)$
+#expect plan done \(cursor there\)
+@pixel #expect left click at picture \(-47,80\): .*\(no square\)
+@fill #expect left click at picture \(-40,80\): .*\(no square\)
+@pixel #expect click: not on the map
+@fill #expect click: not on the map
+@stretch #expect left click at picture \(20,80\): game \(20,80\), square \(8,22\)$
+#count 0 plan dropped

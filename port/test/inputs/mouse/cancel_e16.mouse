@@ -1,0 +1,61 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenario "cancel" (format: attack_e16.mouse). Picture pixels.
+# Start: e16_start.sav, route_f_lordpromo_e16.keys's first 5885 ticks (Chapter 16, turn 1, the free map at frame
+# 5885, cursor on unit 0x01 at (16,24)); FE8PC_TEST_HOLD_KEYS=6566:Tab:1 (Select held one frame step).
+#
+# The wheel on the map (Down, Up); a click on an empty square (the cursor only), a second click on it (A: the map
+# menu); the wheel in the menu (hand to 2); hover over its first item (hand to 0); right-click (B: the menu
+# closes); a side button (nothing); a click in the frame step the window got the focus (dropped); a click on unit
+# 0x01 (selected), right-click (B: back to the free map); a middle-click on unit 0x07 (the cursor there, R: its
+# stat screen), the wheel there (Down: the next unit), right-click (B: back); a long click away, cut short by a
+# key (the plan dropped).
+5900 wheel -1
+5920 wheel 1
+5940 click left 120 72
+6000 click left 120 72
+6040 wheel -2
+6080 move 200 28
+6120 click right 100 100
+6160 click x1 184 104
+6170 focus
+6170 click left 184 104
+6200 click left 184 104
+6260 click right 10 10
+6300 click middle 200 104
+6400 wheel -1
+6460 click right 100 100
+6560 click left 24 24
+#expect wheel y -1
+#expect press Down
+#expect wheel y 1
+#expect press Up
+#expect click: map, the cursor to \(12,22\)$
+#expect plan done \(cursor there\)
+#expect click: map, the cursor to \(12,22\), then A$
+#expect screen: menu [0-9]+: 7 items, hand on 0, box 23,2 7x16; .* 4:'Reforged'@11
+#expect wheel y -2
+#expect screen: menu [0-9]+: 7 items, hand on 2
+#expect hover: menu item 0
+#expect screen: menu [0-9]+: 7 items, hand on 0
+#expect right click
+#expect press B
+#expect screen: map cursor \(12,22\)
+#expect the click that focused the window ignored
+#expect click: map, the cursor to \(16,24\), then A$
+#expect screen: move cursor \(16,24\) unit 0x01 at \(16,24\)
+#expect right click
+#expect press B
+#expect screen: map cursor \(16,24\)
+#expect middle click at picture \(200,104\)
+#expect click: map, the cursor to \(17,24\), then R$
+#expect press R
+#expect screen: other screen
+#expect wheel y -1
+#expect press Down
+#expect right click
+#expect press B
+#expect screen: map cursor
+#expect click: map, the cursor to \(7,19\)$
+#expect plan dropped \(a key or button\)
+#count 4 left click at picture
+#count 1 middle click at picture
+#count 3 right click at picture

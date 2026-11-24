@@ -595,6 +595,33 @@ void Reforged_RenderBmMapEdges(void) {
     if (gBmSt.camera.y & 15)
         RenderBmMapLine(10);
 }
+
+/*
+ * PC played builds only, Widescreen (port/include/port_reforged.h, port/reforged/reforged_wide.c): the four
+ * BG3 screen entries DisplayBmTile above writes for map square (x, y), from the same tables (sTilesetConfig,
+ * gBmMapBaseTiles, gBmMapFog), into out. Only for a square inside the map: outside it the PC DisplayBmTile
+ * emulates the GBA's out-of-map and open-bus reads, which mean nothing here, so nothing is written and 0 is
+ * returned. Plain reads; nothing is written to GBA memory.
+ */
+int PortWide_BmTileWords(int x, int y, u16* out) {
+    u32 id;
+    u16 base;
+
+    if (x < 0 || y < 0 || x >= gBmMapSize.x || y >= gBmMapSize.y)
+        return 0;
+
+    id = gBmMapBaseTiles[y][x];
+    if (id + 4 > ARRAY_COUNT(sTilesetConfig))
+        return 0;
+
+    base = gBmMapFog[y][x] ? (6 << 12) : (11 << 12);
+
+    out[0] = base + sTilesetConfig[id + 0];
+    out[1] = base + sTilesetConfig[id + 1];
+    out[2] = base + sTilesetConfig[id + 2];
+    out[3] = base + sTilesetConfig[id + 3];
+    return 1;
+}
 #endif
 
 void RefreshUnitsOnBmMap(void) {

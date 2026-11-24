@@ -1,0 +1,9 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenario "fullscreen" (format: attack_e16.mouse): the window
+# made fullscreen (the offscreen driver's display), then a click at picture pixel (200,40) (picture pixels:
+# SDL_RenderCoordinatesToWindow at that poll). Start: as attack_e16.mouse (camera (112,272)).
+7930 fullscreen 1
+7940 click left 200 40
+#expect FE8PC_TEST_MOUSE: fullscreen on
+#expect left click at picture \(200,40\): game \(200,40\), square \(19,19\)$
+#expect click: map, the cursor to \(19,19\)$
+#expect plan done \(cursor there\)

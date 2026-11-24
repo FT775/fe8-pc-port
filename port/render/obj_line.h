@@ -205,5 +205,9 @@ void RenderOutInit(void);
 void RenderFrameToRgba8888(const uint16_t *src555, uint32_t *dst);
 uint32_t RenderHashFrame555(const uint16_t *frame555);
 int RenderDumpPpm555(const char *path, const uint16_t *frame555);
+/* The same two for a picture of any size (render.c's widescreen picture): count pixels through D3, and a
+   width x height PPM. */
+void RenderPixelsToRgba8888(const uint16_t *src555, uint32_t *dst, int count);
+int RenderDumpPpm555Size(const char *path, const uint16_t *pix555, int width, int height);
 
 #endif /* GUARD_PORT_RENDER_OBJ_LINE_H */

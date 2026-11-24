@@ -125,3 +125,19 @@ The harness compares the GBA build of the game, running in mGBA, with the PC bui
 - **Test-only cheats.** The test builds have cheats for durability, funds and the item convoy, so that long routes can finish. Any route that uses them is labelled "cheat-assisted". They are never in played builds, and the GBA reference runs the same cheats on the same ticks.
 
 Route and monkey counts change as coverage grows. The current figures are in ACCURACY.md.
+
+## 4. Releasing
+
+Three scripts in `port/tools/` turn a finished change into a release. Local paths (the play-copy folder, the FE7/FE6 ROMs, the test saves) are read from `~/.config/fe8pc-release.conf`, which is never committed.
+
+1. **`quickcheck.sh`** (10-20 minutes). Builds the three PC builds and runs the randomizer and Third promotion self-tests. It then replays ten recorded routes with the default settings, on this build and on the previous release, and compares every dumped frame, the `.sav` and the `.reforged` side file. Finally it checks that the GBA build is byte-identical. Zero differences means a player who does not touch a new option gets exactly the previous release. A change meant to alter play passes `--allow-diff ROUTE`, and the differences are still reported. `--full` adds the 229 save checks against mGBA (about 20 minutes more). It prints `QUICKCHECK: PASS` and stamps the tree.
+2. **`release.sh VERSION MESSAGE_FILE`**. This needs a passing quick check of the very same tree and a `## VERSION (unreleased)` CHANGELOG heading. It:
+   - dates that heading, commits and tags;
+   - moves the main branches;
+   - packages the Windows zip (`package.sh`) and updates the Windows source copy;
+   - keeps this build's binaries as the next quick check's baseline;
+   - pushes to the backup;
+   - installs into the play folder. It keeps the old exe, refuses while the game runs, and checks that no save and not the settings file changed.
+3. **`publish.ps1 -Version VERSION -Private -Public`** (Windows, after the owner's go-ahead). Pushes the main branches and the tag to the private repository. Then it adds one snapshot commit to the public repository and publishes a release with the zip. The files are scanned first against a local pattern list for personal details, ROMs and saves. The notes are `release-notes.md` filled in with the version's CHANGELOG "### In short" part. `-DryRun` shows everything without pushing.
+
+A small change is: edit, `quickcheck.sh`, `release.sh`. A large feature also gets its own targeted tests.

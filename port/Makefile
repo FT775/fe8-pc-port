@@ -367,6 +367,14 @@ $(BUILD)/port/render/obj_line.o: port/render/obj_line.c port/include/port_reforg
 	@mkdir -p $(@D)
 	$(CC) $(PORT_CFLAGS) $(RFO_OVL_DEFS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
 
+# Widescreen on the battle map (v1.26.0, milestone M1): port/render/render.o and wide.o get PORT_RFO_WIDE=1,
+# the sides drawn from port/reforged/reforged_wide.c's latch (gPortWide), on the same PORT_PLAYED_BUILD
+# condition as PORT_RFO_MAPOVERLAY above. Every test build compiles render.c as before and wide.c empty.
+RFO_WIDE_DEFS = $(if $(filter -DFE8PC_DEBUG=1 -DFE8PC_TESTBUILD=1,$(HOST_CPPFLAGS) $(PORT_CFLAGS)),,-DPORT_RFO_WIDE=1)
+$(BUILD)/port/render/render.o $(BUILD)/port/render/wide.o: $(BUILD)/port/%.o: port/%.c port/include/port_reforged.h     port/render/render.h $(COMPILE_STAMP)
+	@mkdir -p $(@D)
+	$(CC) $(PORT_CFLAGS) $(RFO_WIDE_DEFS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)
+
 $(BUILD)/port/%.o: port/%.c $(COMPILE_STAMP)
 	@mkdir -p $(@D)
 	$(CC) $(PORT_CFLAGS) $(RFO_STATE_DEFS) -DPC_PORT=1 -Iinclude -Iport/include -Iport/render -c $< -o $@ $(WARNLOG)

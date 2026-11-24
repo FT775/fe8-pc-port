@@ -142,6 +142,13 @@ void Platform_CaptureEnd(void);
 void Platform_SetWindowScale(int scale);
 void Platform_SetScaling(int mode, int smooth);
 void Platform_SetFullscreen(int on);
+/* Platform_SetWide (v1.25.0, the Display screen's "Widescreen" row): the frames Platform_PresentFrame
+   shows become width x PLATFORM_GBA_HEIGHT (PLATFORM_GBA_WIDTH, the start-up width, to PLATFORM_MAX_WIDTH;
+   any other value: PLATFORM_GBA_WIDTH); a frame of another size is dropped. The window keeps its scale in
+   the new shape (in fullscreen, the size it gets when it leaves fullscreen), and the scaling modes and
+   minimum size follow the new width. Nothing in the headless backend. */
+#define PLATFORM_MAX_WIDTH 512
+void Platform_SetWide(int width);
 /* A valid binding name in the backend's own spelling ("return" -> "Return",
    "DPUP" -> "dpup"), in out; the headless backend copies it. */
 void Platform_CanonicalName(int pad, const char *name, char *out, size_t size);

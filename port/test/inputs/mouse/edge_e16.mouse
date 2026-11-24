@@ -1,0 +1,29 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenario "edge" (format: attack_e16.mouse). Picture pixels.
+# Start: e16_start.sav, route_f_lordpromo_e16.keys's first 5885 ticks (Chapter 16, turn 1, the free map at frame
+# 5885, cursor on unit 0x01 at (16,24)).
+#
+# A target that makes the camera scroll still takes two clicks: unit 0x01 selected and told to stay (two clicks on
+# its square), Trade clicked; a click on the target (17,24) at the screen's edge chooses it (the camera scrolls 16
+# pixels, which holds the target list's loop for some frames: the same list, the plan waits), a second click on it
+# (now 16 pixels further left) confirms: the trade screen. Right-click twice: back to the menu, back to moving.
+5900 click left 184 120
+5940 click left 184 120
+5980 click left 30 56
+6020 click left 200 120
+6060 click left 184 120
+6100 click right 100 100
+6140 click right 100 100
+#expect screen: targets [0-9]+: 3, current \(16,23\) unit 0x04
+#expect click: targets, target \(17,24\) \(click again: A\)
+#expect screen: other screen
+#expect screen: targets [0-9]+: 3, current \(17,24\) unit 0x07
+#expect plan done \(target chosen; a click on it again confirms\)
+#expect click: targets, the chosen target again: A
+#expect press A
+#expect screen: other screen
+#expect press B
+#expect screen: menu [0-9]+: 4 items
+#expect press B
+#expect screen: move cursor \(16,24\) unit 0x01
+#count 0 plan dropped
+#count 0 the current target chosen

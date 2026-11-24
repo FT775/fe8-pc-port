@@ -38,6 +38,32 @@ The `.debug` file that the build also produces is for developers. You do not nee
 - The keyboard controls cannot be changed yet. Rebindable controls are planned (see MODDING.md).
 - **Space**, or a click of the right stick on a gamepad, held: fast-forward. It is not a GBA button. See Reforged Options below.
 
+### Mouse controls (v1.29.0)
+
+Off by default: switch them on with the **Mouse** row of the Controls screen (Reforged Options, Controls >; on the title screen). The mouse only presses the buttons a gamepad would (the cursor travels square by square, the hand steps item by item), so the game, its saves and its rules are exactly the same as with the keyboard. Any key or gamepad button pressed while the mouse is doing something stops it at once.
+
+| Mouse | Where | What it does |
+|---|---|---|
+| Left-click | Free map, on a unit | The cursor goes to the unit, then A: your unit is selected (its move range shows); another unit shows its range. |
+| Left-click | Free map, on an empty square | The cursor goes there, nothing else. Click the cursor's square again: A (the map menu: Unit, Status, Options, Reforged, Suspend, End ...). |
+| Left-click | Choosing where a unit moves | The cursor goes to the square, then A: the unit moves there (a square it cannot reach buzzes, as with A). Its own square: it stays. |
+| Left-click | Another unit's range shown (an enemy's, or the danger zone) | First closes the range (B), then acts as on the free map: one click on your unit selects it. |
+| Left-click | A menu (unit actions such as Attack, Item, Trade, Wait; the weapon list; the map menu; any other game menu with a hand) | The hand goes to the item clicked, then A. A click beside the items does nothing. |
+| Left-click | Choosing a target (attack, staff, trade, rescue, ...) | On a target that is not the chosen one: it becomes the chosen one (the forecast shows). On the chosen target, after it was clicked once: A (attack, heal ...). So a target always takes two clicks. A square that is no target: nothing. |
+| Left-click | The Controls screen | A on the row the hand is on (move the hand with the wheel); a click on any other row does nothing. |
+| Left-click | Any other screen (conversations, battles, title and save menus, the stat screen, preparations, world map, shops ...) | A, when the click is inside the game's picture (not on a black bar). |
+| Moving the pointer | A menu | The hand follows the pointer onto another item (it never presses anything by itself). |
+| Right-click | Anywhere | B (back, cancel). It first stops whatever the mouse was doing. |
+| Middle-click | Free map or choosing where to move | The cursor goes to the square, then R (the unit's stat screen). |
+| Middle-click | Anywhere else | R (help, unit info). |
+| Wheel | Anywhere | Up or Down, one press a notch: the next or previous item in a menu or list, the next target, the next unit on the stat screen; on the map the cursor moves (and the camera with it). A sideways wheel: Left or Right. |
+| Side buttons | Anywhere | Nothing. |
+
+- It works in every window size and in full screen, with Pixel, Fill and Stretch scaling and with Widescreen on (a click in a side bar that shows the map picks that square; the camera follows the cursor there).
+- A click that brings the window to the front is not taken as a click.
+- A double-click on a unit, a square or a menu item counts as one click (a double-clicked unit is selected, not selected and then told to stay). Two clicks on a target still choose it and then confirm it.
+- **Not supported yet** (these screens take only the "any other screen" rules above: left-click is A, right-click B, the wheel Up/Down, middle-click R): pointing at items in the trade screen, the preparations screens (unit list, items, supply, trading), the world map's places, shops, the convoy, the arena, Reforged Options' own screens, and menus with more than 9 items; dragging; moving the camera without the cursor; the cursor following the pointer on the map; binding mouse buttons on the Controls screen. **On those screens a click chooses what the hand is on, not what the pointer is over** (in the trade screen it gives the highlighted item; in a shop it asks to buy the highlighted one): move the hand with the wheel first.
+
 ## Window and full screen
 
 - **F11** switches full screen.
@@ -87,7 +113,7 @@ Reforged Options is a PC-only screen of extra options. The name and the idea com
 | Randomizer > | | Opens the Randomizer screen (for the next New Game). |
 | Game fixes > | | Opens the Game fixes screen: optional fixes to the original game's rules (for the next New Game). |
 | Controls > | | Opens the Controls screen: choose your keys and gamepad buttons. |
-| Display > | | Opens the Display screen: window size, scaling, smoothing, fullscreen. |
+| Display > | | Opens the Display screen: window size, scaling, smoothing, fullscreen, widescreen. |
 | Option sets > | | Opens the Option sets screen: save your options as a set, or load one. |
 
 ### Danger zone on Select
@@ -451,7 +477,7 @@ So with no extra ROM: Eirika gets **Great Lord, Ranger, Swordmaster**, Ephraim *
 
 Choose **Controls >** in Reforged Options to change which keyboard keys and gamepad buttons do what. A change works at once and is written to the settings file when you leave with B.
 
-- **Rows:** A, B, Select, Start, Right, Left, Up, Down, R, L, Fast fwd (fast-forward, held) and Fullscreen, then **Reset to defaults**.
+- **Rows:** A, B, Select, Start, Right, Left, Up, Down, R, L, Fast fwd (fast-forward, held), Fullscreen and Rewind, then **Mouse** (v1.29.0: On / **Off**, switched with A, Left or Right; see Mouse controls above; Reset to defaults leaves it as it is), then **Reset to defaults**.
 - **Columns:** two keyboard keys (Key, Key 2) and two gamepad buttons (Pad, Pad 2) for each row. A dash means none.
 - **Keys on this screen:** Up and Down pick a row, Left and Right a column. **A** on a cell waits for the key (or, in a Pad column, the gamepad button) to put there; **Escape** cancels, **Delete** clears the cell, and after 10 seconds it gives up. **Select** clears the cell. **A** on Reset to defaults puts every key and button back. **B** goes back.
 - **A key or button does one job.** Binding a key that another row already has moves it: that row gets this cell's old key instead (a swap).
@@ -482,6 +508,7 @@ Choose **Display >** in Reforged Options. A change shows at once and is written 
 | Scaling | **Pixel** / Fill / Stretch | Pixel: whole-number scaling, every pixel the same size, black bars around the picture. Fill: as large as the window allows, keeping the shape. Stretch: fills the window, changing the shape. |
 | Smoothing | On / **Off** | Softens the picture in Fill and Stretch (pixels of uneven size look smoother). Pixel scaling is always sharp. |
 | Fullscreen | On / **Off** | The game starts fullscreen. F11 (or its new key, under Controls) still switches. |
+| Widescreen | On / **Off** | A 16:9 window (284x160, times the window size), nothing stretched. On the battle map the sides show more of the map, with the units standing there and their icons, the move and attack ranges, the danger zone, the movement arrow, units walking in or out of them, the HP bars and "!" warnings, and the phase banner's band and square wipe; menus and windows stay in the usual 240x160 middle, which moves up to 22 pixels off centre near a map edge so the open side shows more map. A unit walking wholly inside a side keeps one walking pose until it is back in the middle. A staff's or item's sparkle on the map stays in the middle while the sides keep showing the map; a flash that fills the screen briefly blacks the sides. Battle animations and the level-up screen are centred; when the battle is drawn over the map, the sides keep showing the map, and near a map edge the picture glides to the middle as the battle starts and back as it ends. Every other screen (a battle with its own background, menus over the whole screen, the world map, cutscenes) shows the 240x160 picture in the middle with black bars. Only the picture changes: the game and your saves are the same with it on or off. |
 
 ### Helpers
 
@@ -549,7 +576,7 @@ The game also takes settings on its command line, for that run only (they are wr
 | `map_hp_bars_warnings` | 0 = off, 1 = bars, 2 = warnings, 3 = both (also `off`, `bars`, `warnings`, `both`) |
 | `window_size` | 0 = auto, 1 to 8 (also `auto`, `3x` and the like) |
 | `scaling` | 0 = pixel, 1 = fill, 2 = stretch (also the names) |
-| `smoothing`, `fullscreen` | 0 = off, 1 = on |
+| `smoothing`, `fullscreen`, `widescreen` | 0 = off, 1 = on |
 | `fix_early_kill_exp`, `fix_promoted_enemy_levels`, `fix_ai_heal_full_hp`, `fix_canto_after_trade`, `fix_devil_high_luck`, `fix_ch15_staff_drop`, `fix_pair_up`, `fix_smart_enemies`, `fix_myrrh_buff`, `fix_join_ranks`, `fix_armed_dancers`, `fix_third_promotion` | 0 = off (the default), 1 = on (the Game fixes screen) |
 | `fix_skills` | 0 = off (the default), 1 = class, 2 = class + personal (also `off`, `class`, `personal`) |
 | `fix_enemy_skills` | 0 = off (the default), 1 = promoted enemies and bosses, 2 = all (also `off`, `promoted`, `all`) |

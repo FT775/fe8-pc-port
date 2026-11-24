@@ -143,6 +143,7 @@ Every played build also has the older developer switches of the port layer, whic
 | `FE8PC_MGBA_BGCLIP=1` | All | Copies mGBA's cut of flipped text tiles at window edges (OL-6, section 5). Picture only. | `port/render/render.c:60-61`; `port/render/bg_line.c:231`, `:461` |
 | `FE8PC_RENDER_LAYERS=mask` | All | Draws only the background layers in `mask`. Picture only. | `port/render/bg_line.c:66-75` |
 | `FE8PC_DUMP_FRAMES=a[-b]`, `FE8PC_DUMP_DIR` | All | Writes those frames as picture files. | `port/render/render.c:64-78` |
+| `FE8PC_DUMP_WIDE=dir` (v1.25.0) | Played builds, with the Widescreen row on and `FE8PC_DUMP_FRAMES` set | Also writes the same frames' 284x160 widescreen pictures as picture files in `dir` (same names), and (v1.26.0) `dir/wide.log`, one line per frame: the 240 strip's x, whether the sides show the map, why not. The 240x160 dumps are unchanged. Picture only. `FE8PC_WIDE_LOG=1` (v1.26.0, `port/render/wide.c`): a log line at each change between map sides and black sides. | `port/render/render.c` `RenderInit`, `RenderEndFrame` |
 | `FE8PC_AUDIO=0` | All | Opens no sound device. | `port/audio/audio_out.c:46-52` |
 | `FE8PC_AUDIO_DUMP=prefix` | All | Writes the sound output to `prefix.lr16` and `prefix.fifo8`. | `port/audio/fifo_pc.c:102-106` |
 | `FE8PC_SND_RECORD=path`, `FE8PC_SND_FROM=n` | All | Writes the sound record that the sound compare reads. | `port/audio/fifo_pc.c:107-113` |

@@ -4,10 +4,11 @@
  * Reforged Options, the Display screen: opened by A on "Display >" in the options
  * screen (reforged_menu.c); a list screen (reforged_listmenu.h, drawn by
  * reforged_randomizer_menu.c's code). Played builds only; empty in every test build.
- * Window size, scaling, smoothing and fullscreen (RFO_WINDOW_SCALE ...
- * RFO_FULLSCREEN, display-only: they never mark a save). A change is applied to the
+ * Window size, scaling, smoothing, fullscreen and widescreen (RFO_WINDOW_SCALE ...
+ * RFO_WIDESCREEN, display-only: they never mark a save). A change is applied to the
  * window at once (port/platform.h Platform_SetWindowScale, Platform_SetScaling,
- * Platform_SetFullscreen) and kept in the settings file; the saved values are
+ * Platform_SetFullscreen, Platform_SetWide; widescreen also port/render/render.h
+ * RenderSetWide) and kept in the settings file; the saved values are
  * applied when the settings are read at start (Reforged_ApplyDisplay).
  */
 
@@ -18,9 +19,19 @@
 #include "port_reforged.h"
 #include "reforged_listmenu.h"
 #include "../platform.h"
+#include "../render/render.h"
 
 void Reforged_ApplyDisplay(int option)
 {
+    /* Widescreen (v1.25.0) first, so the window size below is taken in its shape: the renderer's picture
+       and the window's width change together (a frame of the other width would be dropped). */
+    if (option < 0 || option == RFO_WIDESCREEN)
+    {
+        int wide = Reforged_GetOption(RFO_WIDESCREEN) != 0;
+
+        RenderSetWide(wide);
+        Platform_SetWide(wide ? RENDER_WIDE_W : PLATFORM_GBA_WIDTH);
+    }
     if (option < 0 || option == RFO_WINDOW_SCALE)
         Platform_SetWindowScale(Reforged_GetOption(RFO_WINDOW_SCALE));
     if (option < 0 || option == RFO_SCALE_MODE || option == RFO_SCALE_SMOOTH)
@@ -36,6 +47,7 @@ static const struct RandoRow sDisplayRows[] = {
       { "Pixel", "Fill", "Stretch" }, { 0, 1, 2 }, NULL, NULL, 0 },
     RR_SWITCH(RFO_SCALE_SMOOTH, "Smoothing", "Soften the pixels when filling or stretching."),
     RR_SWITCH(RFO_FULLSCREEN, "Fullscreen", "Start fullscreen. F11 still switches."),
+    RR_SWITCH(RFO_WIDESCREEN, "Widescreen", "A 16:9 window, the game in the middle."),
 };
 
 static const struct ReforgedListScreen sDisplayScreen = {

@@ -1,0 +1,16 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenario "wide" (format: attack_e16.mouse), with the
+# Widescreen row on: picture pixels of the 284x160 picture. Start: as attack_e16.mouse (turn 2's free map, camera
+# (112,272); the game's 240 strip sits at x = 44 of the picture there, its left side bar showing the map).
+# A click in the left side bar, 34 pixels left of the strip: square ((112 - 34) / 16, (272 + 72) / 16) = (4,21),
+# an enemy's square: the cursor travels there (the camera scrolls as with the pad), then A (its range);
+# right-click: B.
+7940 click left 10 72
+8060 click right 100 100
+#expect left click at picture \(10,72\): game \(-34,72\) \(outside the game's 240x160\), square \(4,21\)$
+#expect click: map, the cursor to \(4,21\), then A$
+#expect press A
+#expect plan done
+#expect screen: move cursor \(4,21\)
+#expect press B
+#expect screen: map cursor \(4,21\)
+#count 0 plan dropped

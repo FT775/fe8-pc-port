@@ -335,6 +335,10 @@ void OnVBlank(void)
            map sprites SyncHiOam just put in OAM become the shown ones
            (port/reforged/reforged_hpbars.c); no GBA memory is written. */
         Reforged_MapHpBarsVBlank();
+        /* PC played builds only, Widescreen (port/reforged/reforged_wide.c): the
+           camera, the BG3 ring origin and the side sprites for the frame these
+           flushes show; host memory only. Nothing with the row off. */
+        PortWide_VBlankLatch();
 #endif
     }
     m4aSoundMain();

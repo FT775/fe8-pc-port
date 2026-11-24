@@ -1002,6 +1002,52 @@ struct SMSHandle * AddUnitSprite(int y)
     }
 }
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/*
+ * PC played builds only, Widescreen (port/include/port_reforged.h,
+ * port/reforged/reforged_wide.c): the push PutUnitSpritesOam below makes for
+ * this standing sprite, with the same tests but whole x and y and no
+ * 240-pixel cull, into the host list of sprites reaching into the picture's
+ * sides. Nothing with the row off; nothing is written to GBA memory.
+ */
+static void PortWide_PutUnitSprite(struct SMSHandle * it, int x, int y)
+{
+    int r3 = 0;
+    int layer;
+
+    if (!PortWide_On())
+        return;
+
+    if (y < -32 || y > DISPLAY_HEIGHT)
+        return;
+
+    if (it->config & 0x80)
+        return;
+
+    if (it->config & 0x40)
+        r3 = GetGameClock() & 2;
+
+    layer = (it->config & 0xf) >= 3 ? OAM2_LAYER(3) : OAM2_LAYER(2);
+
+    switch ((it->config & 0xf)) {
+    case 0:
+    case 3:
+        PortWide_PushObj(x + r3, y, gObject_16x16, it->oam2Base + layer);
+        break;
+
+    case 1:
+    case 4:
+        PortWide_PushObj(x + r3, y - 16, gObject_16x32, it->oam2Base + layer);
+        break;
+
+    case 2:
+    case 5:
+        PortWide_PushObj((x - 8) + r3, y - 16, gObject_32x32, it->oam2Base + layer);
+        break;
+    }
+}
+#endif
+
 void PutUnitSpritesOam(void)
 {
     struct SMSHandle * it = gSMSHandleArray->pNext;
@@ -1025,6 +1071,10 @@ void PutUnitSpritesOam(void)
 
         int x = it->xDisplay - gBmSt.camera.x;
         int y = it->yDisplay - gBmSt.camera.y;
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        PortWide_PutUnitSprite(it, x, y); /* Widescreen: the sides (above) */
+#endif
 
         if (x < -16 || x > DISPLAY_WIDTH)
             continue;
@@ -1094,6 +1144,9 @@ void PutChapterMarkedTileIconOam(void)
     x = xTile * 16 - gBmSt.camera.x;
     y = yTile * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    PortWide_PushObj(x + 4, y + 7, gObject_8x8, 0xC51); /* Widescreen: the sides */
+#endif
     if (x < -16 || x > DISPLAY_WIDTH)
         return;
 
@@ -1158,6 +1211,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x - 2, y - 4, sPoisonIconSprites[poisonIconFrame], 0); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 break;
 
@@ -1171,6 +1227,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x - 2, y - 4, sSilenceIconSprites[silenceIconFrame], 0); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 break;
 
@@ -1184,6 +1243,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x + 2, y, sSleepIconSprites[sleepIconFrame], 0); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 break;
 
@@ -1197,6 +1259,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x + 1, y - 5, sBerserkIconSprites[berserkIconFrame], 0); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 break;
 
@@ -1216,6 +1281,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x - 1, y - 5, sSprite_StatBoostIcon, 0); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 break;
 
@@ -1238,6 +1306,10 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            if (PortWide_On()) /* nothing read with the row off */
+                PortWide_PushObj(x + 9, y + 7, gObject_8x8, (rescuePalLut[unit->rescue >> 6] & 0xf) * 0x1000 + 0x803); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 continue;
 
@@ -1251,6 +1323,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x + 9, y + 7, gObject_8x8, 0x810); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 continue;
 
@@ -1264,6 +1339,9 @@ void PutUnitSpriteIconsOam(void)
             x = unit->xPos * 16 - gBmSt.camera.x;
             y = unit->yPos * 16 - gBmSt.camera.y;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+            PortWide_PushObj(x + 9, y + 7, gObject_8x8, 0x811); /* Widescreen: the sides */
+#endif
             if (x < -16 || x > DISPLAY_WIDTH)
                 continue;
 
@@ -1441,6 +1519,42 @@ void PutStandingMuSprite(int layer, int x, int y, u16 oam2, int class, int idx)
         break;
     }
 }
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/*
+ * PC played builds only, Widescreen (port/include/port_reforged.h,
+ * port/reforged/reforged_wide.c; src/mu.c PutMuSMS): PutStandingMuSprite's
+ * push, with whole x and y and no 240-pixel cull, into the host list of
+ * side sprites (never OAM). sideOnly: the game draws none of it in the 240
+ * strip, so it is kept only if no part of it falls there (by this class's
+ * sprite size). Plain reads; nothing with the row off. Returns 1 when the
+ * push was kept (v1.28.0, for wide.log's counts).
+ */
+int PortWide_PutStandingMuSprite(int x, int y, int oam2, int class, int idx, int sideOnly)
+{
+    u32 id;
+    int chr;
+
+    if (!PortWide_On())
+        return 0;
+
+    if (y < -32 || y > DISPLAY_HEIGHT)
+        return 0;
+
+    id = GetClassSMSId(class);
+    chr = sUiSMSSlotLut[idx] + 1;
+
+    switch (GetInfo(id).size) {
+    case UNIT_ICON_SIZE_16x16:
+    case UNIT_ICON_SIZE_16x32:
+        return PortWide_PushObjEx(x, y - 16, gObject_16x32, (u16)oam2 + chr, 0, sideOnly);
+
+    case UNIT_ICON_SIZE_32x32:
+        return PortWide_PushObjEx(x - 8, y - 16, gObject_32x32, (u16)oam2 + chr, 0, sideOnly);
+    }
+    return 0;
+}
+#endif
 
 void PutUnitSpriteExt(int layer, int x, int y, int oam2, struct Unit * unit)
 {

@@ -56,6 +56,8 @@ extern uint32_t gPortOnMainCalls;
 void PortStubHit(const char *name, unsigned gbaAddr, unsigned *count);
 void PortLog(const char *fmt, ...);
 void PortExit(int code);
+/* port/hw/frame.c, FE8PC_KEYREC (v1.29.0): the recorded key file's last run written and the file closed (PortExit). */
+void PortKeyRec_Close(void);
 void PortSoftReset(void);
 /* This binary's path (save states' build id): 1 and out filled, or 0 (main_pc.c; posix_win32.c on Windows). */
 int PortExePath(char *out, size_t outSize);

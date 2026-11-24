@@ -84,12 +84,14 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_SCALE_MODE] = "scaling",
     [RFO_SCALE_SMOOTH] = "smoothing",
     [RFO_FULLSCREEN] = "fullscreen",
+    [RFO_WIDESCREEN] = "widescreen",
     [RFO_KEEP_GAME_OPTIONS] = "keep_game_options",
     [RFO_ENEMY_SPEED] = "enemy_phase_speed",
     [RFO_TRUE_HIT] = "true_hit",
     [RFO_ARENA_ODDS] = "arena_odds",
     [RFO_SKILL_BANNERS] = "skill_banners",
     [RFO_MYRRH_LOOK] = "myrrh_look",
+    [RFO_MOUSE] = "mouse_controls", /* v1.29.0, the Controls screen's row (reforged_mouse.c) */
     [RFO_CONVOY_ANYWHERE] = "convoy_anywhere",
     [RFO_SKIRMISH_PASS] = "pass_skirmishes",
     [RFO_REWIND] = "rewind",
@@ -654,10 +656,12 @@ enum { RS_FILE, RS_SET, RS_CLI };
 static int IsDisplaySubmenu(int id)
 {
     return id == RFO_WINDOW_SCALE || id == RFO_SCALE_MODE || id == RFO_SCALE_SMOOTH || id == RFO_FULLSCREEN
+        || id == RFO_WIDESCREEN
         || id == RFO_KEEP_GAME_OPTIONS || id == RFO_ENEMY_SPEED || id == RFO_TRUE_HIT
         || id == RFO_SKILL_BANNERS
-        || id == RFO_MYRRH_LOOK; /* on the Display screen: this computer's, never a set's (Myrrh look: it needs this
+        || id == RFO_MYRRH_LOOK  /* on the Display screen: this computer's, never a set's (Myrrh look: it needs this
                                     computer's FE6 ROM) */
+        || id == RFO_MOUSE;      /* v1.29.0: the Controls screen's row, this computer's input, as the keys are */
 }
 
 /* One "key = value" (both trimmed) into the options; path and lineNo name it in the
@@ -1038,6 +1042,7 @@ static const unsigned char sDisplayOnly[RFO_COUNT] = {
     [RFO_ARENA_ODDS] = 1, /* the arena's opponent and odds shown before the wager: no change to the game */
     [RFO_SKILL_BANNERS] = 1, /* a skill's name shown when it activates (reforged_skillbanner.c): no change to the game */
     [RFO_MYRRH_LOOK] = 1, /* v1.20.0: Myrrh's dragon drawn as FE6's Divine Dragon (reforged_fe7.c): pictures only */
+    [RFO_MOUSE] = 1, /* v1.29.0: input only: every press the mouse makes is one a pad could make (reforged_mouse.c) */
     [RFO_FF_SOUND] = 1,
     [RFO_GROWTH_SELECT] = 1, /* growth rates on Select: shows numbers only */
     [RFO_MAP_HPBARS] = 1, /* map HP bars block: pictures only (reforged_hpbars.c) */
@@ -1045,6 +1050,7 @@ static const unsigned char sDisplayOnly[RFO_COUNT] = {
     [RFO_SCALE_MODE] = 1,
     [RFO_SCALE_SMOOTH] = 1,
     [RFO_FULLSCREEN] = 1,
+    [RFO_WIDESCREEN] = 1, /* v1.25.0: the picture's shape only (render.h); the game is the same */
     [RFO_KEEP_GAME_OPTIONS] = 1, /* the game's own Options screen's values, as the player may set them */
     /* original-game bug fixes block: never marks a save. Off is the original game; on is the default (a mark
        is for a value not at its default). The Riev fix acts only where the original hangs for good; the Pierce
@@ -1188,6 +1194,7 @@ static int WriteSettings(const char *path, int onlyIfChanged)
         "# fighting with a tome); 0 = they hang as on the GBA.\n"
         "# myrrh_look: 1 = Myrrh's dragon form in battle is FE6's Divine Dragon (needs your\n"
         "# own FE6 ROM; looks only).\n"
+        "# widescreen: 1 = a 16:9 window, the game centred with black sides.\n"
         /* --- Game fixes submenu --- */
         "# fix_*: optional changes to the original's rules (the Game fixes screen),\n"
         "# 0 = off (the default, the original), 1 = on; each marks a save. fix_skills:\n"
@@ -1197,6 +1204,8 @@ static int WriteSettings(const char *path, int onlyIfChanged)
         "# never breaks and her Speed is +2. fix_join_ranks: 1 = characters joining from\n"
         "# Chapter 9 start 1 weapon rank higher, from Chapter 13 2 (at most A).\n"
         /* --- Cheats submenu --- */
+        "# mouse_controls: 1 = the mouse plays (click: move and choose; right-click: back;\n"
+        "# middle-click: R; wheel: up/down). Input only; the Controls screen's Mouse row.\n"
         "# cheat_infinite_gold: 1 = gold stays at 999,999. cheat_growths: 0 = off, 1 = fixed,\n"
         "# 2 = +25%%, 3 = +50%% to every growth. cheat_exp: 0 = x1, 1 = x2, 2 = x3.\n"
         /* --- end of the Cheats block --- */

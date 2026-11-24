@@ -318,6 +318,9 @@ void PlayerPhase_MainIdle(ProcPtr proc)
 #if defined(PC_PORT) && defined(FE8PC_TESTBUILD)
     u16 newKeysAsRead = gKeyStatusPtr->newKeys;
 #endif
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_MouseMapIdle(0); /* PC played builds, "Mouse" (off by default): the free map's idle ran */
+#endif
 
     HandlePlayerCursorMovement();
 
@@ -570,6 +573,9 @@ void PlayerPhase_RangeDisplayIdle(ProcPtr proc)
     u8 uid;
     u8 action = -1;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Reforged_MouseMapIdle(1); /* PC played builds, "Mouse" (off by default): the destination's idle ran */
+#endif
     HandlePlayerCursorMovement();
 
 #if defined(PC_PORT) && PORT_PLAYED_BUILD

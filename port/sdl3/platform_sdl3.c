@@ -32,6 +32,27 @@
 #endif
 
 /*
+ * Mouse controls (Reforged Options, the Controls screen's "Mouse" row, v1.29.0; port/reforged/reforged_mouse.c):
+ * the played window builds only (the fast-forward block's condition). With the row on, each mouse event is
+ * turned into a pixel of the picture shown (SDL_ConvertEventToRenderCoordinates: the renderer's logical
+ * presentation, so Pixel / Fill / Stretch, fullscreen, any window size and the display's scaling need nothing
+ * of ours) and handed to Reforged_MouseEvent; Platform_ReadKeys ORs in Reforged_MouseKeys, the keys the mouse
+ * presses (the same per-frame key path as the keyboard's). With the row off the events are dropped.
+ * A button pressed in the frame step the window got the focus, or the next one, is dropped (clicking the
+ * window to focus it is not A). The side buttons (X1, X2) do nothing. The wheel's notches are counted
+ * whole (a smooth wheel's fractions add up).
+ * FE8PC_TEST_MOUSE=FILE (a test switch, port/tools/mousecheck.sh): mouse events put into SDL's queue as if
+ * the mouse made them, one line each: "POLL move X Y", "POLL down|up|click left|middle|right|x1|x2 X Y",
+ * "POLL wheel DY [DX]", "POLL focus", and to test the picture's mapping "POLL size W H" (the window's size)
+ * and "POLL fullscreen 0|1"; POLL counts frame steps (Platform_PollEvents calls; poll P comes after the
+ * picture dumped as frame P was drawn, the mouse log's "frame P + 1"), X Y are window pixels, or picture pixels with FE8PC_TEST_MOUSE_PICTURE=1 (turned into
+ * window pixels by SDL_RenderCoordinatesToWindow at that poll). # starts a comment.
+ */
+#ifdef PORT_RFO_FASTFORWARD
+#define PLATFORM_MOUSE 1
+#endif
+
+/*
  * Save states (Reforged Options, Helpers: "Save states", v1.24.0; port/reforged/reforged_savestate.c):
  * the played builds only (PORT_RFO_STATE). With the row on, Ctrl+S asks for a save and Ctrl+L for a
  * load (either Ctrl; on the press of S or L, or of Ctrl with S or L held). With the row off (v1.24.1) the
@@ -135,6 +156,23 @@ SDL_COMPILE_TIME_ASSERT(win32_surface, offsetof(SDL_Surface, w) == 8 && offsetof
                                            offsetof(SDL_Surface, pixels) == 20);
 SDL_COMPILE_TIME_ASSERT(win32_vjoy_desc, sizeof(SDL_VirtualJoystickDesc) == 84 &&
                                              offsetof(SDL_VirtualJoystickDesc, name) == 36);
+/* v1.29.0, mouse controls: the mouse events' members this file reads and the test switch writes */
+SDL_COMPILE_TIME_ASSERT(win32_mouse_motion, offsetof(SDL_MouseMotionEvent, windowID) == 16 &&
+                                                offsetof(SDL_MouseMotionEvent, which) == 20 &&
+                                                offsetof(SDL_MouseMotionEvent, x) == 28 &&
+                                                offsetof(SDL_MouseMotionEvent, y) == 32);
+SDL_COMPILE_TIME_ASSERT(win32_mouse_button, offsetof(SDL_MouseButtonEvent, windowID) == 16 &&
+                                                offsetof(SDL_MouseButtonEvent, button) == 24 &&
+                                                offsetof(SDL_MouseButtonEvent, down) == 25 &&
+                                                offsetof(SDL_MouseButtonEvent, x) == 28 &&
+                                                offsetof(SDL_MouseButtonEvent, y) == 32);
+SDL_COMPILE_TIME_ASSERT(win32_mouse_wheel, offsetof(SDL_MouseWheelEvent, windowID) == 16 &&
+                                               offsetof(SDL_MouseWheelEvent, x) == 24 &&
+                                               offsetof(SDL_MouseWheelEvent, y) == 28 &&
+                                               offsetof(SDL_MouseWheelEvent, direction) == 32 &&
+                                               offsetof(SDL_MouseWheelEvent, mouse_x) == 36 &&
+                                               offsetof(SDL_MouseWheelEvent, mouse_y) == 40);
+SDL_COMPILE_TIME_ASSERT(win32_window_event, offsetof(SDL_WindowEvent, windowID) == 16);
 #endif
 
 #define GBA_W PLATFORM_GBA_WIDTH
@@ -151,6 +189,12 @@ static SDL_Texture *sTexture;
 static SDL_AudioStream *sAudio;
 static int sQuit;
 static int sFullscreen;
+/* The picture's width (Platform_SetWide: GBA_W, or the Widescreen row's), the window's scale (the last one
+   chosen or set), and the presentation and texture filter Platform_SetScaling chose, which a new width keeps. */
+static int sPresentW = GBA_W;
+static int sScale = DEFAULT_SCALE;
+static SDL_RendererLogicalPresentation sPresentation = SDL_LOGICAL_PRESENTATION_INTEGER_SCALE;
+static SDL_ScaleMode sTexScale = SDL_SCALEMODE_NEAREST;
 
 struct Pad
 {
@@ -322,7 +366,7 @@ static int ChooseScale(void)
         Log("[sdl] FE8PC_SCALE=%s ignored (1 to %d)\n", s, MAX_SCALE);
     scale = DEFAULT_SCALE;
     if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &usable))
-        while (scale > 1 && (GBA_W * scale > usable.w || GBA_H * scale > usable.h))
+        while (scale > 1 && (sPresentW * scale > usable.w || GBA_H * scale > usable.h))
             scale--;
     return scale;
 }
@@ -405,39 +449,39 @@ int Platform_Init(void)
         return -1;
     }
     scale = ChooseScale();
+    sScale = scale;
 #ifdef FE8PC_TESTBUILD
     flags = PortSdlTest_WindowFlags(flags);
 #endif
-    if (!SDL_CreateWindowAndRenderer(WINDOW_TITLE, GBA_W * scale, GBA_H * scale,
+    if (!SDL_CreateWindowAndRenderer(WINDOW_TITLE, sPresentW * scale, GBA_H * scale,
             flags, &sWindow, &sRenderer))
     {
         Log("[sdl] cannot open the window: %s\n", SDL_GetError());
         SDL_Quit();
         return -1;
     }
-    SDL_SetWindowMinimumSize(sWindow, GBA_W, GBA_H);
+    SDL_SetWindowMinimumSize(sWindow, sPresentW, GBA_H);
     if (sTitleNote[0] != '\0')
         ApplyTitle(); /* a note set before the window existed (the save file, port/save/savefile_pc.c) */
     /* Whole-number scaling with black bars, whatever size the window takes. */
-    if (!SDL_SetRenderLogicalPresentation(sRenderer, GBA_W, GBA_H,
-            SDL_LOGICAL_PRESENTATION_INTEGER_SCALE))
+    if (!SDL_SetRenderLogicalPresentation(sRenderer, sPresentW, GBA_H, sPresentation))
         Log("[sdl] SDL_SetRenderLogicalPresentation failed: %s\n", SDL_GetError());
     SDL_SetRenderVSync(sRenderer, 0);
     sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING,
-        GBA_W, GBA_H);
+        sPresentW, GBA_H);
     if (sTexture == NULL)
     {
         Log("[sdl] SDL_CreateTexture failed: %s\n", SDL_GetError());
         Platform_Shutdown();
         return -1;
     }
-    SDL_SetTextureScaleMode(sTexture, SDL_SCALEMODE_NEAREST);
+    SDL_SetTextureScaleMode(sTexture, sTexScale);
     SDL_SetTextureBlendMode(sTexture, SDL_BLENDMODE_NONE);
 
     version = SDL_GetVersion();
     Log("[sdl] SDL %d.%d.%d, video driver %s, renderer %s, window %dx%d (scale %d)\n",
         SDL_VERSIONNUM_MAJOR(version), SDL_VERSIONNUM_MINOR(version), SDL_VERSIONNUM_MICRO(version),
-        SDL_GetCurrentVideoDriver(), SDL_GetRendererName(sRenderer), GBA_W * scale, GBA_H * scale,
+        SDL_GetCurrentVideoDriver(), SDL_GetRendererName(sRenderer), sPresentW * scale, GBA_H * scale,
         scale);
 #ifdef FE8PC_TESTBUILD
     PortSdlTest_AfterInit(sWindow, sRenderer);
@@ -489,13 +533,13 @@ void Platform_PresentFrame(const uint32_t *rgba, int width, int height)
     if (!Reforged_FastForwardPresent())
         return; /* fast-forward: only every N-th frame is shown */
 #endif
-    if (width != GBA_W || height != GBA_H)
+    if (width != sPresentW || height != GBA_H)
     {
         if (!sWarned++)
-            Log("[sdl] frame of %dx%d ignored (expected %dx%d)\n", width, height, GBA_W, GBA_H);
+            Log("[sdl] frame of %dx%d ignored (expected %dx%d)\n", width, height, sPresentW, GBA_H);
         return;
     }
-    if (!SDL_UpdateTexture(sTexture, NULL, rgba, GBA_W * (int)sizeof(uint32_t)))
+    if (!SDL_UpdateTexture(sTexture, NULL, rgba, sPresentW * (int)sizeof(uint32_t)))
     {
         if (!sWarned++)
             Log("[sdl] SDL_UpdateTexture failed: %s\n", SDL_GetError());
@@ -662,13 +706,14 @@ static void ResizeWindow(int scale)
     if (scale > MAX_SCALE)
         scale = MAX_SCALE;
     if (SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(sWindow), &usable))
-        while (scale > 1 && (GBA_W * scale > usable.w || GBA_H * scale > usable.h))
+        while (scale > 1 && (sPresentW * scale > usable.w || GBA_H * scale > usable.h))
             scale--;
     if (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_MAXIMIZED)
         SDL_RestoreWindow(sWindow);
-    SDL_SetWindowSize(sWindow, GBA_W * scale, GBA_H * scale);
+    sScale = scale;
+    SDL_SetWindowSize(sWindow, sPresentW * scale, GBA_H * scale);
     SDL_SetWindowPosition(sWindow, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-    Log("[sdl] window %dx%d (scale %d)\n", GBA_W * scale, GBA_H * scale, scale);
+    Log("[sdl] window %dx%d (scale %d)\n", sPresentW * scale, GBA_H * scale, scale);
 }
 
 static void ToggleFullscreen(void)
@@ -717,9 +762,53 @@ void Platform_SetScaling(int mode, int smooth)
 
     if (sRenderer == NULL || sTexture == NULL)
         return;
-    if (!SDL_SetRenderLogicalPresentation(sRenderer, GBA_W, GBA_H, p))
+    sPresentation = p;
+    sTexScale = smooth && mode != 0 ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
+    if (!SDL_SetRenderLogicalPresentation(sRenderer, sPresentW, GBA_H, p))
         Log("[sdl] SDL_SetRenderLogicalPresentation failed: %s\n", SDL_GetError());
-    SDL_SetTextureScaleMode(sTexture, smooth && mode != 0 ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+    SDL_SetTextureScaleMode(sTexture, sTexScale);
+}
+
+/* Widescreen (the Display screen; port/platform.h). A new streaming texture of the new width, the logical
+   size and minimum size to match, and the window at its scale in the new shape. Before Platform_Init only
+   the width is kept (Platform_Init uses it). */
+void Platform_SetWide(int width)
+{
+    SDL_Texture *tex;
+
+    if (width < GBA_W || width > PLATFORM_MAX_WIDTH)
+        width = GBA_W;
+    if (width == sPresentW)
+        return;
+    if (sRenderer == NULL || sWindow == NULL)
+    {
+        sPresentW = width;
+        return;
+    }
+    tex = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, width, GBA_H);
+    if (tex == NULL)
+    {
+        Log("[sdl] SDL_CreateTexture (%dx%d) failed: %s; the picture stays %d wide\n", width, GBA_H,
+            SDL_GetError(), sPresentW);
+        return;
+    }
+    SDL_SetTextureScaleMode(tex, sTexScale);
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
+    if (sTexture != NULL)
+        SDL_DestroyTexture(sTexture);
+    sTexture = tex;
+    sPresentW = width;
+    if (!SDL_SetRenderLogicalPresentation(sRenderer, sPresentW, GBA_H, sPresentation))
+        Log("[sdl] SDL_SetRenderLogicalPresentation failed: %s\n", SDL_GetError());
+    SDL_SetWindowMinimumSize(sWindow, sPresentW, GBA_H);
+    Log("[sdl] picture %dx%d\n", sPresentW, GBA_H);
+    if (IsFullscreen())
+    {
+        if (sPendingScale <= 0)
+            sPendingScale = sScale; /* the new shape when it leaves fullscreen */
+        return;
+    }
+    ResizeWindow(EnvScale() > 0 ? EnvScale() : sScale);
 }
 
 void Platform_SetFullscreen(int on)
@@ -728,6 +817,248 @@ void Platform_SetFullscreen(int on)
         return;
     ToggleFullscreen();
 }
+
+#ifdef PLATFORM_MOUSE
+/* Mouse controls (above): the focus rule, the wheel's fractions, the test switch's events. */
+static unsigned sFocusPoll;
+static int sFocusSeen;
+static float sWheelX, sWheelY;
+#define TEST_MOUSE_MAX 4096
+enum { TM_MOVE, TM_DOWN, TM_UP, TM_CLICK, TM_WHEEL, TM_FOCUS, TM_SIZE, TM_FULLSCREEN };
+static struct TestMouse
+{
+    unsigned poll;
+    int kind, button;
+    float x, y;
+} *sTestMouse;
+static int sTestMouseCount = -1, sTestMouseNext, sTestMousePicture;
+static float sTestMouseX, sTestMouseY; /* the pointer's window position, for the wheel's events */
+
+static void MouseEvent(const SDL_Event *in)
+{
+    SDL_Event ev = *in;
+    float fx = 0, fy = 0;
+    int kind, button = 0, steps = 0, i;
+
+    if (in->type == SDL_EVENT_WINDOW_FOCUS_GAINED)
+    {
+        sFocusPoll = sPolls;
+        sFocusSeen = 1;
+        return;
+    }
+    if (!Reforged_MouseOn() || sRenderer == NULL)
+        return;
+    switch (in->type)
+    {
+    case SDL_EVENT_MOUSE_MOTION:
+        kind = REFORGED_MOUSE_MOTION;
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        button = in->button.button == SDL_BUTTON_LEFT ? 1 : in->button.button == SDL_BUTTON_MIDDLE ? 2
+               : in->button.button == SDL_BUTTON_RIGHT ? 3 : 0;
+        if (button == 0)
+            return; /* X1, X2: nothing */
+        if (sFocusSeen && sPolls - sFocusPoll <= 1)
+        {
+            Log("[sdl] mouse: the click that focused the window ignored\n");
+            return;
+        }
+        kind = REFORGED_MOUSE_DOWN;
+        break;
+    case SDL_EVENT_MOUSE_WHEEL:
+    {
+        float x = in->wheel.x, y = in->wheel.y;
+
+        if (in->wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
+            x = -x, y = -y;
+        sWheelX += x;
+        sWheelY += y;
+        kind = REFORGED_MOUSE_WHEEL;
+        break;
+    }
+    default:
+        return;
+    }
+    if (!SDL_ConvertEventToRenderCoordinates(sRenderer, &ev))
+        return;
+    if (kind == REFORGED_MOUSE_MOTION)
+        fx = ev.motion.x, fy = ev.motion.y;
+    else if (kind == REFORGED_MOUSE_DOWN)
+        fx = ev.button.x, fy = ev.button.y;
+    else
+        fx = ev.wheel.mouse_x, fy = ev.wheel.mouse_y;
+    if (kind != REFORGED_MOUSE_WHEEL)
+    {
+        Reforged_MouseEvent(kind, button, (int)SDL_floorf(fx), (int)SDL_floorf(fy), 0, sPresentW);
+        return;
+    }
+    for (i = 0; i < 2; i++)
+    {
+        float *acc = i == 0 ? &sWheelY : &sWheelX;
+
+        steps = (int)*acc; /* whole notches (toward 0) */
+        *acc -= (float)steps;
+        if (steps != 0)
+            Reforged_MouseEvent(i == 0 ? REFORGED_MOUSE_WHEEL : REFORGED_MOUSE_WHEEL_X, 0, (int)SDL_floorf(fx),
+                (int)SDL_floorf(fy), steps, sPresentW);
+    }
+}
+
+/* FE8PC_TEST_MOUSE: read once (above). */
+static void ReadTestMouse(void)
+{
+    const char *path = getenv("FE8PC_TEST_MOUSE"), *pic = getenv("FE8PC_TEST_MOUSE_PICTURE");
+    FILE *f;
+    char line[256];
+
+    sTestMouseCount = 0;
+    sTestMousePicture = pic != NULL && atoi(pic) != 0;
+    if (path == NULL || (f = fopen(path, "r")) == NULL)
+    {
+        if (path != NULL)
+            Log("[sdl] FE8PC_TEST_MOUSE '%s' not read\n", path);
+        return;
+    }
+    sTestMouse = SDL_calloc(TEST_MOUSE_MAX, sizeof(*sTestMouse));
+    while (sTestMouse != NULL && fgets(line, sizeof(line), f) != NULL && sTestMouseCount < TEST_MOUSE_MAX)
+    {
+        struct TestMouse *t = &sTestMouse[sTestMouseCount];
+        char word[16] = "", b[16] = "", *hash = strchr(line, '#');
+        unsigned poll;
+        float x = 0, y = 0;
+        int n;
+
+        if (hash != NULL)
+            *hash = '\0';
+        n = sscanf(line, "%u %15s", &poll, word);
+        if (n < 2)
+            continue;
+        SDL_memset(t, 0, sizeof(*t));
+        t->poll = poll;
+        if (strcmp(word, "move") == 0 && sscanf(line, "%*u %*s %f %f", &x, &y) == 2)
+            t->kind = TM_MOVE;
+        else if ((strcmp(word, "down") == 0 || strcmp(word, "up") == 0 || strcmp(word, "click") == 0) &&
+                 sscanf(line, "%*u %*s %15s %f %f", b, &x, &y) == 3)
+        {
+            t->kind = word[0] == 'd' ? TM_DOWN : word[0] == 'u' ? TM_UP : TM_CLICK;
+            t->button = strcmp(b, "left") == 0 ? SDL_BUTTON_LEFT : strcmp(b, "middle") == 0 ? SDL_BUTTON_MIDDLE
+                      : strcmp(b, "right") == 0 ? SDL_BUTTON_RIGHT : strcmp(b, "x1") == 0 ? SDL_BUTTON_X1
+                      : strcmp(b, "x2") == 0 ? SDL_BUTTON_X2 : 0;
+            if (t->button == 0)
+                continue;
+        }
+        else if (strcmp(word, "wheel") == 0 && sscanf(line, "%*u %*s %f %f", &y, &x) >= 1)
+            t->kind = TM_WHEEL; /* (DY, then DX) */
+        else if (strcmp(word, "focus") == 0)
+            t->kind = TM_FOCUS;
+        else if (strcmp(word, "size") == 0 && sscanf(line, "%*u %*s %f %f", &x, &y) == 2)
+            t->kind = TM_SIZE;
+        else if (strcmp(word, "fullscreen") == 0 && sscanf(line, "%*u %*s %f", &x) == 1)
+            t->kind = TM_FULLSCREEN;
+        else
+        {
+            Log("[sdl] FE8PC_TEST_MOUSE: line not understood: %s", line);
+            continue;
+        }
+        t->x = x, t->y = y;
+        sTestMouseCount++;
+    }
+    fclose(f);
+    Log("[sdl] FE8PC_TEST_MOUSE: %d events from %s%s\n", sTestMouseCount, path,
+        sTestMousePicture ? " (picture pixels)" : "");
+}
+
+/* At the start of each poll: this poll's test events into SDL's queue. */
+static void TestMouseFrame(void)
+{
+    if (sTestMouseCount < 0)
+        ReadTestMouse();
+    while (sTestMouseNext < sTestMouseCount && sTestMouse[sTestMouseNext].poll <= sPolls)
+    {
+        const struct TestMouse *t = &sTestMouse[sTestMouseNext++];
+        SDL_Event ev;
+        float wx = t->x, wy = t->y;
+        SDL_WindowID id = sWindow != NULL ? SDL_GetWindowID(sWindow) : 0;
+        int k;
+
+        if (t->poll < sPolls)
+            continue; /* (a poll already gone) */
+        if (t->kind == TM_SIZE)
+        {
+            if (sWindow != NULL)
+            {
+                SDL_SetWindowSize(sWindow, (int)t->x, (int)t->y);
+                SDL_SyncWindow(sWindow);
+                SDL_GetWindowSize(sWindow, &k, NULL);
+                Log("[sdl] FE8PC_TEST_MOUSE: window size %dx%d asked (now %d wide)\n", (int)t->x, (int)t->y, k);
+            }
+            continue;
+        }
+        if (t->kind == TM_FULLSCREEN)
+        {
+            Platform_SetFullscreen(t->x != 0);
+            if (sWindow != NULL)
+            {
+                int h = 0;
+
+                SDL_SyncWindow(sWindow);
+                SDL_GetWindowSize(sWindow, &k, &h);
+                Log("[sdl] FE8PC_TEST_MOUSE: fullscreen %s, window %dx%d\n", IsFullscreen() ? "on" : "off", k, h);
+            }
+            continue;
+        }
+        if (sTestMousePicture && sRenderer != NULL && t->kind != TM_WHEEL && t->kind != TM_FOCUS)
+            SDL_RenderCoordinatesToWindow(sRenderer, t->x + 0.5f, t->y + 0.5f, &wx, &wy);
+        SDL_zero(ev);
+        switch (t->kind)
+        {
+        case TM_MOVE:
+            ev.type = SDL_EVENT_MOUSE_MOTION;
+            ev.motion.windowID = id;
+            ev.motion.which = 1;
+            ev.motion.x = wx, ev.motion.y = wy;
+            sTestMouseX = wx, sTestMouseY = wy;
+            SDL_PushEvent(&ev);
+            break;
+        case TM_DOWN:
+        case TM_UP:
+        case TM_CLICK:
+            for (k = 0; k < 2; k++)
+            {
+                if ((k == 0 && t->kind == TM_UP) || (k == 1 && t->kind == TM_DOWN))
+                    continue;
+                SDL_zero(ev);
+                ev.type = k == 0 ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+                ev.button.windowID = id;
+                ev.button.which = 1;
+                ev.button.button = (Uint8)t->button;
+                ev.button.down = k == 0;
+                ev.button.clicks = 1;
+                ev.button.x = wx, ev.button.y = wy;
+                SDL_PushEvent(&ev);
+            }
+            sTestMouseX = wx, sTestMouseY = wy;
+            break;
+        case TM_WHEEL:
+            ev.type = SDL_EVENT_MOUSE_WHEEL;
+            ev.wheel.windowID = id;
+            ev.wheel.which = 1;
+            ev.wheel.x = t->x, ev.wheel.y = t->y;
+            ev.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+            ev.wheel.mouse_x = sTestMouseX, ev.wheel.mouse_y = sTestMouseY;
+            SDL_PushEvent(&ev);
+            break;
+        case TM_FOCUS:
+            ev.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+            ev.window.windowID = id;
+            SDL_PushEvent(&ev);
+            break;
+        default:
+            break;
+        }
+    }
+}
+#endif
 
 int Platform_PollEvents(void)
 {
@@ -738,11 +1069,22 @@ int Platform_PollEvents(void)
 #ifdef FE8PC_TESTBUILD
     PortSdlTest_Frame();
 #endif
+#ifdef PLATFORM_MOUSE
+    TestMouseFrame();
+#endif
     ResolveBindings();
     while (SDL_PollEvent(&ev))
     {
         switch (ev.type)
         {
+#ifdef PLATFORM_MOUSE
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_WHEEL:
+        case SDL_EVENT_WINDOW_FOCUS_GAINED:
+            MouseEvent(&ev); /* mouse controls (above); nothing with the row off */
+            break;
+#endif
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             sQuit = 1;
@@ -940,6 +1282,9 @@ void Platform_ReleaseKeys(void)
         if (sStateKeys[i] || SDL_GetKeyboardState(NULL)[i])
             sKeyHeldBack[i] = true;
     sPadWait = 1;
+#ifdef PLATFORM_MOUSE
+    Reforged_MouseReset(); /* mouse controls: what the mouse was doing is dropped */
+#endif
 }
 #endif
 
@@ -987,6 +1332,11 @@ uint16_t Platform_ReadKeys(void)
     }
 #ifdef FE8PC_TESTBUILD
     keys = PortSdlTest_Keys(keys);
+#endif
+#ifdef PLATFORM_MOUSE
+    /* Mouse controls (above): the keys the mouse presses this frame step; any key or button held cancels
+       what it was doing (0 with the row off) */
+    keys |= Reforged_MouseKeys(keys);
 #endif
 #ifdef PLATFORM_FAST_FORWARD
     {
@@ -1382,6 +1732,10 @@ PORT_STATE_SESSION(sTexture)
 PORT_STATE_SESSION(sAudio)
 PORT_STATE_SESSION(sQuit)
 PORT_STATE_SESSION(sFullscreen)
+PORT_STATE_SESSION(sPresentW)
+PORT_STATE_SESSION(sScale)
+PORT_STATE_SESSION(sPresentation)
+PORT_STATE_SESSION(sTexScale)
 PORT_STATE_SESSION(sPads)
 PORT_STATE_SESSION(sBound)
 PORT_STATE_SESSION(sTitleNote)
@@ -1404,4 +1758,16 @@ PORT_STATE_SESSION(sFadeIn)
 PORT_STATE_SESSION(sUserDir)
 PORT_STATE_SESSION(sAsked)
 PORT_STATE_SESSION(sDir)
+#ifdef PLATFORM_MOUSE
+PORT_STATE_SESSION(sFocusPoll)
+PORT_STATE_SESSION(sFocusSeen)
+PORT_STATE_SESSION(sWheelX)
+PORT_STATE_SESSION(sWheelY)
+PORT_STATE_SESSION(sTestMouse)
+PORT_STATE_SESSION(sTestMouseCount)
+PORT_STATE_SESSION(sTestMouseNext)
+PORT_STATE_SESSION(sTestMousePicture)
+PORT_STATE_SESSION(sTestMouseX)
+PORT_STATE_SESSION(sTestMouseY)
+#endif
 #endif

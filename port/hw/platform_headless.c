@@ -93,6 +93,11 @@ void Platform_SetFullscreen(int on)
     (void)on;
 }
 
+void Platform_SetWide(int width)
+{
+    (void)width;
+}
+
 void Platform_CanonicalName(int pad, const char *name, char *out, size_t size)
 {
     (void)pad;

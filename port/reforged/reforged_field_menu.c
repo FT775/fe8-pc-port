@@ -117,6 +117,7 @@ static const struct RandoRow sFieldRows[] = {
       { "Pixel", "Fill", "Stretch" }, { 0, 1, 2 }, NULL, NULL, 0 },
     RR_SWITCH(RFO_SCALE_SMOOTH, "Smoothing", "Soften the pixels when filling or stretching."),
     RR_SWITCH(RFO_FULLSCREEN, "Fullscreen", "Start fullscreen. F11 still switches."),
+    RR_SWITCH(RFO_WIDESCREEN, "Widescreen", "A 16:9 window, the game in the middle."),
     { RR_CHOICE, RFO_ENEMY_SPEED, 3, 0, 0, 0, "Enemy phase", "How fast enemy turns go.\nStart during them: skip to your turn.",
       { "Normal", "2x", "4x" }, { 1, 2, 4 }, NULL, NULL, 0 },
     RR_SWITCH(RFO_TRUE_HIT, "True hit", "Show the real chance to hit: the game\nrolls twice, so 70 is 82 and 30 is 18."),

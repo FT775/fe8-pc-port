@@ -83,6 +83,7 @@ static void DumpState(void)
 void PortExit(int code)
 {
     PortSave_Flush(); /* the save file first, before anything else can fail */
+    PortKeyRec_Close(); /* FE8PC_KEYREC's last run (frame.c; nothing without it) */
     PortLog("[port] exit %d: frames=%u OnMain calls=%u distinct stubs hit=%u\n", code,
         gPortFrameCount, gPortOnMainCalls, sStubsHit);
     PortPaceReport();

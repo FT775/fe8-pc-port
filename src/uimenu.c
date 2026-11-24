@@ -14,6 +14,10 @@
 #include "uimenu.h"
 #include "constants/songs.h"
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h" /* PC played builds: Reforged Options, mouse controls */
+#endif
+
 // data
 
 static CONST_DATA
@@ -393,6 +397,12 @@ void Menu_OnIdle(struct MenuProc* proc)
         EndMenu(proc);
         return;
     }
+
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    /* PC played builds, "Mouse" (off by default; port/reforged/reforged_mouse.c): this menu takes input
+       now; a host copy of its items' places (nothing written) */
+    Reforged_MouseMenu(proc);
+#endif
 
     ProcessMenuDpadInput(proc);
     actions = ProcessMenuSelectInput(proc);

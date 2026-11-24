@@ -1,0 +1,31 @@
+# Mouse controls (v1.29.0), port/tools/mousecheck.sh scenario "range" (format: attack_e16.mouse). Picture pixels.
+# Start: e16_start.sav, route_f_lordpromo_e16.keys's first 7925 ticks (Chapter 16, turn 2, the free map at frame
+# 7923: cursor (16,24), camera (112,272)).
+#
+# A click on enemy 0x94 at (19,22) shows its range; a click on ally 0x02 at (18,23) then closes the range (B) and
+# selects 0x02 with the same click; right-click (B: back to the free map, the cursor on 0x02); a double-click on
+# 0x02 (two clicks two frame steps apart): selected once, the second click dropped (not A on its own square,
+# which would make it stay); right-click (B: back).
+7940 click left 200 88
+8000 click left 184 104
+8060 click right 100 100
+8100 click left 184 104
+8102 click left 184 104
+8160 click right 100 100
+#expect click: map, the cursor to \(19,22\), then A
+#expect screen: move cursor \(19,22\) unit 0x94
+#expect click: a range is shown: B closes it first
+#expect press B
+#expect screen: map cursor
+#expect click: map, the cursor to \(18,23\), then A
+#expect screen: move cursor \(18,23\) unit 0x02
+#expect press B
+#expect screen: map cursor \(18,23\)
+#expect click: map, the cursor to \(18,23\), then A
+#expect click: the second click of a double-click, ignored
+#expect screen: move cursor \(18,23\) unit 0x02
+#expect press B
+#expect screen: map cursor \(18,23\)
+#count 1 the second click of a double-click
+#count 0 plan dropped
+#count 0 click: move,

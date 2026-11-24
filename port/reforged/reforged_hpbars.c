@@ -60,6 +60,12 @@
  * sprite pushed before stay on top, and so do sprites pushed after it. A
  * sprite not drawn (hidden, moving, off screen, dropped from OAM) has no
  * picture. With the option OFF the list is empty and nothing is drawn.
+ *
+ * Widescreen (v1.27.0): a unit whose square reaches into the sides of the
+ * 284x160 picture also hands its picture, with the push src/bmudisp.c makes
+ * for its sprite there, to port/reforged/reforged_wide.c (PortWide_PushHpBar),
+ * which the renderer draws in the sides by the same rule. With the
+ * Widescreen row off nothing changes here.
  */
 
 #if PORT_PLAYED_BUILD
@@ -79,6 +85,7 @@
 
 #include "port_hw.h"
 #include "port_reforged.h"
+#include "port_state.h"
 
 /* High crit: the orange "!" for a weapon whose own crit (GetItemCrit) is above
    this. In retail FE8 (src/data_items.c, checked 2026-10-29) only the Killer
@@ -114,6 +121,9 @@
 
 struct ReforgedOverlay gReforgedOverlay; /* shown (read by the renderer) */
 static struct ReforgedOverlay sPending;  /* this OnMain's sprites */
+/* Widescreen (v1.27.0): scratch for the picture of a unit drawn only in the sides (session data) */
+static struct ReforgedOverlayOwner sSideOwner;
+PORT_STATE_SESSION(sSideOwner)
 
 /* The marks against the selected unit, by unit index (MarksFor), and what
    they were worked out for; unit -1: none (no unit selected). selUnit,
@@ -583,8 +593,14 @@ void Reforged_MapHpBarsCollect(void)
         int x = it->xDisplay - gBmSt.camera.x;
         int y = it->yDisplay - gBmSt.camera.y;
         int r3 = 0, layer, maxHp = 0, mark = MARK_NONE, bar = 0;
+        /* v1.27.0, Widescreen: a unit whose square reaches into the picture's sides also gets its picture
+           there (port/reforged/reforged_wide.c PortWide_PushHpBar); with the row off, side is 0 and this
+           loop is exactly as before */
+        int centre = !(x < -16 || x > DISPLAY_WIDTH || y < -32 || y > DISPLAY_HEIGHT);
+        int side = !(y < -32 || y > DISPLAY_HEIGHT) && PortWide_ReachesSide(x, 16);
+        int px = 0, py = 0;
 
-        if (x < -16 || x > DISPLAY_WIDTH || y < -32 || y > DISPLAY_HEIGHT)
+        if (!centre && !side)
             continue;
         if (it->config & 0x80)
             continue;
@@ -605,7 +621,7 @@ void Reforged_MapHpBarsCollect(void)
         if (sPending.count >= RFO_OVERLAY_MAX)
             break;
 
-        o = &sPending.owner[sPending.count];
+        o = centre ? &sPending.owner[sPending.count] : &sSideOwner;
         layer = (it->config & 0xf) >= 3 ? 3 : 2;
         switch (it->config & 0xf) {
         case 0:
@@ -614,6 +630,8 @@ void Reforged_MapHpBarsCollect(void)
             OamWords(list, OAM1_X(x + r3 + 0x200), OAM0_Y(0x100 + y), it->oam2Base + OAM2_LAYER(layer), &o->a0);
             o->dx = 0;
             o->dy = 0;
+            px = x + r3;
+            py = y;
             break;
         case 1:
         case 4:
@@ -621,6 +639,8 @@ void Reforged_MapHpBarsCollect(void)
             OamWords(list, OAM1_X(x + r3 + 0x200), OAM0_Y(0x100 + y - 16), it->oam2Base + OAM2_LAYER(layer), &o->a0);
             o->dx = 0;
             o->dy = 16;
+            px = x + r3;
+            py = y - 16;
             break;
         case 2:
         case 5:
@@ -629,6 +649,8 @@ void Reforged_MapHpBarsCollect(void)
                 &o->a0);
             o->dx = 8;
             o->dy = 16;
+            px = (x - 8) + r3;
+            py = y - 16;
             break;
         default:
             continue; /* PutUnitSpritesOam pushes nothing */
@@ -638,10 +660,15 @@ void Reforged_MapHpBarsCollect(void)
         if (bar)
         {
             DrawBar(o->pix, unit->curHP, maxHp);
-            bars++;
+            bars += centre;
         }
         if (mark != MARK_NONE)
             DrawMark(o->pix, mark == MARK_EFFECTIVE ? COL_WHITE : COL_ORANGE);
+        if (side) /* the square's picture for the sides, with the push src/bmudisp.c makes for them */
+            PortWide_PushHpBar(x + r3, y, px, py, list, it->oam2Base + OAM2_LAYER(layer),
+                (const unsigned short (*)[16])o->pix);
+        if (!centre)
+            continue;
         white += mark == MARK_EFFECTIVE;
         orange += mark == MARK_CRIT;
         sPending.count++;

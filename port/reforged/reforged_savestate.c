@@ -453,11 +453,19 @@ static void StToastDraw(void (*put)(void *dst, int x, int y, int c), void *dst)
     }
 }
 
+/* The window's picture: stride pixels wide, the game's 240 strip at x0 (Widescreen, v1.25.0: the middle). */
+struct StRgbaPic {
+    uint32_t *pix;
+    int stride, x0;
+};
+
 static void StPutRgba(void *dst, int x, int y, int c)
 {
+    const struct StRgbaPic *p = dst;
+
     if (x >= 0 && y >= 0 && x < 240 && y < 160)
-        ((uint32_t *)dst)[y * 240 + x] = ((uint32_t)sToastRgb[c][0] << 24) | ((uint32_t)sToastRgb[c][1] << 16) |
-                                         ((uint32_t)sToastRgb[c][2] << 8) | 0xFF;
+        p->pix[y * p->stride + p->x0 + x] = ((uint32_t)sToastRgb[c][0] << 24) | ((uint32_t)sToastRgb[c][1] << 16) |
+                                            ((uint32_t)sToastRgb[c][2] << 8) | 0xFF;
 }
 
 static void StPut555(void *dst, int x, int y, int c)
@@ -467,11 +475,17 @@ static void StPut555(void *dst, int x, int y, int c)
                                                     (sToastRgb[c][0] >> 3));
 }
 
-void PortState_ToastRgba(uint32_t *rgba)
+void PortState_ToastRgba(uint32_t *rgba, int stride, int x0)
 {
+    struct StRgbaPic pic;
+
     if (S.toastFrames <= 0)
         return;
-    StToastDraw(StPutRgba, rgba);
+    pic.pix = rgba;
+    pic.stride = stride;
+    pic.x0 = x0;
+    if (x0 >= 0 && x0 + 240 <= stride)
+        StToastDraw(StPutRgba, &pic);
     S.toastFrames--;
 }
 
