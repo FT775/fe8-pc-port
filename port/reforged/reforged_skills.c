@@ -315,6 +315,62 @@ static const char *const sHelps[SK_COUNT] = {
     [SK_PASS] = "Move through enemy squares",
 };
 
+/* v1.34.0 (the owner: "make sure each ability has a descriptor"): what each skill does, in plain words, for the
+   help boxes (the Skills page); sHelps' short forms stay for the page's one-line rows and the promotion screen. */
+static const char *const sLongHelps[SK_COUNT] = {
+    [SK_NONE] = "",
+    [SK_CANTO] = "Can move again after acting",
+    [SK_STEAL] = "Takes an item from a slower foe",
+    [SK_LOCKTOUCH] = "Opens doors and chests with Lockpicks",
+    [SK_CRIT15] = "+15 critical hit chance",
+    [SK_SILENCER] = "Critical hits may kill outright",
+    [SK_SURESTRIKE] = "Level % chance the attack cannot miss",
+    [SK_PIERCE] = "Level % chance to ignore Defense",
+    [SK_GREATSHIELD] = "Level % chance to take no damage",
+    [SK_SLAYER] = "Extra damage against monsters",
+    [SK_SUMMON] = "Summons a Phantom to fight",
+    [SK_DANCE] = "Lets an ally who acted move again",
+    [SK_CHARM] = "Allies within 2 squares: +5 Hit and Avoid",
+    [SK_SAVIOR] = "Carrying a unit costs no Skill or Speed",
+    [SK_WARY] = "Neither side can attack twice",
+    [SK_ARMSTHRIFT] = "Luck x2 % chance a weapon loses no use",
+    [SK_VANTAGE] = "At half HP or less: strikes first",
+    [SK_PATIENCE] = "+10 Hit and Avoid on the enemy's turn",
+    [SK_WRATH] = "At half HP or less: +20 critical",
+    [SK_DESPOIL] = "After a kill: Luck % chance of 300 gold",
+    [SK_MIRACLE] = "Luck % chance to survive a fatal hit with 1 HP",
+    [SK_LIVETOSERVE] = "Heals itself when it heals an ally",
+    [SK_STR2] = "Strength +2",
+    [SK_MAG2] = "Magic +2",
+    [SK_SKL2] = "Skill +2",
+    [SK_SPD2] = "Speed +2",
+    [SK_LCK2] = "Luck +2",
+    [SK_DEF2] = "Defense +2",
+    [SK_RES2] = "Resistance +2",
+    [SK_HP5] = "Max HP +5",
+    [SK_HEX] = "Enemies next to it: -15 Avoid",
+    [SK_TANTIVY] = "No ally within 2 squares: +10 Hit and Avoid",
+    [SK_UNDERDOG] = "Against a higher-level foe: +15 Hit and Avoid",
+    [SK_DISCIPLINE] = "Weapon ranks grow twice as fast",
+    [SK_SOL] = "Skill/2 % chance to heal the damage it deals",
+    [SK_LUNA] = "Skill/2 % chance to halve the foe's Defense",
+    [SK_PAVISE] = "Skill % chance to halve melee damage taken",
+    [SK_AEGIS] = "Skill % chance to halve bow and magic damage taken",
+    [SK_LIFETAKER] = "A kill on its own turn heals half its max HP",
+    [SK_POISONSTRIKE] = "A foe it hits loses 20% of its max HP",
+    [SK_RENEWAL] = "Heals 20% of its max HP at the start of each turn",
+    [SK_CELERITY] = "Movement +1",
+    [SK_ANATHEMA] = "Enemies within 3 squares: -10 Avoid and Dodge",
+    [SK_SWORDBREAKER] = "Against swords: +30 Hit and Avoid",
+    [SK_LANCEBREAKER] = "Against lances: +30 Hit and Avoid",
+    [SK_AXEBREAKER] = "Against axes: +30 Hit and Avoid",
+    [SK_BOWBREAKER] = "Against bows: +30 Hit and Avoid",
+    [SK_TOMEBREAKER] = "Against magic: +30 Hit and Avoid",
+    [SK_ASTRA] = "Skill/2 % chance: 5 hits at half damage",
+    [SK_NIHIL] = "Foes' battle skills do nothing to it",
+    [SK_PASS] = "Can move through enemy squares",
+};
+
 const char *Reforged_SkillName(int skill)
 {
     return skill > SK_NONE && skill < SK_COUNT && sNames[skill] != NULL ? sNames[skill] : "";
@@ -868,6 +924,20 @@ static const char *ShownHelp(int skill, const struct ClassData *cd)
     return Reforged_SkillHelp(skill);
 }
 
+/* v1.34.0: the plain-words help as class jid shows it (Str +2 or Mag +2) */
+static const char *ShownLongHelp(int skill, const struct ClassData *cd)
+{
+    if (skill == SK_STR2 || skill == SK_MAG2)
+        return ClassIsMagic(cd) ? "Magic +2" : "Strength +2";
+    return skill > SK_NONE && skill < SK_COUNT && sLongHelps[skill] != NULL && sLongHelps[skill][0] ? sLongHelps[skill]
+                                                                                                    : Reforged_SkillHelp(skill);
+}
+
+const char *Reforged_SkillShownLongHelp(int skill, int jid)
+{
+    return ShownLongHelp(skill, ClassOf(jid));
+}
+
 /* For the Skills page (reforged_skills_page.c): the name and help as class jid shows them. */
 const char *Reforged_SkillShownName(int skill, int jid)
 {
@@ -893,6 +963,22 @@ static int Segment(char *buf, int size, const char *label, const u8 *sk, int n, 
     len = snprintf(buf, size, "%s", label);
     for (i = 0; i < n && len < size; i++)
         len += snprintf(buf + len, size - len, "%s%s", i ? ", " : "", ShownName(sk[i], cd));
+    return len < size ? len : size - 1;
+}
+
+/* v1.34.0: "Label" + the names, each with what it does in brackets ("Gains: Celerity (Move +1)"). */
+static int SegmentHelp(char *buf, int size, const char *label, const u8 *sk, int n, const struct ClassData *cd)
+{
+    int len, i;
+
+    len = snprintf(buf, size, "%s", label);
+    for (i = 0; i < n && len < size; i++)
+    {
+        const char *h = ShownHelp(sk[i], cd);
+
+        len += snprintf(buf + len, size - len, h != NULL && h[0] ? "%s%s (%s)" : "%s%s", i ? ", " : "",
+            ShownName(sk[i], cd), h);
+    }
     return len < size ? len : size - 1;
 }
 
@@ -991,7 +1077,14 @@ int Reforged_SkillPromoDesc(struct Unit *unit, int slot, int jid, int desc)
         strcpy(out, "No skills before or after.");
         return 0x7F50 + slot;
     }
-    /* readable words first; then the short marks; then cut at the line length */
+    /* v1.34.0 (the owner: "make sure each ability has a descriptor"): what each gained skill does, when that
+       fits the two lines; then readable words; then the short marks; then cut at the line length */
+    seg[0][0] = seg[1][0] = seg[2][0] = 0;
+    if (ng) SegmentHelp(seg[0], sizeof(seg[0]), "Gains: ", gain, ng, next);
+    if (nk) Segment(seg[1], sizeof(seg[1]), "Keeps: ", keep, nk, next);
+    if (nl) Segment(seg[2], sizeof(seg[2]), "Loses: ", lose, nl, cur);
+    if (ng && TwoLines(out, sizeof(sPromoText[slot]), seg, ". "))
+        return 0x7F50 + slot;
     seg[0][0] = seg[1][0] = seg[2][0] = 0;
     if (ng) Segment(seg[0], sizeof(seg[0]), "Gains: ", gain, ng, next);
     if (nk) Segment(seg[1], sizeof(seg[1]), "Keeps: ", keep, nk, next);

@@ -146,6 +146,8 @@ int Reforged_SkillPromoChoices(const struct Unit *unit, int *out);
 int Reforged_SkillPageMsg(int index, char *buf);
 const char *Reforged_SkillShownName(int skill, int jid);
 const char *Reforged_SkillShownHelp(int skill, int jid);
+/* v1.34.0: what the skill does in plain words, for help boxes (falls back to the short help) */
+const char *Reforged_SkillShownLongHelp(int skill, int jid);
 #endif
 /* --- end of kept skills --- */
 

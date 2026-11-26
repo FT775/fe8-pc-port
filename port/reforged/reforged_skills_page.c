@@ -154,9 +154,9 @@ static int Put(struct Text *t, int x, int color, const char *str)
     return Text_GetCursor(t);
 }
 
-/* Greedy word wrap of src into dst: lines of HELP_CHARS characters at most, HELP_LINES lines at
+/* Greedy word wrap of src into dst: lines of HELP_CHARS characters at most, maxLines lines at
    most (the rest is dropped), the game's line break "\x01" between lines. */
-static void Wrap(char *dst, int size, const char *src)
+static void WrapN(char *dst, int size, const char *src, int maxLines)
 {
     int len = 0, col = 0, lines = 1;
     const char *p = src;
@@ -177,7 +177,7 @@ static void Wrap(char *dst, int size, const char *src)
         wl = (int)(p - w);
         if (col > 0 && col + 1 + wl > HELP_CHARS)
         {
-            if (lines == HELP_LINES || len + 1 >= size)
+            if (lines >= maxLines || len + 1 >= size)
                 break;
             dst[len++] = '\x01';
             lines++;
@@ -200,6 +200,11 @@ static void Wrap(char *dst, int size, const char *src)
     dst[len] = 0;
 }
 
+static void Wrap(char *dst, int size, const char *src)
+{
+    WrapN(dst, size, src, HELP_LINES);
+}
+
 /* The class the names are shown for (Str +2 or Mag +2): the unit's own while its skills are
    drawn, a promotion choice's while that choice's line is. */
 static int sNameJid;
@@ -212,6 +217,19 @@ static const char *PName(int skill)
 static const char *PHelp(int skill)
 {
     return Reforged_SkillShownHelp(skill, sNameJid);
+}
+
+/* v1.34.0: one help line "<prefix>Name: what it does": the plain words when they fit a line, else the short
+   form (so a line is never cut) */
+static void HelpLine(char *one, int size, const char *prefix, int skill)
+{
+    const char *l = Reforged_SkillShownLongHelp(skill, sNameJid), *h = PHelp(skill);
+
+    snprintf(one, size, "%s%s: %s", prefix, PName(skill), l != NULL && l[0] ? l : (h != NULL && h[0] ? h : "a map skill"));
+    if ((int)strlen(one) > HELP_CHARS + 6)
+        snprintf(one, size, "%s%s: %s", prefix, PName(skill), h != NULL && h[0] ? h : "a map skill");
+    if ((int)strlen(one) > HELP_CHARS + 6)
+        one[HELP_CHARS + 6] = 0;
 }
 
 static void Names(char *out, int size, const char *label, const unsigned char *ids, int n)
@@ -265,7 +283,11 @@ static void SkillRow(int skill)
 
     if (help != NULL && help[0] && x + 6 + 20 <= LINE_PX)
         Put(t, x + 6, TEXT_COLOR_SYSTEM_BLUE, help);
-    snprintf(text, sizeof(text), "%s: %s", PName(skill), help ? help : "");
+    {
+        const char *l = Reforged_SkillShownLongHelp(skill, sNameJid);
+
+        snprintf(text, sizeof(text), "%s: %s", PName(skill), l != NULL && l[0] ? l : (help ? help : ""));
+    }
     Wrap(sHelp[sRows], sizeof(sHelp[0]), text);
     sRows++;
 }
@@ -288,11 +310,9 @@ static void AlsoRow(const unsigned char *ids, int n)
     text[0] = 0;
     for (i = 0; i < n && lines < HELP_LINES && len < (int)sizeof(text); i++, lines++)
     {
-        char one[64];
+        char one[96];
 
-        snprintf(one, sizeof(one), "%s: %s", PName(ids[i]),
-            PHelp(ids[i]) ? PHelp(ids[i]) : "");
-        one[HELP_CHARS + 6] = 0; /* one line each: a long effect is cut */
+        HelpLine(one, sizeof(one), "", ids[i]); /* one line each */
         len += snprintf(text + len, sizeof(text) - len, "%s%s", lines ? "\x01" : "", one);
     }
     snprintf(sHelp[sRows], sizeof(sHelp[0]), "%s", text);
@@ -334,14 +354,70 @@ static void PromoRow(const struct PromoLine *p)
             x = Put(t, x + 4, color, buf);
     }
     gains[0] = keeps[0] = loses[0] = 0;
-    if (p->ng) Names(gains, sizeof(gains), "Gains ", p->gains, p->ng);
     if (p->nk) Names(keeps, sizeof(keeps), "Keeps ", p->keeps, p->nk);
     if (p->nl) Names(loses, sizeof(loses), "Loses ", p->loses, p->nl);
     if (p->ng + p->nk + p->nl == 0)
+    {
         snprintf(all, sizeof(all), "%s: no skills before or after.", cls);
+        Wrap(sHelp[sRows], sizeof(sHelp[0]), all);
+    }
     else
-        snprintf(all, sizeof(all), "%s: %s%s%s", cls, gains, keeps, loses);
-    Wrap(sHelp[sRows], sizeof(sHelp[0]), all);
+    {
+        /* v1.34.0 (the owner: "make sure each ability has a descriptor"): each skill the promotion gives,
+           with what it does, a line each; then what it keeps and loses, in the lines left */
+        int len = 0, lines = 0;
+
+        char wrapped[4][200];
+        int need = 0;
+
+        all[0] = 0;
+        /* the plain words for every gain, wrapped, when they all fit the help's lines; else one line each */
+        for (i = 0; i < p->ng && i < 4; i++)
+        {
+            const char *l = Reforged_SkillShownLongHelp(p->gains[i], sNameJid);
+            char one[160];
+            const char *c;
+
+            snprintf(one, sizeof(one), "+%s: %s", PName(p->gains[i]), l != NULL && l[0] ? l : "a map skill");
+            WrapN(wrapped[i], sizeof(wrapped[i]), one, HELP_LINES);
+            need++;
+            for (c = wrapped[i]; *c; c++)
+                need += *c == '\x01';
+            if (strlen(wrapped[i]) < strlen(one) - 2) /* cut: does not fit even alone */
+                need = HELP_LINES + 1;
+        }
+        if (p->ng <= 4 && need <= HELP_LINES)
+        {
+            for (i = 0; i < p->ng; i++)
+            {
+                const char *c;
+
+                len += snprintf(all + len, sizeof(all) - len, "%s%s", lines ? "\x01" : "", wrapped[i]);
+                lines++;
+                for (c = wrapped[i]; *c; c++)
+                    lines += *c == '\x01';
+            }
+        }
+        else
+            for (i = 0; i < p->ng && lines < HELP_LINES; i++, lines++)
+            {
+                char one[96];
+
+                HelpLine(one, sizeof(one), "+", p->gains[i]);
+                len += snprintf(all + len, sizeof(all) - len, "%s%s", lines ? "\x01" : "", one);
+            }
+        if (p->ng == 0)
+            snprintf(gains, sizeof(gains), "Gains no skill. ");
+        if (lines < HELP_LINES && (gains[0] || keeps[0] || loses[0]) && len < (int)sizeof(all) - 2)
+        {
+            char rest[160], wrapped[200];
+
+            snprintf(rest, sizeof(rest), "%s%s%s", gains, keeps, loses);
+            WrapN(wrapped, sizeof(wrapped), rest, HELP_LINES - lines);
+            snprintf(all + len, sizeof(all) - len, "%s%s", lines ? "\x01" : "", wrapped);
+        }
+        snprintf(sHelp[sRows], sizeof(sHelp[0]), "%s", all);
+    }
     sRows++;
 }
 

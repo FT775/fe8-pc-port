@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.34.0 (2026-11-26)
+
+### In short
+- With **Skills** on, every skill now says what it does in plain words: on the stat screen's Skills page, the help (R) of a promotion row explains each skill that promotion gives ("+Renewal: Heals 20% of its max HP at the start of each turn"), not just its name.
+- The promotion screen also names what a new skill does when it fits ("Gains: Celerity (Move +1)").
+
+### Changed
+- **Skills page help** (the stat screen's 4th page). A promotion row's help now gives each skill gained with what it does, wrapped over the help's three lines when they all fit, else one line each in the short form; then what the unit keeps and loses in the lines left. Every skill now has a plain-words description for the help boxes (a skill's own row, the "Also:" row and the promotion rows); the short form stays on the page's rows, which have room for a few words only. The promotion screen's two lines try "Gains: Name (what it does)" first and fall back to the names alone when that does not fit.
+
+### Technical
+- `port/reforged/reforged_skills.c`: `sLongHelps` (one per skill) and `Reforged_SkillShownLongHelp`; the promotion text tries `SegmentHelp` first. `port/reforged/reforged_skills_page.c`: `WrapN`, `HelpLine` (the plain words when they fit a line, else the short form), the promotion row's help as above. Display only: the game is the same (the identity routes, skills off, are unchanged; checked with Skills on in Chapter 16 on Eirika's page).
+
 ## v1.33.0 (2026-11-26)
 
 ### In short
