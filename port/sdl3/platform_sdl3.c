@@ -76,6 +76,11 @@
 int PortWin32RoamingDir(char *out, size_t outSize);
 int PortWin32SystemDir(char *out, size_t outSize);                    /* v1.31.0 */
 int PortWin32RunHidden(const char *cmdline, char *out, size_t outSize); /* v1.31.0 */
+int PortWin32UpdateTempDir(char *out, size_t outSize);                 /* v1.33.0 */
+int PortWin32InstallUpdate(const char *zipPath, const char *tmpDir, const char *folder);
+void PortWin32RestartGame(void);
+void PortWin32UpdateCleanup(void);
+void PortWin32WaitForUpdater(void);
 #endif
 
 /*
@@ -1857,5 +1862,72 @@ int Platform_HttpsGet(const char *url, const char *userAgent, char *buf, size_t 
         buf[total] = '\0';
         return pclose(f) == 0 && total > 0;
     }
+#endif
+}
+
+/* v1.33.0 (port/platform.h; the updater, port/reforged/reforged_update.c): Windows only */
+int Platform_CanInstallUpdates(void)
+{
+#ifdef _WIN32
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int Platform_UpdateTempDir(char *out, size_t size)
+{
+#ifdef _WIN32
+    return PortWin32UpdateTempDir(out, size) == 0;
+#else
+    (void)out;
+    (void)size;
+    return 0;
+#endif
+}
+
+int Platform_HttpsDownload(const char *url, const char *path)
+{
+#ifdef _WIN32
+    char sys[260], cmd[1400], out[256];
+
+    if (SDL_strchr(url, '"') != NULL || SDL_strchr(path, '"') != NULL ||
+        (SDL_strncmp(url, "https://", 8) != 0 && SDL_strncmp(url, "file://", 7) != 0))
+        return 0;
+    if (PortWin32SystemDir(sys, sizeof(sys)) != 0)
+        return 0;
+    SDL_snprintf(cmd, sizeof(cmd), "\"%s\\curl.exe\" -fsSL --max-time 600 -A \"fe8pc-update\" -o \"%s\" -w ok \"%s\"",
+        sys, path, url);
+    return PortWin32RunHidden(cmd, out, sizeof(out)) && SDL_strcmp(out, "ok") == 0;
+#else
+    (void)url;
+    (void)path;
+    return 0;
+#endif
+}
+
+int Platform_InstallUpdate(const char *zipPath, const char *tmpDir, const char *folder)
+{
+#ifdef _WIN32
+    return PortWin32InstallUpdate(zipPath, tmpDir, folder) == 0;
+#else
+    (void)zipPath;
+    (void)tmpDir;
+    (void)folder;
+    return 0;
+#endif
+}
+
+void Platform_RestartGame(void)
+{
+#ifdef _WIN32
+    PortWin32RestartGame();
+#endif
+}
+
+void Platform_UpdateCleanup(void)
+{
+#ifdef _WIN32
+    PortWin32UpdateCleanup();
 #endif
 }

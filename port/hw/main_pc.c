@@ -19,6 +19,9 @@
 #include "render.h"
 #include "../platform.h"
 #include "../audio/audio_pc.h"
+#ifdef _WIN32
+void PortWin32WaitForUpdater(void); /* port/win32/posix_win32.c (v1.33.0) */
+#endif
 #include "port_state.h"
 
 /*
@@ -452,6 +455,9 @@ int main(int argc, char **argv)
         return 1;
     /* The player's save file into SRAM: after PortMemInit blanks it, before
        AgbMain's SramInit (main.c:55) first reads it. */
+#ifdef _WIN32
+    PortWin32WaitForUpdater(); /* v1.33.0: started by an install: the old game's save lock released first */
+#endif
     if (PortSave_Init(romPath, args.save, args.noSave) != 0)
         return 1;
     /* After the GBA map is reserved, so nothing the backend loads lands in it. */

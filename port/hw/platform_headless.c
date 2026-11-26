@@ -265,3 +265,39 @@ void Platform_SetAudioRate(uint32_t rateHz)
 {
     (void)rateHz;
 }
+
+/* v1.33.0 (port/platform.h): no updates here. */
+int Platform_CanInstallUpdates(void)
+{
+    return 0;
+}
+
+int Platform_UpdateTempDir(char *out, size_t size)
+{
+    (void)out;
+    (void)size;
+    return 0;
+}
+
+int Platform_HttpsDownload(const char *url, const char *path)
+{
+    (void)url;
+    (void)path;
+    return 0;
+}
+
+int Platform_InstallUpdate(const char *zipPath, const char *tmpDir, const char *folder)
+{
+    (void)zipPath;
+    (void)tmpDir;
+    (void)folder;
+    return 0;
+}
+
+void Platform_RestartGame(void)
+{
+}
+
+void Platform_UpdateCleanup(void)
+{
+}

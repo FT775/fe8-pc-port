@@ -1039,6 +1039,299 @@ int PortWin32RunHidden(const char *cmdline, char *out, size_t outSize)
     return ok;
 }
 
+/* --- v1.33.0, the updater (platform_sdl3.c; port/reforged/reforged_update.c) --- */
+
+/* This exe's path and its folder (with the trailing backslash). */
+static int ExeAndDir(char *exe, size_t exeSize, char *dir, size_t dirSize)
+{
+    DWORD n = GetModuleFileNameA(NULL, exe, (DWORD)exeSize);
+    char *slash;
+
+    if (n == 0 || n >= exeSize)
+        return -1;
+    slash = strrchr(exe, '\\');
+    if (slash == NULL || (size_t)(slash - exe + 2) > dirSize)
+        return -1;
+    memcpy(dir, exe, (size_t)(slash - exe + 1));
+    dir[slash - exe + 1] = '\0';
+    return 0;
+}
+
+/* %TEMP%\fe8pc-update\, emptied (only the names this updater writes there). */
+int PortWin32UpdateTempDir(char *out, size_t outSize)
+{
+    char tmp[MAX_PATH], path[MAX_PATH * 2];
+    DWORD n = GetTempPathA(sizeof(tmp), tmp);
+
+    if (n == 0 || n >= sizeof(tmp) || (size_t)snprintf(out, outSize, "%sfe8pc-update\\", tmp) >= outSize)
+        return -1;
+    CreateDirectoryA(out, NULL);
+    snprintf(path, sizeof(path), "%supdate.zip", out);
+    DeleteFileA(path);
+    return GetFileAttributesA(out) != INVALID_FILE_ATTRIBUTES ? 0 : -1;
+}
+
+/* Runs cmdline with no window; its standard output into a growing malloc'd buffer (*out, *outLen; at most
+   maxLen bytes, else a failure), its exit code into *code. 0 when it ran to its end. */
+static int RunHiddenAll(const char *cmdline, unsigned char **out, size_t *outLen, size_t maxLen, DWORD *code)
+{
+    SECURITY_ATTRIBUTES sa;
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    HANDLE rd = NULL, wr = NULL;
+    char cmd[1024];
+    unsigned char *buf = NULL;
+    size_t cap = 0, len = 0;
+    DWORD got = 0;
+    int ok = -1;
+
+    *out = NULL, *outLen = 0, *code = 1;
+    memset(&sa, 0, sizeof(sa));
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    if (strlen(cmdline) >= sizeof(cmd) || !CreatePipe(&rd, &wr, &sa, 0))
+        return -1;
+    SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    si.hStdOutput = wr;
+    strcpy(cmd, cmdline);
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    {
+        CloseHandle(rd);
+        CloseHandle(wr);
+        return -1;
+    }
+    CloseHandle(wr);
+    for (;;)
+    {
+        if (len == cap)
+        {
+            unsigned char *nb;
+
+            if (cap >= maxLen)
+                break; /* too much: a failure below */
+            cap = cap == 0 ? 1u << 20 : cap * 2;
+            if (cap > maxLen)
+                cap = maxLen;
+            nb = realloc(buf, cap);
+            if (nb == NULL)
+                break;
+            buf = nb;
+        }
+        if (!ReadFile(rd, buf + len, (DWORD)(cap - len), &got, NULL) || got == 0)
+        {
+            ok = 0;
+            break;
+        }
+        len += got;
+    }
+    CloseHandle(rd);
+    if (WaitForSingleObject(pi.hProcess, 15000) != WAIT_OBJECT_0 || !GetExitCodeProcess(pi.hProcess, code))
+    {
+        TerminateProcess(pi.hProcess, 1);
+        ok = -1;
+    }
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    if (ok != 0)
+    {
+        free(buf);
+        return -1;
+    }
+    *out = buf, *outLen = len;
+    return 0;
+}
+
+/* data into path (created or replaced), every byte written and flushed; 0, or -1 (path deleted). */
+static int WriteWhole(const char *path, const unsigned char *data, size_t len)
+{
+    HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    size_t done = 0;
+    int ok;
+
+    if (h == INVALID_HANDLE_VALUE)
+        return -1;
+    while (done < len)
+    {
+        DWORD w = 0, n = (DWORD)(len - done > (1u << 24) ? (1u << 24) : len - done);
+
+        if (!WriteFile(h, data + done, n, &w, NULL) || w != n)
+            break;
+        done += w;
+    }
+    ok = done == len && FlushFileBuffers(h);
+    CloseHandle(h);
+    if (!ok)
+        DeleteFileA(path);
+    return ok ? 0 : -1;
+}
+
+/* One member of the (SHA-256-checked) zip, as Windows' tar gives it on its standard output (tar checks the
+   member's CRC and fails on a bad one), written to dst; at least minSize bytes. 0, or -1 (dst not there). */
+static int ExtractTo(const char *sys, const char *zipPath, const char *member, const char *dst, size_t minSize)
+{
+    char cmd[1024];
+    unsigned char *data;
+    size_t len;
+    DWORD code;
+    int r;
+
+    if ((size_t)snprintf(cmd, sizeof(cmd), "\"%s\\tar.exe\" -xOf \"%s\" \"%s\"", sys, zipPath, member) >= sizeof(cmd))
+        return -1;
+    if (RunHiddenAll(cmd, &data, &len, 64u << 20, &code) != 0)
+    {
+        PortLog("[update] tar could not give %s\n", member);
+        return -1;
+    }
+    if (code != 0 || len < minSize)
+    {
+        PortLog("[update] tar gave %s with exit %lu, %lu bytes: not used\n", member, (unsigned long)code, (unsigned long)len);
+        free(data);
+        return -1;
+    }
+    r = WriteWhole(dst, data, len);
+    free(data);
+    if (r != 0)
+        PortLog("[update] cannot write %s (error %lu)\n", dst, (unsigned long)GetLastError());
+    return r;
+}
+
+/* The new fe8pc-sdl.exe and SDL3.dll from the zip's folder: first written beside the game as .new (a failure
+   there changes nothing), then four renames on the same drive (cur -> .old, .new -> cur), each checked and
+   undone on a failure. 0 when the new files are in place, -1 when the old ones still are. tmpDir: unused. */
+int PortWin32InstallUpdate(const char *zipPath, const char *tmpDir, const char *folder)
+{
+    char exe[MAX_PATH], dir[MAX_PATH], sys[MAX_PATH], member[160];
+    char dll[MAX_PATH + 16], exeNew[MAX_PATH + 16], dllNew[MAX_PATH + 32], exeOld[MAX_PATH + 16], dllOld[MAX_PATH + 32];
+
+    (void)tmpDir;
+    if (ExeAndDir(exe, sizeof(exe), dir, sizeof(dir)) != 0 || PortWin32SystemDir(sys, sizeof(sys)) != 0 ||
+        strchr(folder, '\\') != NULL || strchr(folder, '/') != NULL || strstr(folder, "..") != NULL ||
+        strchr(folder, '"') != NULL || strlen(folder) > 100)
+        return -1;
+    snprintf(dll, sizeof(dll), "%sSDL3.dll", dir);
+    snprintf(exeNew, sizeof(exeNew), "%s.new", exe);
+    snprintf(dllNew, sizeof(dllNew), "%s.new", dll);
+    snprintf(exeOld, sizeof(exeOld), "%s.old", exe);
+    snprintf(dllOld, sizeof(dllOld), "%s.old", dll);
+    snprintf(member, sizeof(member), "%s/fe8pc-sdl.exe", folder);
+    if (ExtractTo(sys, zipPath, member, exeNew, 1000000u) != 0)
+        return -1;
+    snprintf(member, sizeof(member), "%s/SDL3.dll", folder);
+    if (ExtractTo(sys, zipPath, member, dllNew, 100000u) != 0)
+    {
+        DeleteFileA(exeNew);
+        return -1;
+    }
+    DeleteFileA(exeOld);
+    DeleteFileA(dllOld);
+    /* a running exe and its loaded DLL can be renamed, not overwritten */
+    if (!MoveFileA(exe, exeOld))
+    {
+        PortLog("[update] cannot rename %s (error %lu)\n", exe, (unsigned long)GetLastError());
+        goto undo0;
+    }
+    if (!MoveFileA(dll, dllOld))
+    {
+        PortLog("[update] cannot rename %s (error %lu)\n", dll, (unsigned long)GetLastError());
+        goto undo1;
+    }
+    if (!MoveFileA(exeNew, exe))
+    {
+        PortLog("[update] cannot rename %s (error %lu)\n", exeNew, (unsigned long)GetLastError());
+        goto undo2;
+    }
+    if (!MoveFileA(dllNew, dll))
+    {
+        PortLog("[update] cannot rename %s (error %lu)\n", dllNew, (unsigned long)GetLastError());
+        if (!MoveFileExA(exe, exeNew, MOVEFILE_REPLACE_EXISTING))
+            PortLog("[update] cannot move the new exe aside (error %lu)\n", (unsigned long)GetLastError());
+        goto undo2;
+    }
+    PortLog("[update] %s and SDL3.dll replaced (the old ones kept as .old until the next start)\n", exe);
+    return 0;
+undo2:
+    if (!MoveFileExA(dllOld, dll, MOVEFILE_REPLACE_EXISTING))
+        PortLog("[update] PUT BACK FAILED: rename %s to SDL3.dll yourself (error %lu)\n", dllOld, (unsigned long)GetLastError());
+undo1:
+    if (!MoveFileExA(exeOld, exe, MOVEFILE_REPLACE_EXISTING))
+        PortLog("[update] PUT BACK FAILED: rename %s to fe8pc-sdl.exe yourself (error %lu)\n", exeOld, (unsigned long)GetLastError());
+undo0:
+    DeleteFileA(exeNew);
+    DeleteFileA(dllNew);
+    return -1;
+}
+
+/* This exe again, with this run's command line; FE8PC_UPDATED=<this process's id> in its environment, so it
+   waits for this one to have ended (its save file's lock released) before it opens the save
+   (PortWin32WaitForUpdater). */
+void PortWin32RestartGame(void)
+{
+    char exe[MAX_PATH], dir[MAX_PATH], pid[16], *line = GetCommandLineA();
+    static char cmd[8192];
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+
+    if (ExeAndDir(exe, sizeof(exe), dir, sizeof(dir)) != 0 || strlen(line) >= sizeof(cmd))
+        return;
+    strcpy(cmd, line);
+    snprintf(pid, sizeof(pid), "%lu", (unsigned long)GetCurrentProcessId());
+    SetEnvironmentVariableA("FE8PC_UPDATED", pid);
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    if (CreateProcessA(exe, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+    {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+    else
+        PortLog("[update] cannot start %s again (error %lu): start it yourself\n", exe, (unsigned long)GetLastError());
+}
+
+/* port/hw/main_pc.c, before the save file is opened: started by an install (FE8PC_UPDATED=<pid>), wait (at most
+   20 s) for the game that installed this one to end, so its save file's lock is free. */
+void PortWin32WaitForUpdater(void)
+{
+    const char *s = getenv("FE8PC_UPDATED");
+    unsigned long pid = s != NULL ? strtoul(s, NULL, 10) : 0;
+    HANDLE h;
+
+    if (pid == 0 || pid == GetCurrentProcessId())
+        return;
+    h = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
+    if (h == NULL)
+        return; /* already gone */
+    if (WaitForSingleObject(h, 20000) != WAIT_OBJECT_0)
+        PortLog("[update] the game that installed this one has not ended after 20 s\n");
+    CloseHandle(h);
+}
+
+/* What an install left: the .old files (once nothing runs from them) and any .new ones. */
+void PortWin32UpdateCleanup(void)
+{
+    static const char *const kSuffix[] = { "fe8pc-sdl.exe.old", "SDL3.dll.old", "fe8pc-sdl.exe.new", "SDL3.dll.new" };
+    char exe[MAX_PATH], dir[MAX_PATH], path[MAX_PATH * 2];
+    const char *base;
+    size_t i;
+
+    if (ExeAndDir(exe, sizeof(exe), dir, sizeof(dir)) != 0)
+        return;
+    base = exe + strlen(dir);
+    for (i = 0; i < sizeof(kSuffix) / sizeof(kSuffix[0]); i++)
+    {
+        /* the exe's own name may differ from fe8pc-sdl.exe: its .old / .new go by its name */
+        if (i == 0 || i == 2)
+            snprintf(path, sizeof(path), "%s%s%s", dir, base, i == 0 ? ".old" : ".new");
+        else
+            snprintf(path, sizeof(path), "%s%s", dir, kSuffix[i]);
+        if (DeleteFileA(path))
+            PortLog("[update] deleted %s\n", path);
+    }
+}
+
 /* Save states (port/include/port_state.h): not game state: the exe image's bounds, the signal emulation,
    the clock's frequency and the sleep timer (a handle of this process). */
 PORT_STATE_SESSION(sImageLo)

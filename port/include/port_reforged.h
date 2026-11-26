@@ -65,9 +65,9 @@ enum ReforgedOption {
        hover become key presses, the same ones a pad would make). Input only: never marks a save, never in
        an option set. */
     RFO_MOUSE,
-    /* "Update notice" (reforged_update.c, v1.31.0; the Display screen's row): 0 [0], 1 (once per run the game
-       asks GitHub for the newest release; a newer one is named on the title screen). Never marks a save,
-       never in an option set. */
+    /* "Updates" (reforged_update.c; v1.31.0 "Update notice", v1.33.0 on by default and installing; the Display
+       screen's row): 1 [1] (once per run the game asks GitHub for the newest release; a newer one is named on
+       the title screen, where Select installs it on Windows), 0. Never marks a save, never in an option set. */
     RFO_UPDATE_NOTICE,
     /* "Sound" (port/audio/hq_pc.c, v1.32.0; the Display screen's row): 0 Original [0], 1 Enhanced (the music
        and sound effects mixed again at 4 x the GBA's rate for the speaker). Never marks a save, never in an

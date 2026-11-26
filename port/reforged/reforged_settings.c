@@ -92,7 +92,8 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_SKILL_BANNERS] = "skill_banners",
     [RFO_MYRRH_LOOK] = "myrrh_look",
     [RFO_MOUSE] = "mouse_controls", /* v1.29.0, the Controls screen's row (reforged_mouse.c) */
-    [RFO_UPDATE_NOTICE] = "update_notice", /* v1.31.0, the Display screen's row (reforged_update.c) */
+    [RFO_UPDATE_NOTICE] = "updates", /* v1.33.0 (v1.31.0's "update_notice", off by default, is no longer read:
+                                       the row is on by default from v1.33.0), the Display screen's row */
     [RFO_AUDIO_HQ] = "enhanced_sound", /* v1.32.0, the Display screen's "Sound" row (port/audio/hq_pc.c) */
     [RFO_CONVOY_ANYWHERE] = "convoy_anywhere",
     [RFO_SKIRMISH_PASS] = "pass_skirmishes",
@@ -184,7 +185,7 @@ static const char *const sKeys[RFO_COUNT] = {
    reforged_savemark.c) and the Randomizer's amounts (UFER's
    defaults, port_reforged.h; they act only with the randomizer and their mode on).
    A missing file or key, or a bad value, gives the default. */
-#define RFO_DEFAULTS { [RFO_FAST_FORWARD] = 1, [RFO_FF_SPEED] = 4, [RFO_BUG_FIXES] = 1, [RFO_ENEMY_SPEED] = 4, [RFO_TRUE_HIT] = 1, [RFO_ARENA_ODDS] = 1, [RFO_SKILL_BANNERS] = 1, \
+#define RFO_DEFAULTS { [RFO_UPDATE_NOTICE] = 1, [RFO_FAST_FORWARD] = 1, [RFO_FF_SPEED] = 4, [RFO_BUG_FIXES] = 1, [RFO_ENEMY_SPEED] = 4, [RFO_TRUE_HIT] = 1, [RFO_ARENA_ODDS] = 1, [RFO_SKILL_BANNERS] = 1, \
     [RFO_SAVE_STATES] = 1, \
     [RFO_RANDO_GROWTH_VAR] = 30, [RFO_RANDO_GROWTH_MIN] = 5, [RFO_RANDO_GROWTH_MAX] = 80, \
     [RFO_RANDO_BASE_VAR] = 5, [RFO_RANDO_GENDER] = 1, [RFO_RANDO_PALETTES] = 1, [RFO_RANDO_ENEMY_GROWTH_AMT] = 10, \
@@ -1201,8 +1202,9 @@ static int WriteSettings(const char *path, int onlyIfChanged)
         "# myrrh_look: 1 = Myrrh's dragon form in battle is FE6's Divine Dragon (needs your\n"
         "# own FE6 ROM; looks only).\n"
         "# widescreen: 1 = a 16:9 window, the game centred with black sides.\n"
-        "# update_notice: 1 = once per run, ask GitHub for the newest version of the\n"
-        "# port and name a newer one on the title screen (nothing is downloaded).\n"
+        "# updates: 1 (the default) = once per run, ask GitHub for the newest version of\n"
+        "# the port; a newer one is named on the title screen, where Select installs it\n"
+        "# (Windows: the release's zip, its SHA-256 checked); 0 = never ask.\n"
         "# enhanced_sound: 1 = the music and sound effects mixed again at 4 times the\n"
         "# GBA's rate, smoother and without its hiss; 0 (the default) = the GBA's sound.\n"
         /* --- Game fixes submenu --- */

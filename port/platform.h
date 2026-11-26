@@ -160,6 +160,20 @@ void Platform_SetWide(int width);
    thread. Headless: both 0. */
 int Platform_RunDetached(int (*fn)(void *), void *arg);
 int Platform_HttpsGet(const char *url, const char *userAgent, char *buf, size_t size);
+/* v1.33.0 (the updater, port/reforged/reforged_update.c). Platform_CanInstallUpdates: 1 where the next four
+   work (the Windows window build). Platform_UpdateTempDir: an empty folder for a download (with its trailing
+   separator). Platform_HttpsDownload: url (https://, or file:// for tests) into path through curl (at most
+   10 minutes); blocks. Platform_InstallUpdate: the zip's folder/fe8pc-sdl.exe and folder/SDL3.dll, extracted
+   into tmpDir, put in place of this exe and its SDL3.dll (those renamed to .old first, put back on any
+   failure); 1 when done. Platform_RestartGame: this exe started again with this run's command line and
+   FE8PC_UPDATED=1 (the caller then exits). Platform_UpdateCleanup: the .old files an install left, deleted.
+   Elsewhere: 0 / nothing. */
+int Platform_CanInstallUpdates(void);
+int Platform_UpdateTempDir(char *out, size_t size);
+int Platform_HttpsDownload(const char *url, const char *path);
+int Platform_InstallUpdate(const char *zipPath, const char *tmpDir, const char *folder);
+void Platform_RestartGame(void);
+void Platform_UpdateCleanup(void);
 /* A valid binding name in the backend's own spelling ("return" -> "Return",
    "DPUP" -> "dpup"), in out; the headless backend copies it. */
 void Platform_CanonicalName(int pad, const char *name, char *out, size_t size);
