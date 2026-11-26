@@ -827,6 +827,9 @@ static int16_t ClampS16(int32_t v)
     return (int16_t)v;
 }
 
+/* v1.32.0, "Enhanced sound" (psg.h PortPsg_SetTickHook) */
+static PortPsgTickHook sTickHook;
+
 /* --- Interface ------------------------------------------------------------ */
 
 void PortPsg_Init(volatile uint8_t *io)
@@ -917,8 +920,15 @@ void PortPsg_Render(const int8_t *laneA, const int8_t *laneB, int16_t *lr, uint3
             levels[1] = SquareLevel(&sPsg.sq[1]);
             levels[2] = WaveLevel();
             levels[3] = NoiseLevel();
-            accL += DacTick(PsgSide(levels, sPsg.nr51 >> 4, (sPsg.nr50 >> 4) & 7u) + fifoL) - bias;
-            accR += DacTick(PsgSide(levels, sPsg.nr51 & 0x0Fu, sPsg.nr50 & 7u) + fifoR) - bias;
+            {
+                int32_t psgL = PsgSide(levels, sPsg.nr51 >> 4, (sPsg.nr50 >> 4) & 7u);
+                int32_t psgR = PsgSide(levels, sPsg.nr51 & 0x0Fu, sPsg.nr50 & 7u);
+
+                accL += DacTick(psgL + fifoL) - bias;
+                accR += DacTick(psgR + fifoR) - bias;
+                if (sTickHook != NULL) /* v1.32.0, "Enhanced sound": this tick's PSG level, before the DAC */
+                    sTickHook(i * PORT_PSG_SAMPLE_CYCLES + (PORT_PSG_SAMPLE_CYCLES - left), period, psgL, psgR);
+            }
             n++;
             sPsg.pwmTicks++;
         }
@@ -926,6 +936,18 @@ void PortPsg_Render(const int8_t *laneA, const int8_t *laneB, int16_t *lr, uint3
         lr[2 * i + 1] = n != 0 ? ClampS16(accR * S16_PER_UNIT / n) : 0;
     }
     Publish();
+}
+
+void PortPsg_SetTickHook(PortPsgTickHook hook)
+{
+    sTickHook = hook;
+}
+
+void PortPsg_DacRegs(uint16_t *soundcntH, uint16_t *soundbias, int *powered)
+{
+    *soundcntH = sPsg.soundcntH;
+    *soundbias = sPsg.soundbias;
+    *powered = sPsg.powered ? 1 : 0;
 }
 
 void PortPsg_Run(uint32_t cycles)

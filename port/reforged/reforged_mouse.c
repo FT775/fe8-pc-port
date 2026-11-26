@@ -30,6 +30,8 @@
  *                 the Controls screen: A only on the hand's own row (elsewhere nothing);
  *                 a menu (unit actions, items, the map menu, any game menu made by StartMenuCore with 9
  *                 items or fewer and a hand): the hand to the item, then A; outside its items nothing;
+ *                 the trade screen, a shop's list (v1.30.0): the hand to the item (Left / Right, Up / Down),
+ *                 then A; outside its items nothing; hover moves the hand there too;
  *                 a target list (attack, staff, trade, rescue ...): a target that is not the current one
  *                 becomes the current one (the forecast shows); a click on the current target, after it
  *                 was clicked once, is A; a square that is no target: nothing;
@@ -85,9 +87,9 @@
 #define MPIC_H       160
 #define MGAME_W      240
 
-enum { MCTX_NONE, MCTX_MAP_IDLE, MCTX_MAP_MOVE, MCTX_MENU, MCTX_TARGETS, MCTX_HANDROW };
-static const char *const sCtxNames[] = { "none", "map", "move", "menu", "targets", "hand row" };
-enum { MPLAN_NONE, MPLAN_TAP, MPLAN_TRAVEL, MPLAN_MENU, MPLAN_TARGET };
+enum { MCTX_NONE, MCTX_MAP_IDLE, MCTX_MAP_MOVE, MCTX_MENU, MCTX_TARGETS, MCTX_HANDROW, MCTX_GRID };
+static const char *const sCtxNames[] = { "none", "map", "move", "menu", "targets", "hand row", "list" };
+enum { MPLAN_NONE, MPLAN_TAP, MPLAN_TRAVEL, MPLAN_MENU, MPLAN_TARGET, MPLAN_GRID };
 enum { MB_LEFT = 1, MB_MIDDLE = 2, MB_RIGHT = 3 };
 enum { MCL_DONE, MCL_PLAN, MCL_WAIT, MCL_PLAN_KEEP };
 
@@ -115,6 +117,8 @@ struct MouseSnap {
     signed char tx[MTGT_MAX], ty[MTGT_MAX], tuid[MTGT_MAX];
     /* the hand's row (the Controls screen): game-screen pixel rows y0 <= y < y1 */
     short hy0, hy1;
+    /* v1.30.0: a list or grid (the trade screen, a shop's list) */
+    struct ReforgedMouseGrid grid;
 };
 
 struct MousePlan {
@@ -141,6 +145,7 @@ static struct {
     struct MouseSnap ctx;   /* the last hook's copy */
     unsigned lastCtxRead;   /* reads when any input screen's hook last ran */
     unsigned menuSession, menuLast, tgtSession;
+    unsigned gridSession, gridLast; /* v1.30.0 */
     unsigned tgtSig;        /* the last target list's squares (order-free), to tell another list */
     int dblValid, dblGx, dblGy; /* the last left click that chose something (the double-click rule) */
     unsigned dblAt;
@@ -207,6 +212,26 @@ static int MenuHitTest(const struct MouseSnap *s, int gx, int gy)
     return -1;
 }
 
+/* v1.30.0: the item of a list or grid at a game-screen pixel: its index (its column in *col), -1 for none. */
+static int GridHitTest(const struct ReforgedMouseGrid *g, int gx, int gy, int *col)
+{
+    int c, k;
+
+    if (g->rowH <= 0)
+        return -1;
+    for (c = 0; c < g->cols && c < 2; c++)
+    {
+        if (gx < g->x0[c] || gx >= g->x1[c] || gy < g->y0[c])
+            continue;
+        k = (gy - g->y0[c]) / g->rowH;
+        if (k >= g->lines || g->top[c] + k >= g->count[c])
+            return -1;
+        *col = c;
+        return g->top[c] + k;
+    }
+    return -1;
+}
+
 static void SelfTest(void)
 {
     struct MouseSnap m;
@@ -233,6 +258,24 @@ static void SelfTest(void)
     MCHECK(MenuHitTest(&m, 160, 8) == 0 && MenuHitTest(&m, 215, 23) == 0 && MenuHitTest(&m, 216, 8) == -1);
     MCHECK(MenuHitTest(&m, 159, 30) == -1 && MenuHitTest(&m, 170, 24) == 1 && MenuHitTest(&m, 170, 55) == 2);
     MCHECK(MenuHitTest(&m, 170, 56) == -1 && MenuHitTest(&m, 170, 7) == -1);
+    {
+        /* v1.30.0: the trade screen's two columns (3 and 5 items), a shop's scrolled list */
+        struct ReforgedMouseGrid g;
+        int col = -1;
+
+        memset(&g, 0, sizeof(g));
+        g.cols = 2, g.rowH = 16, g.lines = 5;
+        g.x0[0] = 8, g.x1[0] = 120, g.x0[1] = 120, g.x1[1] = 232, g.y0[0] = g.y0[1] = 72;
+        g.count[0] = 3, g.count[1] = 5;
+        MCHECK(GridHitTest(&g, 8, 72, &col) == 0 && col == 0);
+        MCHECK(GridHitTest(&g, 119, 103, &col) == 1 && col == 0);
+        MCHECK(GridHitTest(&g, 60, 104, &col) == 2 && GridHitTest(&g, 60, 120, &col) == -1);
+        MCHECK(GridHitTest(&g, 231, 151, &col) == 4 && col == 1 && GridHitTest(&g, 232, 80, &col) == -1);
+        MCHECK(GridHitTest(&g, 60, 71, &col) == -1 && GridHitTest(&g, 130, 152, &col) == -1);
+        g.cols = 1, g.top[0] = 4, g.count[0] = 9;
+        MCHECK(GridHitTest(&g, 60, 72, &col) == 4 && GridHitTest(&g, 60, 136, &col) == 8);
+        MCHECK(GridHitTest(&g, 130, 80, &col) == -1);
+    }
 #undef MCHECK
     PortLog("[mouse] self-test: %d failures\n", fails);
     if (env != NULL && strcmp(env, "exit") == 0)
@@ -299,6 +342,8 @@ static void LogScreen(void)
         cur = c->cur;
     else if (kind == MCTX_HANDROW)
         cur = c->hy0;
+    else if (kind == MCTX_GRID)
+        cur = c->grid.cur, x = c->grid.curCol, y = c->grid.top[c->grid.curCol & 1] * 2 + c->grid.busy;
     else if (kind == MCTX_TARGETS && c->ntargets > 0)
         x = c->tx[0], y = c->ty[0];
     if (kind == MCTX_MAP_IDLE || kind == MCTX_MAP_MOVE)
@@ -352,6 +397,11 @@ static void LogScreen(void)
         break;
     case MCTX_HANDROW:
         snprintf(buf, sizeof(buf), "a screen that takes a click on the hand's row (y %d-%d)", c->hy0, c->hy1 - 1);
+        break;
+    case MCTX_GRID:
+        snprintf(buf, sizeof(buf), "list %u (id %d): %d column(s) of %d and %d items, hand on %d,%d, first rows %d,%d%s",
+            c->session, c->grid.id, c->grid.cols, c->grid.count[0], c->grid.cols > 1 ? c->grid.count[1] : 0,
+            c->grid.curCol, c->grid.cur, c->grid.top[0], c->grid.top[1], c->grid.busy ? ", busy" : "");
         break;
     default:
         snprintf(buf, sizeof(buf), "other screen");
@@ -459,6 +509,25 @@ void Reforged_MouseHandRow(int y0, int y1)
     c->stamp = sM.lastCtxRead = sM.reads;
     c->session = 0;
     c->hy0 = (short)y0, c->hy1 = (short)y1;
+}
+
+/* v1.30.0: a list or grid (the trade screen, a shop's list), before its input is read this OnMain. Another
+   list: not run at the last read, or another id. */
+void Reforged_MouseGrid(const struct ReforgedMouseGrid *g)
+{
+    struct MouseSnap *c = &sM.ctx;
+
+    if (!Reforged_MouseOn())
+        return;
+    if ((sM.gridLast + 1 != sM.reads && sM.gridLast != sM.reads) || c->kind != MCTX_GRID || c->grid.id != g->id)
+        sM.gridSession++;
+    sM.gridLast = sM.reads;
+    c->kind = MCTX_GRID;
+    c->stamp = sM.lastCtxRead = sM.reads;
+    c->session = sM.gridSession;
+    c->grid = *g;
+    if (c->grid.cols > 2)
+        c->grid.cols = 2;
 }
 
 /* --- events (the platform, once per frame step, before Reforged_MouseKeys) --- */
@@ -696,6 +765,44 @@ static unsigned short Decide(void)
         /* Left / Up: the next target; Right / Down: the previous one (uiselecttarget.c) */
         return Press(ListSteps(0, j, n) > 0 ? PLATFORM_KEY_LEFT : PLATFORM_KEY_RIGHT);
     }
+    case MPLAN_GRID:
+    {
+        const struct ReforgedMouseGrid *g = &c->grid;
+        int steps;
+
+        if (!ctxOk)
+        {
+            EndPlan("dropped (the list is gone)");
+            return 0;
+        }
+        if (p->tapped && g->curCol == p->bx && g->cur == p->by)
+        {
+            EndPlan("dropped (the hand did not move)");
+            return 0;
+        }
+        p->tapped = 0;
+        if (p->tx < 0 || p->tx >= g->cols || p->item >= g->count[p->tx])
+        {
+            EndPlan("dropped (no such item)");
+            return 0;
+        }
+        if (g->curCol == p->tx && g->cur == p->item)
+        {
+            if (!p->finalKey)
+            {
+                EndPlan("done (hand there)");
+                return 0;
+            }
+            if (g->busy)
+                return 0; /* a page still scrolling: A would not be taken yet */
+            return PressFinal((unsigned short)p->finalKey);
+        }
+        p->tapped = 1, p->bx = g->curCol, p->by = g->cur;
+        if (g->curCol != p->tx)
+            return Press(p->tx > g->curCol ? PLATFORM_KEY_RIGHT : PLATFORM_KEY_LEFT);
+        steps = g->wrap ? ListSteps(g->cur, p->item, g->count[p->tx]) : p->item - g->cur;
+        return Press(steps > 0 ? PLATFORM_KEY_DOWN : PLATFORM_KEY_UP);
+    }
     default:
         EndPlan("dropped");
         return 0;
@@ -733,6 +840,25 @@ static int Classify(struct MouseEv *e)
     {
         int i;
 
+        if (ctx == MCTX_GRID)
+        {
+            int col = 0;
+
+            if (c->session != sM.hoverSession)
+                sM.hoverSession = c->session, sM.lastHover = -1;
+            i = e->inStrip ? GridHitTest(&c->grid, e->gx, e->gy, &col) : -1;
+            if (i >= 0)
+                i += col * 64;
+            if (i == sM.lastHover)
+                return MCL_DONE;
+            sM.lastHover = i;
+            if (i < 0 || (col == c->grid.curCol && i - col * 64 == c->grid.cur))
+                return MCL_DONE;
+            MLOG("[mouse] frame %u: hover: list item %d,%d\n", gPortFrameCount, col, i - col * 64);
+            StartPlan(MPLAN_GRID, MCTX_GRID, 30 + 4 * (c->grid.count[0] + c->grid.count[1]));
+            sM.plan.tx = col, sM.plan.item = i - col * 64;
+            return MCL_PLAN;
+        }
         if (ctx != MCTX_MENU || !MenuUsable(c))
             return MCL_DONE;
         if (c->session != sM.hoverSession)
@@ -851,6 +977,28 @@ static int Classify(struct MouseEv *e)
         sM.hoverSession = c->session, sM.lastHover = i;
         StartPlan(MPLAN_MENU, MCTX_MENU, 20 + 4 * c->count);
         sM.plan.item = i, sM.plan.finalKey = PLATFORM_KEY_A;
+        sM.dblValid = 1, sM.dblAt = e->at, sM.dblGx = e->gx, sM.dblGy = e->gy;
+        return MCL_PLAN;
+    }
+    case MCTX_GRID:
+    {
+        int i, col = 0;
+
+        if (e->button == MB_MIDDLE)
+        {
+            StartTap(PLATFORM_KEY_R);
+            return MCL_PLAN;
+        }
+        i = e->inStrip ? GridHitTest(&c->grid, e->gx, e->gy, &col) : -1;
+        if (i < 0)
+        {
+            MLOG("[mouse] frame %u: click: list, on no item\n", gPortFrameCount);
+            return MCL_DONE;
+        }
+        MLOG("[mouse] frame %u: click: list item %d,%d, then A\n", gPortFrameCount, col, i);
+        sM.hoverSession = c->session, sM.lastHover = i + col * 64;
+        StartPlan(MPLAN_GRID, MCTX_GRID, 60 + 4 * (c->grid.count[0] + c->grid.count[1]));
+        sM.plan.tx = col, sM.plan.item = i, sM.plan.finalKey = PLATFORM_KEY_A;
         sM.dblValid = 1, sM.dblAt = e->at, sM.dblGx = e->gx, sM.dblGy = e->gy;
         return MCL_PLAN;
     }

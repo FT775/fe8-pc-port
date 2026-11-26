@@ -5,7 +5,7 @@
 #   port/tools/mousecheck.sh [--only NAME[,NAME...]] [--keep]
 #
 # 1. the planner's pure helpers (FE8PC_MOUSE_SELFTEST=exit: the picture -> game -> square mapping, Widescreen's
-#    offset, the menu hit test, the shorter way round a list);
+#    offset, the menu hit test, the shorter way round a list; v1.30.0: the trade screen's and a shop's hit test);
 # 2. each scenario: a start save and the first ticks of a recorded route (to a free map), then mouse events
 #    injected as real SDL events (FE8PC_TEST_MOUSE, port/test/inputs/mouse/*.mouse: their own comments say what
 #    each does), the log (FE8PC_MOUSE_LOG=1) checked against the file's "#expect" lines (the screens the hooks
@@ -15,7 +15,8 @@
 #    focus click dropped, a key cutting a plan short, a target at the screen's edge (the camera scrolls) still
 #    taking two clicks, a click with an enemy's range shown closing it and selecting the unit clicked, a
 #    double-clicked unit selected once, a click in a Widescreen side bar, a click under Pixel / Fill / Stretch in
-#    a 1200x500 window and fullscreen);
+#    a 1200x500 window and fullscreen; v1.30.0: the trade screen's items clicked, the hand going there, and
+#    hover);
 #    and the KEYREC equivalence: the keys recorded during the session (FE8PC_KEYREC) replayed with the row OFF
 #    and no mouse (FE8PC_KEYFILE) give the same 240x160 frames (FE8PC_DUMP_FRAMES) and the same .sav and
 #    .reforged: the mouse only ever pressed keys a pad could press;
@@ -98,7 +99,8 @@ wide|$M/wide_e16.mouse|-|$OUT/turn2.keys|8150|7900-8150|widescreen = 1|FE8PC_TES
 pixel|$M/scale_e16.mouse|pixel|$OUT/turn2.keys|8020|7900-8020|scaling = 0|
 fill|$M/scale_e16.mouse|fill|$OUT/turn2.keys|8020|7900-8020|scaling = 1|
 stretch|$M/scale_e16.mouse|stretch|$OUT/turn2.keys|8020|7900-8020|scaling = 2|
-fullscreen|$M/full_e16.mouse|-|$OUT/turn2.keys|8020|7900-8020|-|FE8PC_TEST_MOUSE_PICTURE=1"
+fullscreen|$M/full_e16.mouse|-|$OUT/turn2.keys|8020|7900-8020|-|FE8PC_TEST_MOUSE_PICTURE=1
+trade|$M/trade_e16.mouse|-|$OUT/turn1.keys|6400|5880-6400|-|FE8PC_TEST_MOUSE_PICTURE=1"
 
 step "mouse sessions (row on, events injected, keys recorded)"
 RUN=""

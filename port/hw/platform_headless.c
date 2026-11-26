@@ -242,3 +242,26 @@ int Platform_MakeUserDir(void)
 {
     return Platform_UserDir() != NULL ? 0 : -1;
 }
+
+/* v1.31.0 (port/platform.h): no threads and no network here. */
+int Platform_RunDetached(int (*fn)(void *), void *arg)
+{
+    (void)fn;
+    (void)arg;
+    return 0;
+}
+
+int Platform_HttpsGet(const char *url, const char *userAgent, char *buf, size_t size)
+{
+    (void)url;
+    (void)userAgent;
+    if (buf != NULL && size > 0)
+        buf[0] = '\0';
+    return 0;
+}
+
+/* v1.32.0 (port/platform.h): no audio device here. */
+void Platform_SetAudioRate(uint32_t rateHz)
+{
+    (void)rateHz;
+}

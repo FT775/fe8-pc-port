@@ -330,6 +330,12 @@ $(BUILD)/port/reforged/%.o: port/reforged/%.c port/include/port.h port/include/p
 	@mkdir -p $(@D)
 	$(CC) $(HOST_CFLAGS) $(HOST_CPPFLAGS) $(RFO_STATE_DEFS) -c $< -o $@ $(WARNLOG)
 
+# v1.31.0, the update notice (port/reforged/reforged_update.c): this build's version, the first "## vX.Y.Z"
+# heading of the changelog (rebuilt when the changelog changes).
+PORT_VERSION := $(shell sed -n 's/^\#\# \(v[0-9][0-9.]*\).*/\1/p' docs/port/CHANGELOG.md | head -n 1)
+$(BUILD)/port/reforged/reforged_update.o: docs/port/CHANGELOG.md
+$(BUILD)/port/reforged/reforged_update.o: RFO_STATE_DEFS += -DPORT_VERSION='"$(PORT_VERSION)"'
+
 # Reforged Options' save mark (port-rfo-casual): a played build's savefile_pc.o
 # gets PORT_RFO_SAVEMARK=1, its two calls into port/reforged/reforged_savemark.c
 # (the sidecar <sav>.reforged). A test build (FE8PC_TESTBUILD) and the Gate 0

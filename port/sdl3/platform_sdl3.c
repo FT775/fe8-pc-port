@@ -74,6 +74,8 @@
 #ifdef _WIN32
 /* port/win32/posix_win32.c */
 int PortWin32RoamingDir(char *out, size_t outSize);
+int PortWin32SystemDir(char *out, size_t outSize);                    /* v1.31.0 */
+int PortWin32RunHidden(const char *cmdline, char *out, size_t outSize); /* v1.31.0 */
 #endif
 
 /*
@@ -1530,6 +1532,19 @@ uint32_t Platform_AudioQueued(void)
     return bytes > 0 ? (uint32_t)bytes / (2 * sizeof(int16_t)) : 0;
 }
 
+void Platform_SetAudioRate(uint32_t rateHz)
+{
+    SDL_AudioSpec spec;
+
+    if (sAudio == NULL)
+        return;
+    spec.format = SDL_AUDIO_S16;
+    spec.channels = 2;
+    spec.freq = (int)rateHz;
+    if (!SDL_SetAudioStreamFormat(sAudio, &spec, NULL))
+        Log("[sdl] audio: cannot take %u Hz: %s\n", rateHz, SDL_GetError());
+}
+
 void Platform_SetAudioRatio(double ratio)
 {
 #ifdef PLATFORM_FAST_FORWARD
@@ -1771,3 +1786,76 @@ PORT_STATE_SESSION(sTestMouseX)
 PORT_STATE_SESSION(sTestMouseY)
 #endif
 #endif
+
+/* v1.31.0 (port/platform.h; the update notice, port/reforged/reforged_update.c) */
+struct DetachedArg
+{
+    int (*fn)(void *);
+    void *arg;
+};
+
+static int SDLCALL DetachedMain(void *p)
+{
+    struct DetachedArg a = *(struct DetachedArg *)p;
+
+    SDL_free(p);
+    return a.fn(a.arg);
+}
+
+int Platform_RunDetached(int (*fn)(void *), void *arg)
+{
+    struct DetachedArg *a = SDL_malloc(sizeof(*a));
+    SDL_Thread *t;
+
+    if (a == NULL)
+        return 0;
+    a->fn = fn;
+    a->arg = arg;
+    t = SDL_CreateThread(DetachedMain, "fe8pc-bg", a);
+    if (t == NULL)
+    {
+        SDL_free(a);
+        return 0;
+    }
+    SDL_DetachThread(t);
+    return 1;
+}
+
+int Platform_HttpsGet(const char *url, const char *userAgent, char *buf, size_t size)
+{
+    char cmd[512];
+
+    if (buf == NULL || size == 0)
+        return 0;
+    buf[0] = '\0';
+    if (SDL_strchr(url, '"') != NULL || SDL_strchr(userAgent, '"') != NULL || SDL_strncmp(url, "https://", 8) != 0)
+        return 0;
+#ifdef _WIN32
+    {
+        char sys[260];
+
+        if (PortWin32SystemDir(sys, sizeof(sys)) != 0)
+            return 0;
+        SDL_snprintf(cmd, sizeof(cmd),
+            "\"%s\\curl.exe\" -fsSL --max-time 8 -A \"%s\" -H \"Accept: application/vnd.github+json\" \"%s\"",
+            sys, userAgent, url);
+    }
+    return PortWin32RunHidden(cmd, buf, size);
+#else
+    {
+        FILE *f;
+        size_t total = 0, got;
+
+        SDL_snprintf(cmd, sizeof(cmd),
+            "curl -fsSL --max-time 8 -A \"%s\" -H \"Accept: application/vnd.github+json\" \"%s\" 2>/dev/null",
+            userAgent, url);
+        f = popen(cmd, "r");
+        if (f == NULL)
+            return 0;
+        while (total + 1 < size && (got = fread(buf + total, 1, size - 1 - total, f)) > 0)
+            total += got;
+        buf[total] = '\0';
+        return pclose(f) == 0 && total > 0;
+    }
+#endif
+}

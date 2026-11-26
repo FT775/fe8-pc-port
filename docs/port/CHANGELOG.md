@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.32.0 (2026-11-26)
+
+### In short
+- New **Sound** row on the Display screen: **Enhanced** mixes the music and sound effects again on the PC at 4 times the GBA's rate, smoother and without the GBA's hiss; **Original** (the default) is the GBA's own sound.
+- The same songs, instruments, reverb and balance: only the sound quality changes, never the game or your saves.
+
+### New
+- **Enhanced sound** (the Display screen's new **Sound** row, Original / Enhanced; Original by default; display-only: never part of a save or an option set). The GBA mixes its music into 8-bit samples at 13,379 Hz with straight-line interpolation, and its sound chip cuts the result to 9 or 10 bits: the hiss and the dull, slightly grainy top end of the original. With Enhanced, the port mixes the same notes a second time for the speaker: at 53,516 Hz, each instrument's samples interpolated with a smooth cubic curve, the sum kept whole (no 8-bit wrap-around), each note's volume moving smoothly through the frame instead of in steps, the Game Boy channels taken before the 10-bit cut; the game's reverb and stereo routing as on the GBA. It follows the game's own mix slot by slot, so it is always in time and silent when the game is. In the comparison check (Chapter 6's music and battles) it matches the original second by second (correlation 0.96 to 0.99, levels within about 1 dB) with a noise floor about 4 dB lower in quiet passages and the treble above 6.7 kHz the GBA cannot hold.
+
+### Technical
+- New `port/audio/hq_pc.c` (played builds, `PORT_STATE_ON`; `RFO_AUDIO_HQ`, key `enhanced_sound`, in `sDisplayOnly` and `IsDisplaySubmenu`; applied by `Reforged_ApplyDisplay` through `PortHq_SetRow`). The GBA's pipeline is untouched and always runs (m4a_1_pc.c's SoundMainRAM, fifo_pc.c's FIFO model, psg.c's PSG and DAC): every byte of GBA memory, the frames, the saves and the original stream are the same with the row on or off. `m4a_1_pc.c` calls `PortHq_Frame` after SoundMainRAM's reverb or clear of a slot and `PortHq_Channel` for each channel just before it is mixed (its wave, position `cp` + `fw`, step `divFreq * freq`, loop, `er` / `el`, a new note), read only; hq_pc.c mixes a shadow of that slot (896 float frames a lane) with 4-point Catmull-Rom interpolation at a quarter step, volumes ramped from the previous slot's, and the GBA's reverb formula on the shadow slots (values below 1e-6 flushed to 0, as the GBA's integer echo dies), the sample before the loop start taken from the wave's end once a channel has gone round its loop; a save state's load clears the shadow (`PortHq_Reset`). `psg.c` hands each PWM tick's PSG level before the DAC to a hook (`PortPsg_SetTickHook`; psg.c stays integer-only, as `port/test/audio/psg.mk`'s no-float check wants), which hq_pc.c spreads over 896 bins by the cycles each tick covers, and `PortHq_Render` routes the shadow lanes the FIFOs play this VBlank (`PortHq_LaneAt`, from the DMA's source as fifo_pc.c finds it) and the PSG by SOUNDCNT_H, in the DAC's units, with a soft knee for the DAC's clip, to s16 at 53,516 Hz. `audio_out.c` `PortAudioOut_PushRate` follows a change of rate (`Platform_SetAudioRate`: SDL `SDL_SetAudioStreamFormat`; the queue's marks in that rate's frames); SDL resamples to the device. Test switch `FE8PC_AUDIO_DUMP_HQ=prefix` (PB-9): the enhanced stream as `prefix.lr16`, mixed with the row on or off. New `port/tools/soundcheck.sh` (with `soundcheck.py`): the thirdtier route with Sound Original against Enhanced: the same frames, `.sav` and original stream; the enhanced stream against the original second by second (level, correlation, no clipping).
+
+## v1.31.0 (2026-11-26)
+
+### In short
+- New **Update notice** row on the Display screen (Off by default): with it on, when a newer version of the port is out on GitHub, the title screen says so for a few seconds.
+- It only asks GitHub which version is the newest, once per run; it never downloads or installs anything, and without a network it shows nothing.
+- With the row off nothing changes.
+
+### New
+- **Update notice** (the Display screen's new row; Off by default; display-only: never part of a save or an option set). With it on, the game asks GitHub once per run, in the background, for the newest release of the public port: one HTTPS request to api.github.com through Windows' own curl (Windows 10 and later; the system's curl on Linux), run with no window, carrying nothing but the request and a fixed program name. If that release is newer than this one, the title screen shows "vX.Y.Z is out (GitHub releases)" for 8 seconds, once per run (if the answer comes after the title screen, on the next one). The game never waits for the answer; with no network, a firewall or no curl, nothing is shown. Nothing is downloaded or run.
+
+### Technical
+- New `port/reforged/reforged_update.c` (played builds; `RFO_UPDATE_NOTICE`, key `update_notice`, in `sDisplayOnly` and `IsDisplaySubmenu`; applied by `Reforged_ApplyDisplay`). New platform calls (`port/platform.h`): `Platform_RunDetached` (SDL: a detached SDL thread; headless: none) and `Platform_HttpsGet` (SDL: `curl` through `popen`; on Windows `port/win32/posix_win32.c` `PortWin32RunHidden`, `CreateProcessA` of System32's `curl.exe` with `CREATE_NO_WINDOW` and a pipe; headless: none). The build's version is `PORT_VERSION`, the first `## vX.Y.Z` heading of `docs/port/CHANGELOG.md` (`port/Makefile`; `reforged_update.o` is rebuilt when the changelog changes). The line is drawn by the save states' toast (`PortState_ToastText`; the toast text may now be 47 characters). `port/hw/frame.c` calls `Reforged_UpdateFrame` once per frame step (it only reads a finished answer, and the title screen with `Proc_Find`). Test switch `FE8PC_TEST_UPDATE_TAG=vX.Y.Z` (PB-9): no request, that tag is the answer.
+
+## v1.30.0 (2026-11-26)
+
+### In short
+- With **Mouse** on, a click in the trade screen or a shop's Buy or Sell list now picks the item you clicked (until now it picked the one the hand was on), and the hand follows the pointer there too.
+- With **Widescreen** on, a see-through glow that fills the screen no longer blacks the side bars for half a second (Chapter 16's warp sparkles): the sides keep the map, with the glow carried on into them.
+- Both rows are still off by default, and with them off everything is exactly as in v1.29.0.
+
+### Changed
+- **Mouse: the trade screen and shops.** In the trade screen a click on an item (either unit's side) moves the hand there, Left / Right and Up / Down as with the pad, then A: the first click picks the item to give, the second the item or empty slot to swap with. In a shop's Buy or Sell list a click on an item moves the hand there (a click on the list's bottom row scrolls it one line, as Down does; A waits until the page has stopped), then A: the shopkeeper names the price. In both, moving the pointer over an item moves the hand, and a click beside the items does nothing. The shops' browse-only list (A or B closes it) keeps the old rule.
+- **Widescreen: screen-wide glows.** An effect on BG2 that reaches the strip's edges and is the alpha blend's first target over the map (a glow, a flash, or an effect whose screen-wide layer is black where it shows nothing) no longer blacks the side bars: each side line takes the effect's pixel at the strip's own edge on that line, blended the same way. On the lordpromo route the last 29 black-bar frames on the map (the warp sparkles at 99931) now show the map. An opaque effect layer that reaches the edges still gives black bars.
+
+### Technical
+- New `Reforged_MouseGrid` (`port/include/port_reforged.h`, `struct ReforgedMouseGrid`: up to two columns of item rows in game-screen pixels, the rows on screen and the first one's index, the hand, Up/Down going round, A not taken yet), with host-copy hooks under `#if defined(PC_PORT) && PORT_PLAYED_BUILD` in `src/bmtrade.c` `TradeMenu_OnLoopUnselected` / `_OnLoopSelected` (before `TradeMenu_UpdateSelection`; the cells from `gTradeItemDisplayTileLocation` and `hasItem`, the empty slot of the selected state included) and `src/bmshop.c` `Shop_Loop_BuyKeyHandler` / `_SellKeyHandler` (before `Shop_TryMoveHandPage`; rows from `gShopState`, busy while `IsShopPageScrolling` or the help box). `port/reforged/reforged_mouse.c`: screen kind "list", plan `MPLAN_GRID` (the column first, then the shorter way round or straight, A when there and not busy), hover, `GridHitTest` in the self-test. The GBA build and the test builds are unchanged. New mousecheck scenario `trade` (`port/test/inputs/mouse/trade_e16.mouse`, with its KEYREC replay); the shop lists were checked on `route_e11.keys`'s world-map armory (not a standing check: mousecheck's routes are Chapter 16's).
+- `port/render/wide.c`: `Bg2Blended`, `sBg2Edge`, `SideBg2Edge`; `wide.log` flag 32; `widecheck.py` COVER item `edge`; new widecheck route `e16glow` (lordpromo 99880-100000, must cover `edge`).
+
 ## v1.29.0 (2026-11-24)
 
 ### In short

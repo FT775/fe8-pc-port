@@ -30,6 +30,7 @@
 
 #if PORT_PLAYED_BUILD
 
+void PortHq_Reset(void); /* port/audio/audio_pc.h (v1.32.0) */
 #include <stdlib.h>
 #include <string.h>
 
@@ -186,6 +187,7 @@ static void Rewind_Restart(ProcPtr proc)
     ReadSuspendSave(SAVE_ID_SUSPEND); /* sPending still set: the kept turns stay (Reforged_RewindForget) */
     sPending = 0;
     Reforged_MouseReset(); /* mouse controls: a plan in flight is dropped, as after a save-state load */
+    PortHq_Reset();        /* v1.32.0, "Enhanced sound": the shadow starts again from silence (port/audio/hq_pc.c) */
     RestartGameAndGoto8();
 }
 

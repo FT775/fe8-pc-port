@@ -430,6 +430,33 @@ void ShopDrawSellItemLine(struct ProcShop * proc, int itemIndex)
         );
 }
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h" /* PC played builds: Reforged Options, mouse controls */
+
+/* PC played builds, "Mouse" (off by default; port/reforged/reforged_mouse.c, v1.30.0): a shop's buy or sell
+   list takes input now; a host copy of its rows (nothing written): one column, gShopState->lines rows on
+   screen from y 72 (the hand's y is 72 + 16 * (head_loc - hand_loc)), no going round; A is not taken while
+   the page scrolls or the help box is up */
+static void Shop_MouseGrid(struct ProcShop * proc, int id)
+{
+    struct ReforgedMouseGrid g = { 0 };
+
+    g.id = id;
+    g.cols = 1;
+    g.rowH = 16;
+    g.lines = gShopState->lines;
+    g.x0[0] = 40;
+    g.x1[0] = 232;
+    g.y0[0] = 72;
+    g.top[0] = gShopState->hand_loc;
+    g.count[0] = gShopState->item_cnt;
+    g.curCol = 0;
+    g.cur = gShopState->head_loc;
+    g.busy = IsShopPageScrolling() || proc->helpTextActive;
+    Reforged_MouseGrid(&g);
+}
+#endif
+
 void Shop_InitBuyState(struct ProcShop * proc)
 {
     RegisterShopState(
@@ -450,6 +477,9 @@ void Shop_Loop_BuyKeyHandler(struct ProcShop * proc)
     int a;
     int b;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Shop_MouseGrid(proc, 2); /* PC played builds, "Mouse": the rows, before this frame's input */
+#endif
     Shop_TryMoveHandPage();
 
     BG_SetPosition(2, 0, ShopSt_GetBg2Offset());
@@ -657,6 +687,9 @@ void Shop_Loop_SellKeyHandler(struct ProcShop * proc)
     int a;
     int b;
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+    Shop_MouseGrid(proc, 3); /* PC played builds, "Mouse": the rows, before this frame's input */
+#endif
     Shop_TryMoveHandPage();
 
     BG_SetPosition(BG_2, 0, ShopSt_GetBg2Offset());

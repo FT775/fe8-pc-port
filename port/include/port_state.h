@@ -49,6 +49,9 @@ void PortState_Point(void);
    ToastRgba's picture is stride pixels wide with the game's 240 strip at x0 (Widescreen: render.h
    RENDER_WIDE_W, RENDER_WIDE_MARGIN; else 240, 0); the toast stays inside that strip. */
 void PortState_ToastRgba(uint32_t *rgba, int stride, int x0);
+/* v1.31.0: any toast text (at most 47 characters) for that many frames, warn: the orange text (the update
+   notice, port/reforged/reforged_update.c). */
+void PortState_ToastText(const char *text, int warn, int frames);
 void PortState_ToastDump555(uint16_t *frame555);
 /* The platform: Ctrl+S (save 1) or Ctrl+L (load 2) was pressed; acted on at the next program point.
    Ignored with the row off. */

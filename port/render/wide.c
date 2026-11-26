@@ -98,6 +98,15 @@
  *   - an attack square in the sides takes the shade (0x5280.. / 0x5284..) of
  *     the strip's attack square nearest to it on the same row of squares (the
  *     two differ only while 0x5280.. grows in), else the strip's majority.
+ *
+ * v1.30.0: BG2 holding something else that is not local (above) but is the
+ * alpha blend's first target (a glow, a flash, or an effect whose screen-wide
+ * tilemap is black where it shows nothing: Chapter 16's warp sparkles, frame
+ * 99931 of lordpromo, black pixels added at 16/16 over the map) no longer
+ * blacks the sides: each side line takes BG2's pixel at the strip's own edge
+ * column on that line (BG2's scroll), blended as in the strip, so a screen-wide
+ * glow carries on into the sides and black adds nothing. An opaque BG2 that
+ * is not local still gives black sides.
  */
 
 #if PORT_RFO_WIDE
@@ -149,6 +158,7 @@ static u16 sAttackWord = 0x5280; /* v1.27.0: the first word of an attack square 
    seam on that row (0: none on the row, sAttackWord then) */
 static u16 sRowShade[2][PORT_WIDE_PH];
 static int sBg2Local; /* v1.28.0: BG2 holds an effect that stays off the strip's outer columns: left out */
+static int sBg2Edge;  /* v1.30.0: BG2 holds a blended screen-wide effect: its edge columns carried into the sides */
 /* v1.28.0: the phase banner's square wipe (BG1) matched at one step: drawn in the sides */
 static int sSquares;
 static int sSqOut, sSqT; /* ... which loop (0 in, 1 out) and its timer */
@@ -399,6 +409,13 @@ static int Bg2Faint(const struct RenderLineRegs *regs)
         (regs->bldcnt & 0x2800) == 0x2800 && (regs->bldalpha & 0x1F) <= 1;
 }
 
+/* v1.30.0: BG2 is the alpha blend's first target over BG3 (a glow or a flash drawn on BG2, which the map shows
+   through): its edge columns can be carried into the sides (sBg2Edge) */
+static int Bg2Blended(const struct RenderLineRegs *regs)
+{
+    return (regs->bldcnt & 0x00C4) == 0x0044 && (regs->bldcnt & 0x0800);
+}
+
 /* v1.28.0: the phase banner's square wipe (src/phasechangefx.c PhaseIntroSquares_InLoop / _OutLoop): the four
    BG1 words the loop at timer t writes for square (x, y), for any x (the sides' squares by the same rule). */
 #define WIDE_SQ_CHR 0x100 /* BGCHR_PHASE_CHANGE_SQUARES */
@@ -517,6 +534,7 @@ static int Decide(void)
 
     sSquares = 0;
     sBg2Local = 0;
+    sBg2Edge = 0;
     if (!gRenderWideOn)
         return WIDE_NO_OFF;
     if ((uint32_t)(gPortFrameCount - w->frame) > 2)
@@ -572,6 +590,12 @@ static int Decide(void)
                 sBg2Local = 1;
                 return 0;
             }
+            /* v1.30.0: a blended screen-wide effect (a text BG): its edge columns carried into the sides */
+            if (Bg2Blended(&regs) && !(cnt & (BGCNT_256COLOR | BGCNT_MOSAIC)))
+            {
+                sBg2Edge = 1;
+                return 0;
+            }
             if (sLogOn)
                 snprintf(sDetail, sizeof(sDetail), ": BG2CNT %04X, scroll %d,%d off the camera %d,%d, BLDCNT %04X, BLDALPHA %04X",
                     cnt, regs.bghofs[2], regs.bgvofs[2], w->camX, w->camY, regs.bldcnt, regs.bldalpha);
@@ -588,6 +612,11 @@ static int Decide(void)
                 if (BgEdgesClear(2, &regs) || Bg2Faint(&regs)) /* v1.28.0: as above */
                 {
                     sBg2Local = 1;
+                    return 0;
+                }
+                if (Bg2Blended(&regs)) /* v1.30.0: as above */
+                {
+                    sBg2Edge = 1;
                     return 0;
                 }
                 if (sLogOn)
@@ -667,15 +696,16 @@ void RenderWideBeginFrame(void)
         int state = sReason + (sMap && sBg2Range ? 100 : 0) + (sMap && sRangeMiss ? 200 : 0) +
             (sMap && sBg2Range && sAttackWord == 0x5284 ? 300 : 0) + (sMap && sBg2Local ? 1000 : 0) +
             (sMap && sSquares ? 2000 : 0) + (sMap && w->muCount ? 10000 : 0) + (sMap && w->muFogCount ? 20000 : 0) +
-            (sMap && w->hpCount ? 40000 : 0);
+            (sMap && w->hpCount ? 40000 : 0) + (sMap && sBg2Edge ? 80000 : 0);
 
         if (sLogOn && state != sLastLogged && gRenderWideOn)
         {
             if (sMap)
-                PortLog("[wide] frame %u: sides show the map%s%s%s%s%s%s%s%s\n", gPortFrameCount,
+                PortLog("[wide] frame %u: sides show the map%s%s%s%s%s%s%s%s%s\n", gPortFrameCount,
                     sBg2Range ? " with the range squares" : sRangeMiss ? " without the range squares" : "",
                     sBg2Range && sAttackWord == 0x5284 ? " (attack squares 5284)" : "",
                     sRangeMiss ? sDetail : "", sBg2Local ? " without BG2's effect (off the strip's edges)" : "",
+                    sBg2Edge ? " with BG2's blended effect carried out from the strip's edges" : "",
                     sSquares ? " with the phase banner's squares" : "", w->muCount ? ", moving units" : "",
                     w->muFogCount ? ", a moving enemy hidden by the fog" : "", w->hpCount ? ", HP bars" : "");
             else
@@ -687,12 +717,13 @@ void RenderWideBeginFrame(void)
 
 /* v1.28.0: wide.log's extra columns (render.c): side sprites, moving units among them, moving units the fog
    hid at a side, HP bar pictures, and flags (1 the strip sliding, 2 range squares drawn, 4 a local BG2 effect
-   left out, 8 the phase banner's squares drawn, 16 the latch suspended) */
+   left out, 8 the phase banner's squares drawn, 16 the latch suspended, 32 BG2's blended effect carried out from
+   the strip's edges, v1.30.0) */
 void RenderWideLogExtra(char *buf, int size)
 {
     const struct PortWideLatch *w = &gPortWide;
     int flags = (sSliding ? 1 : 0) | (sMap && sBg2Range ? 2 : 0) | (sMap && sBg2Local ? 4 : 0) |
-        (sMap && sSquares ? 8 : 0) | (w->suspended ? 16 : 0);
+        (sMap && sSquares ? 8 : 0) | (w->suspended ? 16 : 0) | (sMap && sBg2Edge ? 32 : 0);
 
     snprintf(buf, (size_t)size, " %d %d %d %d %d", sMap ? w->objCount : 0, sMap ? w->muCount : 0,
         sMap ? w->muFogCount : 0, sMap ? w->hpCount : 0, flags);
@@ -754,6 +785,23 @@ static void SideBg(int n, int line, const struct RenderLineRegs *regs, uint16_t 
         if (inMap != NULL)
             inMap[i] = 1;
     }
+}
+
+/* v1.30.0: the side pixels of BG2 on this line while it holds a blended screen-wide effect (sBg2Edge): BG2's
+   pixel at the strip's own edge column (x 0 for the left side, 239 for the right) on this line, at its scroll. */
+static void SideBg2Edge(int line, const struct RenderLineRegs *regs, uint16_t *col)
+{
+    uint16_t cnt = regs->bgcnt[2];
+    u32 charBase = ((cnt >> 2) & 3) * 0x4000u;
+    int bw = (cnt & 0x4000) ? 512 : 256, bh = (cnt & 0x8000) ? 512 : 256;
+    int my = ((regs->bgvofs[2] & 0x1FF) + line) & (bh - 1);
+    int mxl = (regs->bghofs[2] & 0x1FF) & (bw - 1), mxr = ((regs->bghofs[2] & 0x1FF) + RENDER_FRAME_WIDTH - 1) & (bw - 1);
+    uint16_t left = BgPixel(charBase, TextEntry(cnt, mxl, my), mxl & 7, my & 7);
+    uint16_t right = BgPixel(charBase, TextEntry(cnt, mxr, my), mxr & 7, my & 7);
+    int i;
+
+    for (i = 0; i < WIDE_SIDE; i++)
+        col[i] = i < sOff ? left : right;
 }
 
 /* v1.28.0: the side pixels of BG1 on this line while it holds the phase banner's square wipe (PhaseSquares:
@@ -1042,6 +1090,14 @@ void RenderWideLine(int line, const struct RenderLineRegs *regs, const struct Re
         bg.on[2] = 1;
         bg.prio[2] = regs->bgcnt[2] & 3;
     }
+    else if (sBg2Edge && (regs->dispcnt & 7) == 0 && (regs->dispcnt & 0x0400) &&
+             !(regs->bgcnt[2] & (BGCNT_256COLOR | BGCNT_MOSAIC)))
+    {
+        SideBg2Edge(line, regs, sCol2); /* v1.30.0 */
+        bg.color[2] = sCol2;
+        bg.on[2] = 1;
+        bg.prio[2] = regs->bgcnt[2] & 3;
+    }
     /* v1.28.0: the phase banner's square wipe (BG1 matched at the start of the frame, still unscrolled here),
        on lines where BG1 is the alpha blend's first target, as the wipe always is (PhaseIntroVMatchHi / Lo).
        On the banner's first frame the VCount chain has not run yet and PhaseIntroVMatchMid's BLDCNT (BG0 the
@@ -1105,6 +1161,7 @@ PORT_STATE_SESSION(sRangeMiss)
 PORT_STATE_SESSION(sAttackWord)
 PORT_STATE_SESSION(sRowShade)
 PORT_STATE_SESSION(sBg2Local)
+PORT_STATE_SESSION(sBg2Edge)
 PORT_STATE_SESSION(sSquares)
 PORT_STATE_SESSION(sSqOut)
 PORT_STATE_SESSION(sSqT)

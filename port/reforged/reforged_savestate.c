@@ -89,6 +89,7 @@
 
 #if PORT_PLAYED_BUILD
 
+void PortHq_Reset(void); /* port/audio/audio_pc.h (v1.32.0) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -148,7 +149,7 @@ static struct
     uint32_t crcTable[256];
     int crcReady;
     const char *checkFile;
-    char toast[40];
+    char toast[48];
     int toastFrames, toastWarn;
     char exeSha1[41];
     int exeKnown; /* 0 not yet, 1 known, -1 not readable */
@@ -401,6 +402,12 @@ static void StToast(const char *text, int warn)
     snprintf(S.toast, sizeof(S.toast), "%s", text);
     S.toastFrames = TOAST_FRAMES;
     S.toastWarn = warn;
+}
+
+void PortState_ToastText(const char *text, int warn, int frames)
+{
+    StToast(text, warn);
+    S.toastFrames = frames;
 }
 
 /* The toast's pixels: a dark panel with a light rim, the text in the game's system font. */
@@ -914,6 +921,7 @@ static void StLoad(void)
     REG_KEYINPUT = 0x3FF;
     Platform_ReleaseKeys();
     Platform_AudioJoin();
+    PortHq_Reset(); /* v1.32.0: "Enhanced sound" starts again from silence (port/audio/hq_pc.c) */
     Reforged_FastForwardAfterStateLoad();
     Reforged_SettingsAfterStateLoad(); /* a Reforged screen's unsaved change: its flag went back with the load */
     Reforged_SaveMarkStateLoaded(1); /* v1.24.1: this game's saves are marked from now on */

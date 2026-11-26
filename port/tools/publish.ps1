@@ -49,7 +49,8 @@ if ($Public) {
     $files = @(G diff --name-only $P $Version)
     $hits = @()
     foreach ($chunk in ($files | ForEach-Object -Begin { $a = @() } -Process { $a += $_; if ($a.Count -ge 200) { , $a; $a = @() } } -End { if ($a.Count) { , $a } })) {
-        $hits += @(& git -c safe.directory=* -C $B grep -IlE $pat $Version -- @chunk 2>$null)
+        $paths = @($chunk)  # one path comes as a string, and splatting a string passes nothing (a whole-tree scan)
+        $hits += @(& git -c safe.directory=* -C $B grep -IlE $pat $Version -- @paths 2>$null)
     }
     $roms = @(G ls-tree -r --name-only $Version | Where-Object { $_ -match '\.(gba|sav|state)$' })
     Write-Output "scan: $($files.Count) changed files, $($hits.Count) with a listed pattern, $($roms.Count) ROM/save/state files"

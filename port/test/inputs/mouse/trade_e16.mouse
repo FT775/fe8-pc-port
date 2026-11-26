@@ -1,0 +1,36 @@
+# Mouse controls (v1.30.0), port/tools/mousecheck.sh scenario "trade": FE8PC_TEST_MOUSE events, picture pixels
+# (FE8PC_TEST_MOUSE_PICTURE=1). Start: e16_start.sav, route_f_lordpromo_e16.keys's first 5885 ticks (Chapter 16,
+# turn 1, the free map: cursor (16,24)). Lines: "POLL event ..."; "#expect REGEX": log lines (FE8PC_MOUSE_LOG=1)
+# that must appear, in this order; "#count N REGEX": exactly N log lines match.
+#
+# Eirika (16,24) selected and kept on her square, Trade clicked, Gilliam (15,24) clicked twice: the trade screen
+# (Eirika 5 items, Gilliam 4). A click on Gilliam's third item (right column, row 2): the hand goes Right, Down,
+# Down, then A (the item to give); a click on Eirika's first item (Rapier): Up, Up, then A (the swap); the pointer
+# over Gilliam's second item moves the hand there; right-click leaves (Trade is gone from the menu).
+5900 click left 184 120
+5940 click left 184 120
+5980 click left 30 56
+6020 click left 168 120
+6060 click left 168 120
+6120 click left 170 106
+6200 click left 50 76
+6280 move 170 92
+6320 click right 100 100
+#expect screen: list [0-9]+ \(id 1\): 2 column\(s\) of 5 and 4 items, hand on 0,0
+#expect click: list item 1,2, then A$
+#expect press Right
+#expect hand on 1,0
+#expect press Down
+#expect press Down
+#expect hand on 1,2
+#expect press A
+#expect click: list item 0,0, then A$
+#expect press Up
+#expect press Up
+#expect hand on 0,0
+#expect press A
+#expect hover: list item 1,1
+#expect hand on 1,1, first rows 0,0
+#expect press B
+#expect screen: menu [0-9]+: 3 items, hand on 0, box 1,3 7x8; unit 0x01 at \(16,24\); items 0:0x68D@4 1:0x68F@6 2:0x695@8
+#count 0 plan dropped

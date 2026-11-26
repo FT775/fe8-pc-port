@@ -15,7 +15,9 @@
 #              battle animation and the level-up screen, and back); e16late, lordpromo's frames 34950-36400
 #              with HP bars on (units walking across the seam at the map's left edge, hurt units' bars in
 #              a side, a tile change's cross-fade, the phase banner, ranges); e16heal, frames 22400-22700 (a
-#              staff's effect on BG2 left out of the sides); e11fog: Eirika's Chapter 11 (fog;
+#              staff's effect on BG2 left out of the sides); v1.30.0: e16glow, frames 99880-100000 (Chapter 16's
+#              warp sparkles: BG2 a blended screen-wide effect, its edge columns carried into the sides);
+#              e11fog: Eirika's Chapter 11 (fog;
 #              route_e11.keys from $TESTDATA/saves/e11_start.sav, skipped without it), frames 11400-12750:
 #              enemies walking in the fog, one hidden at a side, a battle); e11cam: the same route's frames 73850-73965
 #              (a staff's target selection scrolling the camera 4 pixels past the map's bottom: the sides
@@ -95,6 +97,7 @@ e16bars|$SV/e16_start.sav|$INP/route_f_lordpromo_e16.keys|66000|65000-66000|none
 e16battle|$SV/e16_start.sav|$INP/route_f_lordpromo_e16.keys|9900|8800-9900|none|||held,slide
 e16late|$SV/e16_start.sav|$INP/route_f_lordpromo_e16.keys|36400|34950-36400|none||map_hp_bars_warnings = 3|mus,hps,squares,range
 e16heal|$SV/e16_start.sav|$INP/route_f_lordpromo_e16.keys|22700|22400-22700|none|||local
+e16glow|$SV/e16_start.sav|$INP/route_f_lordpromo_e16.keys|100000|99880-100000|none|||edge
 e11fog|$SV/e11_start.sav|$INP/route_e11.keys|12750|11400-12750|opt|||mus,fogs,local,held
 e11cam|$SV/e11_start.sav|$INP/route_e11.keys|73965|73850-73965|opt|||range,allmap
 lordpromo7|$SV/e16_start.sav|$INP/route_f_lordpromo_e16_fe7.keys|109273|101500-103500|both|

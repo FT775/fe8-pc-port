@@ -25,6 +25,10 @@
 #include "EAstdlib.h"
 #include "constants/songs.h"
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+#include "port_reforged.h" /* PC played builds: Reforged Options, mouse controls */
+#endif
+
 EWRAM_DATA struct TradeMenuProc * gpTradeMenuProc = NULL;
 EWRAM_OVERLAY(0) struct Text gTradeMenuText[2][UNIT_ITEM_COUNT] = {};
 
@@ -373,6 +377,34 @@ void TradeMenu_InitItemDisplay(struct TradeMenuProc * proc)
     BG_EnableSyncByMask(BG0_SYNC_BIT | BG1_SYNC_BIT);
 }
 
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+/* PC played builds, "Mouse" (off by default; port/reforged/reforged_mouse.c, v1.30.0): the trade screen takes
+   input now; a host copy of its cells (nothing written): two columns of up to five items, Up / Down going round */
+static void TradeMenu_MouseGrid(struct TradeMenuProc * proc)
+{
+    struct ReforgedMouseGrid g = { 0 };
+    int col, row;
+
+    g.id = 1;
+    g.cols = 2;
+    g.rowH = 16;
+    g.lines = UNIT_ITEM_COUNT;
+    g.wrap = 1;
+    for (col = 0; col < 2; col++)
+    {
+        g.x0[col] = 8 * (col == POS_L ? ITEM_PANEL_LEFT_X : ITEM_PANEL_RIGHT_X);
+        g.x1[col] = g.x0[col] + 8 * 14;
+        g.y0[col] = 8 * gTradeItemDisplayTileLocation[col][0].y;
+        for (row = 0; row < UNIT_ITEM_COUNT && proc->hasItem[col][row]; row++)
+            ;
+        g.count[col] = row;
+    }
+    g.curCol = proc->hoverColumn;
+    g.cur = proc->hoverRow;
+    Reforged_MouseGrid(&g);
+}
+#endif
+
 void TradeMenu_OnInitUnselected(struct TradeMenuProc * proc)
 {
     TradeMenu_RefreshSelectableCells(proc);
@@ -389,6 +421,9 @@ void TradeMenu_OnLoopUnselected(struct TradeMenuProc * proc)
     }
     else
     {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        TradeMenu_MouseGrid(proc); /* PC played builds, "Mouse": the cells, before this frame's input */
+#endif
         TradeMenu_UpdateSelection(proc);
 
         DisplayUiHand(
@@ -449,6 +484,9 @@ void TradeMenu_OnLoopSelected(struct TradeMenuProc * proc)
     }
     else
     {
+#if defined(PC_PORT) && PORT_PLAYED_BUILD
+        TradeMenu_MouseGrid(proc); /* PC played builds, "Mouse": the cells, before this frame's input */
+#endif
         TradeMenu_UpdateSelection(proc);
 
         DisplayUiHand(

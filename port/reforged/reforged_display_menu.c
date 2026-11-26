@@ -5,7 +5,8 @@
  * screen (reforged_menu.c); a list screen (reforged_listmenu.h, drawn by
  * reforged_randomizer_menu.c's code). Played builds only; empty in every test build.
  * Window size, scaling, smoothing, fullscreen and widescreen (RFO_WINDOW_SCALE ...
- * RFO_WIDESCREEN, display-only: they never mark a save). A change is applied to the
+ * RFO_WIDESCREEN, display-only: they never mark a save); v1.31.0: the update notice
+ * (RFO_UPDATE_NOTICE, reforged_update.c). A change is applied to the
  * window at once (port/platform.h Platform_SetWindowScale, Platform_SetScaling,
  * Platform_SetFullscreen, Platform_SetWide; widescreen also port/render/render.h
  * RenderSetWide) and kept in the settings file; the saved values are
@@ -20,6 +21,8 @@
 #include "reforged_listmenu.h"
 #include "../platform.h"
 #include "../render/render.h"
+
+void PortHq_SetRow(int on); /* port/audio/audio_pc.h (v1.32.0) */
 
 void Reforged_ApplyDisplay(int option)
 {
@@ -38,6 +41,10 @@ void Reforged_ApplyDisplay(int option)
         Platform_SetScaling(Reforged_GetOption(RFO_SCALE_MODE), Reforged_GetOption(RFO_SCALE_SMOOTH));
     if (option < 0 || option == RFO_FULLSCREEN)
         Platform_SetFullscreen(Reforged_GetOption(RFO_FULLSCREEN));
+    if (option < 0 || option == RFO_UPDATE_NOTICE)
+        Reforged_UpdateCheck(); /* v1.31.0: once per run, the row on (reforged_update.c) */
+    if (option < 0 || option == RFO_AUDIO_HQ)
+        PortHq_SetRow(Reforged_GetOption(RFO_AUDIO_HQ)); /* v1.32.0: "Enhanced sound" (port/audio/hq_pc.c) */
 }
 
 /* The help lines are at most 192 pixels (24 tiles). */
@@ -48,6 +55,9 @@ static const struct RandoRow sDisplayRows[] = {
     RR_SWITCH(RFO_SCALE_SMOOTH, "Smoothing", "Soften the pixels when filling or stretching."),
     RR_SWITCH(RFO_FULLSCREEN, "Fullscreen", "Start fullscreen. F11 still switches."),
     RR_SWITCH(RFO_WIDESCREEN, "Widescreen", "A 16:9 window, the game in the middle."),
+    RR_SWITCH(RFO_UPDATE_NOTICE, "Update notice", "Title screen: says when GitHub has a newer one."),
+    { RR_CHOICE, RFO_AUDIO_HQ, 2, 0, 0, 0, "Sound", "Enhanced: smoother music, no GBA hiss.",
+      { "Original", "Enhanced" }, { 0, 1 }, NULL, NULL, 0 },
 };
 
 static const struct ReforgedListScreen sDisplayScreen = {

@@ -152,5 +152,13 @@ void PortPsg_Render(const int8_t *laneA, const int8_t *laneB, int16_t *lr, uint3
 void PortPsg_Run(uint32_t cycles);   /* advance the hardware, no output */
 int PortPsg_ChannelOn(int ch);       /* ch 1-4: the SOUNDCNT_X on flag */
 uint8_t PortPsg_ChannelLevel(int ch); /* ch 1-4: digital output now, 0-15 */
+/* v1.32.0, "Enhanced sound" (port/audio/hq_pc.c): when a hook is set, PortPsg_Render calls it at each PWM tick
+   with the tick's end (cycles from the start of this render), its length in cycles, and the PSG's level then
+   before the DAC, left and right, in the DAC's units (no bias, no cut). NULL (the default): no call.
+   PortPsg_DacRegs: the DAC's SOUNDCNT_H and SOUNDBIAS as the last PortPsg_Latch took them, and whether the
+   sound circuit is powered. Integers only: psg.c has no floating point. */
+typedef void (*PortPsgTickHook)(uint32_t cycleEnd, uint32_t period, int32_t left, int32_t right);
+void PortPsg_SetTickHook(PortPsgTickHook hook);
+void PortPsg_DacRegs(uint16_t *soundcntH, uint16_t *soundbias, int *powered);
 
 #endif /* GUARD_PORT_AUDIO_PSG_H */

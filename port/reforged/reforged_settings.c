@@ -92,6 +92,8 @@ static const char *const sKeys[RFO_COUNT] = {
     [RFO_SKILL_BANNERS] = "skill_banners",
     [RFO_MYRRH_LOOK] = "myrrh_look",
     [RFO_MOUSE] = "mouse_controls", /* v1.29.0, the Controls screen's row (reforged_mouse.c) */
+    [RFO_UPDATE_NOTICE] = "update_notice", /* v1.31.0, the Display screen's row (reforged_update.c) */
+    [RFO_AUDIO_HQ] = "enhanced_sound", /* v1.32.0, the Display screen's "Sound" row (port/audio/hq_pc.c) */
     [RFO_CONVOY_ANYWHERE] = "convoy_anywhere",
     [RFO_SKIRMISH_PASS] = "pass_skirmishes",
     [RFO_REWIND] = "rewind",
@@ -661,7 +663,9 @@ static int IsDisplaySubmenu(int id)
         || id == RFO_SKILL_BANNERS
         || id == RFO_MYRRH_LOOK  /* on the Display screen: this computer's, never a set's (Myrrh look: it needs this
                                     computer's FE6 ROM) */
-        || id == RFO_MOUSE;      /* v1.29.0: the Controls screen's row, this computer's input, as the keys are */
+        || id == RFO_MOUSE       /* v1.29.0: the Controls screen's row, this computer's input, as the keys are */
+        || id == RFO_UPDATE_NOTICE  /* v1.31.0: this computer's (it asks the network) */
+        || id == RFO_AUDIO_HQ;      /* v1.32.0: this computer's speaker */
 }
 
 /* One "key = value" (both trimmed) into the options; path and lineNo name it in the
@@ -1043,6 +1047,8 @@ static const unsigned char sDisplayOnly[RFO_COUNT] = {
     [RFO_SKILL_BANNERS] = 1, /* a skill's name shown when it activates (reforged_skillbanner.c): no change to the game */
     [RFO_MYRRH_LOOK] = 1, /* v1.20.0: Myrrh's dragon drawn as FE6's Divine Dragon (reforged_fe7.c): pictures only */
     [RFO_MOUSE] = 1, /* v1.29.0: input only: every press the mouse makes is one a pad could make (reforged_mouse.c) */
+    [RFO_UPDATE_NOTICE] = 1, /* v1.31.0: a line on the title screen (reforged_update.c): nothing in the game */
+    [RFO_AUDIO_HQ] = 1, /* v1.32.0: what the speaker plays (port/audio/hq_pc.c): GBA memory is the same */
     [RFO_FF_SOUND] = 1,
     [RFO_GROWTH_SELECT] = 1, /* growth rates on Select: shows numbers only */
     [RFO_MAP_HPBARS] = 1, /* map HP bars block: pictures only (reforged_hpbars.c) */
@@ -1195,6 +1201,10 @@ static int WriteSettings(const char *path, int onlyIfChanged)
         "# myrrh_look: 1 = Myrrh's dragon form in battle is FE6's Divine Dragon (needs your\n"
         "# own FE6 ROM; looks only).\n"
         "# widescreen: 1 = a 16:9 window, the game centred with black sides.\n"
+        "# update_notice: 1 = once per run, ask GitHub for the newest version of the\n"
+        "# port and name a newer one on the title screen (nothing is downloaded).\n"
+        "# enhanced_sound: 1 = the music and sound effects mixed again at 4 times the\n"
+        "# GBA's rate, smoother and without its hiss; 0 (the default) = the GBA's sound.\n"
         /* --- Game fixes submenu --- */
         "# fix_*: optional changes to the original's rules (the Game fixes screen),\n"
         "# 0 = off (the default, the original), 1 = on; each marks a save. fix_skills:\n"

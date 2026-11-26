@@ -54,6 +54,10 @@
 #define DMA_TIMING_SPECIAL 0x3000u /* FIFO request for DMA1/DMA2 */
 
 static int16_t sLr[2 * FRAMES];
+#if PORT_STATE_ON
+static int16_t sLrHq[2 * PORT_AUDIO_HQ_FRAMES]; /* v1.32.0, "Enhanced sound" */
+static FILE *sDumpHq;                          /* FE8PC_AUDIO_DUMP_HQ */
+#endif
 static uint32_t sVBlanks;      /* PortAudio_OnVBlank calls */
 static uint32_t sPreVBlanks;   /* PortAudio_PreVBlank calls (record index v) */
 static uint32_t sPlayed[2];    /* VBlanks in which FIFO A / B played a slot */
@@ -114,6 +118,13 @@ void PortAudio_Init(void)
     }
     s = getenv("FE8PC_AUDIO_LOG");
     sSongLog = s != NULL && atoi(s) != 0;
+#if PORT_STATE_ON
+    if ((s = getenv("FE8PC_AUDIO_DUMP_HQ")) != NULL && s[0] != '\0')
+    {
+        sDumpHq = OpenOut(s, ".lr16");
+        PortHq_SetDump(sDumpHq != NULL);
+    }
+#endif
 
     PortAudioOut_Init();
 }
@@ -206,6 +217,9 @@ void PortAudio_OnVBlank(void)
     static const int8_t sZeros[FRAMES];
     static int sWarnedSrc, sWarnedRate;
     const int8_t *lane[2] = { NULL, NULL };
+#if PORT_STATE_ON
+    const float *hq[2] = { NULL, NULL }; /* v1.32.0: the shadow lanes the FIFOs play */
+#endif
     struct SoundInfo *si = SOUND_INFO_PTR;
     uint32_t p = 0;
     int dmaPos = 0;
@@ -243,6 +257,15 @@ void PortAudio_OnVBlank(void)
             continue;
         }
         lane[fifo] = (const int8_t *)(uintptr_t)src;
+#if PORT_STATE_ON
+        if (PortHq_Active())
+        {
+            uint32_t base = (uint32_t)(uintptr_t)si->pcmBuffer;
+
+            if (src >= base && src + FRAMES <= base + 2u * PCM_DMA_BUF_SIZE)
+                hq[fifo] = PortHq_LaneAt(src - base, PCM_DMA_BUF_SIZE);
+        }
+#endif
     }
     sPlayed[0] += lane[0] != NULL;
     sPlayed[1] += lane[1] != NULL;
@@ -250,7 +273,18 @@ void PortAudio_OnVBlank(void)
     /* The PSG reads the registers CgbSound wrote in this handler, then the DAC
        mixes all six sources. */
     PortPsg_Latch();
+#if PORT_STATE_ON
+    PortHq_PsgBegin();
+#endif
     PortPsg_Render(lane[0], lane[1], sLr, FRAMES);
+#if PORT_STATE_ON
+    if (PortHq_Active())
+    {
+        PortHq_Render(hq[0], hq[1], sLrHq, PORT_AUDIO_HQ_FRAMES);
+        if (sDumpHq != NULL)
+            fwrite(sLrHq, sizeof(sLrHq[0]), 2 * PORT_AUDIO_HQ_FRAMES, sDumpHq);
+    }
+#endif
 
     if (sDumpLr != NULL)
         fwrite(sLr, sizeof(sLr[0]), 2 * FRAMES, sDumpLr);
@@ -262,7 +296,12 @@ void PortAudio_OnVBlank(void)
     if (sSongLog && si != NULL)
         LogSongStarts();
 
-    PortAudioOut_Push(sLr, FRAMES);
+#if PORT_STATE_ON
+    if (PortHq_Playing() && PortHq_Active())
+        PortAudioOut_PushRate(sLrHq, PORT_AUDIO_HQ_FRAMES, PORT_AUDIO_HQ_RATE_HZ);
+    else
+#endif
+        PortAudioOut_Push(sLr, FRAMES);
     sVBlanks++;
 }
 
@@ -280,6 +319,11 @@ void PortAudio_Report(void)
     if (sRecord != NULL)
         fclose(sRecord);
     sDumpLr = sDumpFifo = sRecord = NULL;
+#if PORT_STATE_ON
+    if (sDumpHq != NULL)
+        fclose(sDumpHq);
+    sDumpHq = NULL;
+#endif
 }
 
 /* Save states (port/include/port_state.h): not game state: the dump and record files (test switches); the FIFO's
@@ -289,3 +333,7 @@ PORT_STATE_SESSION(sDumpFifo)
 PORT_STATE_SESSION(sRecord)
 PORT_STATE_SESSION(sRecordFrom)
 PORT_STATE_SESSION(sSongLog)
+#if PORT_STATE_ON
+PORT_STATE_SESSION(sLrHq)
+PORT_STATE_SESSION(sDumpHq)
+#endif

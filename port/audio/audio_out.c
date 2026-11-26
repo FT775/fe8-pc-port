@@ -27,8 +27,10 @@
  * FE8PC_AUDIO=0 opens no device (the game then runs silent, as headless).
  */
 
-#define VB PORT_AUDIO_FRAMES_PER_VBLANK
-#define Q_TARGET (3u * VB)  /* 672 frames, 50 ms */
+/* v1.32.0: the frames per VBlank of the stream's rate (224 at 13,379 Hz, 896 for "Enhanced sound") */
+static uint32_t sVb = PORT_AUDIO_FRAMES_PER_VBLANK, sRate = PORT_AUDIO_RATE_HZ;
+#define VB sVb
+#define Q_TARGET (3u * VB)  /* 3 VBlanks, 50 ms */
 #define Q_HIGH   (12u * VB) /* drop VBlanks above this ... */
 #define Q_LOW    (8u * VB)  /* ... until below this */
 #define MAX_DEVIATION 0.005
@@ -37,8 +39,10 @@
 static int sDevice;   /* Platform_OpenAudio gave a device */
 static int sPlaying;  /* device resumed */
 static int sDropping;
+static uint32_t sGrace; /* v1.32.0: pushes after a change of rate during which nothing is dropped */
 static double sQs, sRatio = 1.0;
 static uint64_t sQueued, sDropped;
+static double sQueuedSec; /* v1.32.0: the frames queued, in seconds at their own rate */
 static uint32_t sUnderruns, sRatioSets, sQMin = UINT32_MAX, sQMax, sPushes;
 static double sRatioMin = 1.0, sRatioMax = 1.0;
 
@@ -59,11 +63,28 @@ void PortAudioOut_Init(void)
 
 void PortAudioOut_Push(const int16_t *lr, uint32_t frames)
 {
+    PortAudioOut_PushRate(lr, frames, PORT_AUDIO_RATE_HZ);
+}
+
+void PortAudioOut_PushRate(const int16_t *lr, uint32_t frames, uint32_t rateHz)
+{
     uint32_t q;
     double r, dev;
 
     if (!sDevice)
         return;
+    if (rateHz != sRate && rateHz != 0 && frames != 0)
+    {
+        /* v1.32.0: "Enhanced sound" switched: the stream takes the other rate from here (what is queued
+           plays out at its own); the queue's marks follow (they count this rate's frames) */
+        Platform_SetAudioRate(rateHz);
+        PortLog("[audio] stream now %u Hz (%u frames a VBlank)\n", rateHz, frames);
+        sRate = rateHz;
+        sVb = frames;
+        sQs = (double)Platform_AudioQueued();
+        sDropping = 0;
+        sGrace = 30; /* half a second: what was queued at the old rate drains meanwhile */
+    }
     q = Platform_AudioQueued();
     if (sPlaying && q == 0)
     {
@@ -73,7 +94,9 @@ void PortAudioOut_Push(const int16_t *lr, uint32_t frames)
         Platform_PauseAudio(1);
         sPlaying = 0;
     }
-    if (sDropping && q < Q_LOW)
+    if (sGrace > 0)
+        sGrace--;
+    else if (sDropping && q < Q_LOW)
         sDropping = 0;
     else if (!sDropping && q > Q_HIGH)
     {
@@ -88,6 +111,7 @@ void PortAudioOut_Push(const int16_t *lr, uint32_t frames)
 
     Platform_QueueAudio(lr, frames);
     sQueued += frames;
+    sQueuedSec += (double)frames / (double)sRate;
     q = Platform_AudioQueued();
     if (!sPlaying)
     {
@@ -131,7 +155,7 @@ void PortAudioOut_Report(void)
         return;
     }
     PortLog("[audio] queued to the device: %llu frames (%.3f s at %u Hz), dropped %llu, ran dry %u times\n",
-        (unsigned long long)sQueued, (double)sQueued / PORT_AUDIO_RATE_HZ, PORT_AUDIO_RATE_HZ,
+        (unsigned long long)sQueued, sQueuedSec, sRate,
         (unsigned long long)sDropped, sUnderruns);
     if (sPushes != 0)
         PortLog("[audio] queue after each push: %u to %u frames (target %u); ratio %.4f now, %.4f to %.4f, "
@@ -153,3 +177,7 @@ PORT_STATE_SESSION(sQs)
 PORT_STATE_SESSION(sDropping)
 PORT_STATE_SESSION(sPlaying)
 PORT_STATE_SESSION(sDevice)
+PORT_STATE_SESSION(sVb)
+PORT_STATE_SESSION(sRate)
+PORT_STATE_SESSION(sQueuedSec)
+PORT_STATE_SESSION(sGrace)

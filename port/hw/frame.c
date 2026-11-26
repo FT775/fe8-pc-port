@@ -25,6 +25,9 @@
 
 #define IRQ_COUNT 14
 extern void *gIRQHandlers[IRQ_COUNT];
+#if PORT_STATE_ON
+void Reforged_UpdateFrame(void); /* port/include/port_reforged.h (v1.31.0) */
+#endif
 
 uint32_t gPortFrameCount;
 uint32_t gPortFrameLimit = 60;
@@ -589,6 +592,9 @@ void PortRunFrame(void)
 
     /* The frame drawn on lines 0-159 is finished: show it (headless: no-op). */
     /* Widescreen (render.h, played builds): the pillarboxed picture instead, the toast in its middle strip. */
+#if PORT_STATE_ON
+    Reforged_UpdateFrame(); /* v1.31.0: the update notice's line on the title screen (port/reforged/reforged_update.c) */
+#endif
     if (gRenderWideOn)
     {
 #if PORT_STATE_ON

@@ -129,6 +129,7 @@
 
 #include "m4a_1_pc.h"
 #include "port_state.h"
+#include "audio_pc.h" /* v1.32.0: "Enhanced sound" (hq_pc.c) */
 
 _Static_assert(sizeof(void *) == 4, "m4a_1_pc.c needs ILP32 (D1-a)");
 _Static_assert(sizeof(struct SoundChannel) == 0x40, "SoundChannel layout");
@@ -1298,6 +1299,9 @@ static void MixChannel(struct SoundInfo *soundInfo, u32 chan, u32 wav, u32 r6, u
 {
     u32 r5;
     struct MixRegs m;
+#if PORT_STATE_ON
+    int started = 0; /* v1.32.0, "Enhanced sound": the channel starts in this slot */
+#endif
 
     if (r6 & 0x80)
     {
@@ -1307,6 +1311,9 @@ static void MixChannel(struct SoundInfo *soundInfo, u32 chan, u32 wav, u32 r6, u
             return;
         }
         r6 = 3;
+#if PORT_STATE_ON
+        started = 1;
+#endif
         St8(chan + CH_STATUS, r6);
         St32Field(chan + 0x28, wav + 0x10);           /* cp = wav->data */
         St32Field(chan + 0x18, Ld32Field(wav + 0xC)); /* ct = wav->size */
@@ -1402,6 +1409,15 @@ store:
     m.r10 = Ld8(chan + 0xA) << 16;
     m.r11 = Ld8(chan + 0xB) << 16;
 
+#if PORT_STATE_ON
+    /* v1.32.0, "Enhanced sound" (hq_pc.c): the same stretch of this channel, mixed again for the speaker from
+       what the mixer below is about to read (host memory only; nothing here is written) */
+    if (PortHq_Active())
+        PortHq_Channel((int)((chan - (A(soundInfo) + 0x50)) / 0x40), wav, m.r3, Ld32Field(chan + 0x1C),
+            divFreq * Ld32Field(chan + CH_FREQ), (Ld8(chan + CH_TYPE) & TONEDATA_TYPE_FIX) != 0, m.loopLen != 0,
+            Ld8(chan + 0xA), Ld8(chan + 0xB), started);
+#endif
+
     if (Ld8(chan + CH_TYPE) & TONEDATA_TYPE_FIX)
         MixFixed(chan, &m);
     else
@@ -1469,6 +1485,15 @@ static void SoundMainRAM_C(struct SoundInfo *soundInfo, u32 counter, u32 frame, 
         } while (GtAfterSub(old, 1));
     }
 
+#if PORT_STATE_ON
+    /* v1.32.0, "Enhanced sound" (hq_pc.c): the shadow of this slot, reverberated or cleared as above */
+    if (PortHq_Active() && samples != 0)
+    {
+        int slot = (int)((frame - A(soundInfo->pcmBuffer)) / samples);
+
+        PortHq_Frame(slot, samples, reverb, counter == 2 ? 0 : slot + 1);
+    }
+#endif
     divFreq = (u32)soundInfo->divFreq;
     n = soundInfo->maxChans;
     chan = A(soundInfo) + 0x50;

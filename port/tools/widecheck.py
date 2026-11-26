@@ -12,7 +12,7 @@
 #   WIDE: N frames, M with the map at the sides, P black sides, off min..max, E errors
 #   COVER: frames with side sprites, moving units, moving enemies the fog hid, HP bars, range squares,
 #          local BG2 effects left out, the phase banner's squares, the strip sliding, a suspended map
-# --expect: each named item (sprites mus fogs hps range local squares slide held) must be in at least one
+# --expect: each named item (sprites mus fogs hps range local squares slide held edge) must be in at least one
 # frame, else an error (a route meant to cover it no longer does); allmap: every frame shows the map at the sides. With --sheet writes a PNG contact sheet
 # of up to 24 frames with the map at the sides (PIL when present, else a PNG written by hand with zlib).
 import os
@@ -113,7 +113,8 @@ def main():
     offs = []
     reasons = {}
     map_frames = []
-    cover = dict((k, 0) for k in ('sprites', 'mus', 'fogs', 'hps', 'range', 'local', 'squares', 'slide', 'held'))
+    cover = dict((k, 0) for k in ('sprites', 'mus', 'fogs', 'hps', 'range', 'local', 'squares', 'slide', 'held',
+                                  'edge'))
     prev = None  # (frame, off, held, mapish) of the frame before
     for n in names:
         fr = int(n[5:11])
@@ -126,7 +127,8 @@ def main():
         off, mp, reason = log[fr]
         objs, mus, fogs, hps, flags = extra.get(fr, (0, 0, 0, 0, 0))
         for k, v in (('sprites', objs), ('mus', mus), ('fogs', fogs), ('hps', hps), ('range', flags & 2),
-                     ('local', flags & 4), ('squares', flags & 8), ('slide', flags & 1), ('held', flags & 16)):
+                     ('local', flags & 4), ('squares', flags & 8), ('slide', flags & 1), ('held', flags & 16),
+                     ('edge', flags & 32)):
             cover[k] += 1 if v else 0
         # v1.28.0: the strip's x between the map and a suspended map (the battle animation) only slides, and a
         # suspended map has the strip in the middle once the slide is over

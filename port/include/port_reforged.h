@@ -65,6 +65,14 @@ enum ReforgedOption {
        hover become key presses, the same ones a pad would make). Input only: never marks a save, never in
        an option set. */
     RFO_MOUSE,
+    /* "Update notice" (reforged_update.c, v1.31.0; the Display screen's row): 0 [0], 1 (once per run the game
+       asks GitHub for the newest release; a newer one is named on the title screen). Never marks a save,
+       never in an option set. */
+    RFO_UPDATE_NOTICE,
+    /* "Sound" (port/audio/hq_pc.c, v1.32.0; the Display screen's row): 0 Original [0], 1 Enhanced (the music
+       and sound effects mixed again at 4 x the GBA's rate for the speaker). Never marks a save, never in an
+       option set. */
+    RFO_AUDIO_HQ,
     /* "Helpers >" (reforged_helpers_menu.c), each 0 [0] or 1; they change play (a save is marked) */
     RFO_CONVOY_ANYWHERE,    /* "Convoy anywhere": every unit has Supply where the chapter has the convoy */
     RFO_SKIRMISH_PASS,      /* "Pass skirmishes": the world-map army walks through monster nodes */
@@ -503,7 +511,8 @@ int PortWide_BmTileWords(int x, int y, unsigned short *out);
    - src/hardware.c UpdateKeyStatus: Reforged_MouseKeyRead, the planner's clock (one per key read).
    - src/playerphase.c PlayerPhase_MainIdle (0) / PlayerPhase_RangeDisplayIdle (1): Reforged_MouseMapIdle;
      src/uimenu.c Menu_OnIdle (after its frozen/doomed returns): Reforged_MouseMenu; src/uiselecttarget.c
-     TargetSelection_Loop (after its frozen return): Reforged_MouseTargets. */
+     TargetSelection_Loop (after its frozen return): Reforged_MouseTargets; v1.30.0: the trade screen and the
+     shops' lists: Reforged_MouseGrid (below). */
 enum { REFORGED_MOUSE_MOTION, REFORGED_MOUSE_DOWN, REFORGED_MOUSE_WHEEL, REFORGED_MOUSE_WHEEL_X };
 struct MenuProc;
 struct SelectTargetProc;
@@ -518,7 +527,32 @@ void Reforged_MouseTargets(struct SelectTargetProc *proc);
 /* port/reforged/reforged_controls_menu.c Controls_Loop: a left click there is A only on the hand's row (game-screen
    pixel rows y0 <= y < y1; y0 >= y1: nowhere), so a stray click neither switches the Mouse row nor starts a capture. */
 void Reforged_MouseHandRow(int y0, int y1);
+/* v1.30.0: a list or grid of items the hand moves over with the D-pad (src/bmtrade.c TradeMenu_OnLoopUnselected /
+   _OnLoopSelected, src/bmshop.c Shop_Loop_BuyKeyHandler / _SellKeyHandler; each before its input is read): a click
+   on an item moves the hand there (Left / Right for the column, Up / Down for the row), then A; hover moves the
+   hand. Game-screen pixels. */
+struct ReforgedMouseGrid
+{
+    int id;              /* which screen (1 trade, 2 shop buy, 3 shop sell): another id is another list */
+    int cols;            /* 1 or 2 */
+    int x0[2], x1[2];    /* a column's items: x0 <= x < x1 */
+    int y0[2];           /* the top of a column's first row on screen */
+    int rowH, lines;     /* a row's height; rows on screen */
+    int top[2];          /* the index of a column's first row on screen */
+    int count[2];        /* the items 0 .. count-1 the hand can stand on */
+    int curCol, cur;     /* the hand */
+    int wrap;            /* Up on the first item / Down on the last goes round */
+    int busy;            /* A is not taken now (a page scrolling, a help box): A waits */
+};
+void Reforged_MouseGrid(const struct ReforgedMouseGrid *g);
 /* --- end of the Mouse controls block --- */
+
+/* --- Update notice (v1.31.0; port/reforged/reforged_update.c; RFO_UPDATE_NOTICE, off by default) ---
+   Reforged_UpdateCheck: the row on (Reforged_ApplyDisplay at start, or the row switched on): asks GitHub in the
+   background, once per run. Reforged_UpdateFrame: each frame step (port/hw/frame.c, before the picture is
+   shown): on the title screen, a newer release named once (the save states' toast). */
+void Reforged_UpdateCheck(void);
+void Reforged_UpdateFrame(void);
 
 /* --- Original-game bug fixes (port/reforged/reforged_settings.c; RFO_BUG_FIXES, on by default) ---
    Fixes for retail bugs that stop the game for good (a freeze or a softlock), each reproduced on the GBA

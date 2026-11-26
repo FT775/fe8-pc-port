@@ -981,6 +981,64 @@ int __wrap_main(int argc, char **argv)
     return rc;
 }
 
+/* v1.31.0 (platform_sdl3.c Platform_HttpsGet): the System32 folder (no trailing backslash); 0, or -1. */
+int PortWin32SystemDir(char *out, size_t outSize)
+{
+    UINT n = GetSystemDirectoryA(out, (UINT)outSize);
+
+    return n == 0 || n >= outSize ? -1 : 0;
+}
+
+/* v1.31.0 (platform_sdl3.c Platform_HttpsGet): runs cmdline with no window, its standard output into out
+   (NUL-terminated, at most outSize - 1 bytes); 1 when it ran, exited 0 and wrote something. Waits at most
+   15 s for the exit after the output ends (curl ends itself after --max-time). */
+int PortWin32RunHidden(const char *cmdline, char *out, size_t outSize)
+{
+    SECURITY_ATTRIBUTES sa;
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    HANDLE rd = NULL, wr = NULL;
+    char cmd[1024];
+    DWORD got = 0, total = 0, code = 1;
+    int ok = 0;
+
+    if (out == NULL || outSize == 0)
+        return 0;
+    out[0] = '\0';
+    memset(&sa, 0, sizeof(sa));
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    if (strlen(cmdline) >= sizeof(cmd) || !CreatePipe(&rd, &wr, &sa, 0))
+        return 0;
+    SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    si.hStdOutput = wr;
+    si.hStdError = NULL;
+    si.hStdInput = NULL;
+    strcpy(cmd, cmdline);
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+    {
+        CloseHandle(rd);
+        CloseHandle(wr);
+        return 0;
+    }
+    CloseHandle(wr);
+    while (total + 1 < outSize && ReadFile(rd, out + total, (DWORD)(outSize - 1 - total), &got, NULL) && got > 0)
+        total += got;
+    out[total] = '\0';
+    if (WaitForSingleObject(pi.hProcess, 15000) == WAIT_OBJECT_0 && GetExitCodeProcess(pi.hProcess, &code))
+        ok = code == 0 && total > 0;
+    else
+        TerminateProcess(pi.hProcess, 1);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(rd);
+    return ok;
+}
+
 /* Save states (port/include/port_state.h): not game state: the exe image's bounds, the signal emulation,
    the clock's frequency and the sleep timer (a handle of this process). */
 PORT_STATE_SESSION(sImageLo)

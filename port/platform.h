@@ -76,6 +76,9 @@ int Platform_OpenAudio(uint32_t rateHz, uint32_t channels); /* 0: no device */
 void Platform_QueueAudio(const int16_t *lr, uint32_t frames);
 uint32_t Platform_AudioQueued(void);                        /* frames waiting */
 void Platform_SetAudioRatio(double ratio);
+/* v1.32.0: the rate of the frames Platform_QueueAudio gets from now on (what is queued plays at its own);
+   "Enhanced sound" queues 53,516 Hz, the original sound 13,379 Hz. */
+void Platform_SetAudioRate(uint32_t rateHz);
 void Platform_PauseAudio(int pause);
 
 /* Save states (played builds; port/reforged/reforged_savestate.c), right after a state is loaded:
@@ -149,6 +152,14 @@ void Platform_SetFullscreen(int on);
    minimum size follow the new width. Nothing in the headless backend. */
 #define PLATFORM_MAX_WIDTH 512
 void Platform_SetWide(int width);
+/* v1.31.0 (the Display screen's "Update notice", port/reforged/reforged_update.c): Platform_RunDetached runs
+   fn(arg) on a thread of its own and forgets it (1), or does nothing (0: no threads in this backend).
+   Platform_HttpsGet: the body of an HTTPS GET of url (the program's own constants, no quotes) through the
+   system's curl (Windows 10 and later ship one; run with no window), NUL-terminated in buf; 0 on any
+   failure (no curl, no network, an HTTP error, about 8 s without an answer). It blocks: call it on such a
+   thread. Headless: both 0. */
+int Platform_RunDetached(int (*fn)(void *), void *arg);
+int Platform_HttpsGet(const char *url, const char *userAgent, char *buf, size_t size);
 /* A valid binding name in the backend's own spelling ("return" -> "Return",
    "DPUP" -> "dpup"), in out; the headless backend copies it. */
 void Platform_CanonicalName(int pad, const char *name, char *out, size_t size);
