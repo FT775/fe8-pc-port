@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.34.1 (2026-11-26)
+
+### In short
+- Fixed: on some Windows PCs the game crashed at once or showed a black screen and closed (public issue #2). Another program had already put something where the game needs its memory; the game now claims that memory first and, if it is taken, starts itself again with it claimed before anything else can take it.
+
+### Fixed
+- **Windows start-up** (public issue #2, "Immediate crash after launching EXE"). The port keeps the GBA's memory at the GBA's own addresses (0x02000000 to 0x0E00FFFF). On some PCs a program that puts itself into every process (an overlay, a recorder, security software) already has memory there when the game starts. The game then either stopped ("RESERVATION FAILED: File exists") or, when that memory was EWRAM's or IWRAM's, took it for its own (the Linux build's ELF-loader case, which the Windows exe does not have) and crashed writing to it. Now every GBA region is reserved first thing; if one is taken, the game starts itself again suspended, reserves the regions in the new process before any DLL of its own is loaded, and waits for it. If even that fails, the game stops with a log line naming what holds the address.
+
+### Technical
+- `port/win32/posix_win32.c`: `ReserveGbaEarly` (top of `__wrap_main`), `StartAgainWithGbaReserved` (`CreateProcessW` with `CREATE_SUSPENDED`, the same command line, window state and standard handles; `VirtualAllocEx` reservations; `FE8PC_GBA_RESERVED=1` tells the new process, which clears it; the parent ends with the child's exit code, a crash's included; the child is in a job that ends it with the parent, so a launcher that stops the game it started stops both, and the processes the child starts (the updater's restart) leave that job), `CommitReservedGba` (`mmap` commits a reserved region), `PortWin32DescribeAddress` (`VirtualQuery`, the DLL or mapped file's name). `port/hw/memory.c`: EWRAM and IWRAM are no longer taken as the ELF loader's on Windows; `PortMemRegion`; a failed region logs what holds it. Test switch (PB-9): `FE8PC_TEST_GBA_TAKEN=1` (IWRAM taken before the reservation, so the second start runs) and `=2` (taken in the second start too: the start fails with the message). An independent review's three findings were fixed before release (a crash exit code of the second start made the first one try again; stopping the first left the second running; a shortcut's hotkey or monitor hint was replaced). Checked on Windows, hidden: a normal start, the second start with a log file and with redirected output (the game runs its frames, exit 0), the failing case (exit 1, the message), the first process stopped (the second ends with it), and an update installed from a second start (the restarted game outlives both, takes the save's lock and deletes the `.old` files). The Linux builds are unchanged.
+
 ## v1.34.0 (2026-11-26)
 
 ### In short

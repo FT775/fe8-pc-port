@@ -22,6 +22,12 @@ uint32_t PortRomSize(void);
 /* 1 when addr is inside one of the GBA regions this run has (reserved by
    PortMemInit, or mapped by the ELF loader): the gaps between them are not. */
 int PortMemInGbaMap(uint32_t addr);
+/* v1.34.1: region i of the GBA map (name, address, size); 0 past the last */
+int PortMemRegion(unsigned i, const char **name, uint32_t *addr, uint32_t *size);
+#ifdef _WIN32
+/* v1.34.1 (port/win32/posix_win32.c): what holds addr in this process, in words, for the log */
+void PortWin32DescribeAddress(uint32_t addr, char *out, size_t outSize);
+#endif
 /* What the ROM file at path is (the checks PortMemInit's load makes): the
    original FE8 (USA) ROM; not FE8 (USA) by its header (or not readable); the
    FE8 (USA) header with another size (a dump cut short) or another SHA-1 (a

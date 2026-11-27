@@ -689,7 +689,7 @@ If you also own **Fire Emblem: The Binding Blade (FE6, the Japanese GBA game, or
 | A message box says the ROM is not the original FE8 USA ROM | The port needs the unchanged USA ROM. Hacks, translations and cut-short copies are not supported. |
 | A message box says `SDL3.dll` is missing or too old | Keep `SDL3.dll` beside `fe8pc-sdl.exe`. Use the copy from the same download. |
 | A gamepad does nothing | Plug it in and try again. SDL3 supports most common gamepads; the owner's gamepad was tested on Windows. |
-| The game does not start, or stops with an error | Read the log (below). |
+| The game does not start, or stops with an error | Read the log (below). A line "that address is already used by ..." means another program (an overlay, a recorder, security software) holds memory the game needs: close that program and try again, and report the log. |
 | Windows SmartScreen or an antivirus warns about the exe | The exe is not signed, so Windows may warn the first time. Choose "More info", then "Run anyway", or build the exe yourself (BUILDING.md). |
 
 **The log.** The Windows exe has no console window. It writes `fe8pc-sdl.log` next to the exe, or to `%APPDATA%\fe8pc\` if that folder cannot be written. The first line of the log says where it is. Run `fe8pc-sdl.exe --console` to print the log in the terminal you start it from. Attach the log to any bug report. On Linux the log is printed to the terminal you start the game from.

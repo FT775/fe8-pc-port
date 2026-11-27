@@ -24,9 +24,17 @@ struct PortRegion
     int mappedByElf;
 };
 
+/* v1.34.1 (public issue #2): the Windows exe has no EWRAM / IWRAM sections (port/win32/pe_gba.py strips them), so
+   they are reserved here like the rest; another module's memory there is a failure, not the ELF loader's. */
+#ifdef _WIN32
+#define ELF_RAM 0
+#else
+#define ELF_RAM 1
+#endif
+
 static const struct PortRegion sRegions[] = {
-    { "EWRAM", PORT_EWRAM_START, 0x40000, 1 },
-    { "IWRAM", PORT_IWRAM_START, 0x8000, 1 },
+    { "EWRAM", PORT_EWRAM_START, 0x40000, ELF_RAM },
+    { "IWRAM", PORT_IWRAM_START, 0x8000, ELF_RAM },
     { "IO", PORT_IO_START, 0x1000, 0 },
     { "PLTT", PORT_PLTT_START, 0x1000, 0 },
     { "VRAM", PORT_VRAM_START, 0x18000, 0 },
@@ -41,6 +49,17 @@ static uint32_t sMapped; /* bit i: sRegions[i] is this run's (reserved here, or 
 uint32_t PortRomSize(void)
 {
     return sRomSize;
+}
+
+/* Region i of the GBA map (port/win32/posix_win32.c reserves them first thing, v1.34.1): 0 past the last. */
+int PortMemRegion(unsigned i, const char **name, uint32_t *addr, uint32_t *size)
+{
+    if (i >= ARRAY_COUNT(sRegions))
+        return 0;
+    *name = sRegions[i].name;
+    *addr = sRegions[i].addr;
+    *size = sRegions[i].size;
+    return 1;
 }
 
 int PortMemInGbaMap(uint32_t addr)
@@ -75,6 +94,15 @@ static int ReserveRegion(const struct PortRegion *r)
     }
     PortLog("[mem] %-5s 0x%08X +0x%07X RESERVATION FAILED: %s\n", r->name, r->addr, r->size,
         strerror(errno));
+#ifdef _WIN32
+    {
+        char who[600];
+
+        PortWin32DescribeAddress(r->addr, who, sizeof(who));
+        PortLog("[mem] that address is already used by %s. The game needs it free; another program may have put "
+                "this there (an overlay, a recorder, security software). Close it, or report this log.\n", who);
+    }
+#endif
     return -1;
 }
 

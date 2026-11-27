@@ -409,6 +409,218 @@ void backtrace_symbols_fd(void *const *buffer, int size, int fd)
 }
 
 /* ------------------------------------------------------------------------- */
+/* The GBA map, reserved first thing (v1.34.1, public issue #2)              */
+
+/*
+ * memory.c needs the GBA regions (port_hw.h: EWRAM 0x02000000 ... SRAM
+ * 0x0E000000) at their own addresses. On most PCs they are free when main()
+ * starts; on some, a DLL that another program puts into every process (an
+ * overlay, a recorder, security software), or the memory it allocates, is
+ * already there, and the game could not start (issue #2: "RESERVATION
+ * FAILED", or a crash writing to IWRAM, which memory.c then took for the ELF
+ * loader's). So __wrap_main reserves them before anything else, and when one
+ * is taken, starts this exe again suspended, reserves them in that new
+ * process before any DLL of its own is loaded, lets it run and waits for it,
+ * ending with its exit code. mmap() then commits the reserved ranges. Each
+ * failure is logged with what holds the address (PortWin32DescribeAddress).
+ *
+ * FE8PC_TEST_GBA_TAKEN=1 (a test switch) takes IWRAM's 64 KiB before that,
+ * as such a DLL would, so the second start is used; =2 also leaves IWRAM out
+ * of the new process's reservations and takes it there too, so the start
+ * fails as it would if even a new process had it taken.
+ */
+#define GBA_MAX_REGIONS 16
+
+static struct
+{
+    uint32_t addr, size;
+    int held;   /* reserved for this process (here, or by the process that started this one) */
+    int inUse;  /* committed by mmap() */
+} sGba[GBA_MAX_REGIONS];
+static unsigned sGbaCount;
+static int sGbaSecondStart;           /* this is the second start (FE8PC_GBA_RESERVED=1) */
+static char sGbaConflict[700];        /* the first region found taken, and by what ("" for none) */
+
+typedef DWORD(WINAPI *MappedFileNameFn)(HANDLE, LPVOID, LPSTR, DWORD);
+
+void PortWin32DescribeAddress(uint32_t addr, char *out, size_t outSize)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    char path[MAX_PATH * 2];
+    const char *kind;
+    MappedFileNameFn mapped =
+        (MappedFileNameFn)(void (*)(void))GetProcAddress(GetModuleHandleA("kernel32.dll"), "K32GetMappedFileNameA");
+
+    path[0] = '\0';
+    if (VirtualQuery((void *)(uintptr_t)addr, &mbi, sizeof(mbi)) == 0)
+    {
+        snprintf(out, outSize, "something unknown (error %lu)", (unsigned long)GetLastError());
+        return;
+    }
+    if (mbi.State == MEM_FREE)
+    {
+        snprintf(out, outSize, "nothing now (free)");
+        return;
+    }
+    kind = mbi.Type == MEM_IMAGE ? "a program file (DLL)" : mbi.Type == MEM_MAPPED ? "a mapped file" : "memory";
+    if (mbi.Type == MEM_IMAGE && GetModuleFileNameA((HMODULE)mbi.AllocationBase, path, sizeof(path)) != 0)
+        ;
+    else if (mapped == NULL || mapped(GetCurrentProcess(), (void *)(uintptr_t)addr, path, sizeof(path)) == 0)
+        path[0] = '\0';
+    snprintf(out, outSize, "%s%s%s (allocated at 0x%08X, %s)", kind, path[0] ? " " : "", path,
+        (unsigned)(uintptr_t)mbi.AllocationBase, mbi.State == MEM_RESERVE ? "reserved" : "in use");
+}
+
+/* 1 when [addr, addr + size) is one reservation (not committed) starting at addr: the first start's, for this one. */
+static int IsReservedRange(uint32_t addr, uint32_t size)
+{
+    MEMORY_BASIC_INFORMATION mbi;
+
+    return VirtualQuery((void *)(uintptr_t)addr, &mbi, sizeof(mbi)) != 0 && mbi.State == MEM_RESERVE &&
+           (uintptr_t)mbi.AllocationBase == addr && (uintptr_t)mbi.BaseAddress == addr && mbi.RegionSize >= size;
+}
+
+static void ReserveGbaEarly(void)
+{
+    const char *second = getenv("FE8PC_GBA_RESERVED"), *test = getenv("FE8PC_TEST_GBA_TAKEN");
+    const char *name;
+    uint32_t addr, size;
+    unsigned i;
+
+    sGbaSecondStart = second != NULL && strcmp(second, "1") == 0;
+    SetEnvironmentVariableA("FE8PC_GBA_RESERVED", NULL); /* not for a game the updater starts */
+    _putenv("FE8PC_GBA_RESERVED=");
+    if (test != NULL && (strcmp(test, "1") == 0 || strcmp(test, "2") == 0) && (!sGbaSecondStart || strcmp(test, "2") == 0))
+        VirtualAlloc((void *)(uintptr_t)PORT_IWRAM_START, 0x10000, MEM_RESERVE | MEM_COMMIT, PAGE_READONLY);
+    for (i = 0; i < GBA_MAX_REGIONS && PortMemRegion(i, &name, &addr, &size); i++)
+    {
+        sGba[i].addr = addr;
+        sGba[i].size = size;
+        if (sGbaSecondStart && IsReservedRange(addr, size))
+            sGba[i].held = 1;
+        else if (VirtualAlloc((void *)(uintptr_t)addr, size, MEM_RESERVE, PAGE_NOACCESS) == (void *)(uintptr_t)addr)
+            sGba[i].held = 1;
+        else if (sGbaConflict[0] == '\0')
+        {
+            char who[600];
+
+            PortWin32DescribeAddress(addr, who, sizeof(who));
+            snprintf(sGbaConflict, sizeof(sGbaConflict), "%s 0x%08X is used by %s", name, (unsigned)addr, who);
+        }
+    }
+    sGbaCount = i;
+}
+
+/* mmap(): a fixed range inside one of the regions reserved above is committed there. */
+static void *CommitReservedGba(void *addr, size_t length, DWORD protect)
+{
+    uintptr_t a = (uintptr_t)addr;
+    unsigned i;
+
+    for (i = 0; i < sGbaCount; i++)
+        if (sGba[i].held && !sGba[i].inUse && a == sGba[i].addr && length <= sGba[i].size)
+        {
+            if (VirtualAlloc(addr, length, MEM_COMMIT, protect) != addr)
+                return NULL;
+            sGba[i].inUse = 1;
+            return addr;
+        }
+    return NULL;
+}
+
+#ifndef STARTF_HASSHELLDATA
+#define STARTF_HASSHELLDATA 0x400
+#endif
+
+/* The second start (see above): this exe again with this command line, suspended; the GBA regions reserved in it;
+   then run, and waited for. 1 once it ran (*exitCode: its exit code, a crash's NTSTATUS included); 0 when it could
+   not be started (memory.c then says what is in the way). It is in a job of this process's that ends it when this
+   one ends (a launcher stopping the game it started); the processes it starts (the updater's restart, curl, tar)
+   leave that job (silent breakaway), so they outlive both. */
+static int StartAgainWithGbaReserved(DWORD *exitCode)
+{
+    static wchar_t exe[MAX_PATH * 4], cmd[32768];
+    const char *test = getenv("FE8PC_TEST_GBA_TAKEN"), *name;
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+    DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH * 4);
+    HANDLE std[3], job;
+    uint32_t limits[28];
+    uint32_t addr, size;
+    unsigned i;
+    int ok = 1;
+
+    *exitCode = 1;
+    if (n == 0 || n >= MAX_PATH * 4 || wcslen(GetCommandLineW()) >= sizeof(cmd) / sizeof(cmd[0]))
+        return 0;
+    wcscpy(cmd, GetCommandLineW());
+    if (strstr(GetCommandLineA(), "--console") != NULL)
+        AttachConsole(ATTACH_PARENT_PROCESS); /* so the new process's --console finds this one's */
+    GetStartupInfoW(&si); /* the same window state (shown, hidden) */
+    si.cb = sizeof(si);
+    si.lpReserved = NULL;
+    si.cbReserved2 = 0;
+    si.lpReserved2 = NULL;
+    std[0] = GetStdHandle(STD_INPUT_HANDLE);
+    std[1] = GetStdHandle(STD_OUTPUT_HANDLE);
+    std[2] = GetStdHandle(STD_ERROR_HANDLE);
+    /* the standard handles, unless the start-up info's handle fields carry a hotkey or the monitor to open on */
+    if (!(si.dwFlags & (STARTF_USEHOTKEY | STARTF_HASSHELLDATA)))
+    {
+        for (i = 0; i < 3; i++)
+            if (std[i] != NULL && std[i] != INVALID_HANDLE_VALUE)
+                SetHandleInformation(std[i], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+        si.dwFlags |= STARTF_USESTDHANDLES;
+        si.hStdInput = std[0];
+        si.hStdOutput = std[1];
+        si.hStdError = std[2];
+    }
+    SetEnvironmentVariableA("FE8PC_GBA_RESERVED", "1");
+    SetEnvironmentVariableA("FE8PC_GBA_CONFLICT", sGbaConflict);
+    if (!CreateProcessW(exe, cmd, NULL, NULL, TRUE, CREATE_SUSPENDED, NULL, NULL, &si, &pi))
+        ok = 0;
+    SetEnvironmentVariableA("FE8PC_GBA_RESERVED", NULL);
+    SetEnvironmentVariableA("FE8PC_GBA_CONFLICT", NULL);
+    if (!ok)
+        return 0;
+    for (i = 0; i < GBA_MAX_REGIONS && PortMemRegion(i, &name, &addr, &size); i++)
+    {
+        if (addr == PORT_IWRAM_START && test != NULL && strcmp(test, "2") == 0)
+            continue;
+        if (VirtualAllocEx(pi.hProcess, (void *)(uintptr_t)addr, size, MEM_RESERVE, PAGE_NOACCESS) !=
+            (void *)(uintptr_t)addr)
+            ok = 0;
+    }
+    if (!ok)
+    {
+        TerminateProcess(pi.hProcess, 1);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return 0;
+    }
+    /* never closed: it closes when this process ends, and ends the game with it (if it could be set up). The
+       limits as Windows lays out JOBOBJECT_EXTENDED_LIMIT_INFORMATION for x86 (112 bytes, LimitFlags at byte 16):
+       this file is built with -mno-align-double, which packs that struct's 64-bit members to 108 bytes, and
+       Windows refuses that size (ERROR_BAD_LENGTH). */
+    job = CreateJobObjectW(NULL, NULL);
+    memset(limits, 0, sizeof(limits));
+    limits[4] = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+    if (job != NULL && (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, limits, sizeof(limits)) ||
+                           !AssignProcessToJobObject(job, pi.hProcess)))
+    {
+        CloseHandle(job);
+        job = NULL;
+    }
+    ResumeThread(pi.hThread);
+    CloseHandle(pi.hThread);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    if (!GetExitCodeProcess(pi.hProcess, exitCode))
+        *exitCode = 1;
+    CloseHandle(pi.hProcess);
+    return 1;
+}
+
+/* ------------------------------------------------------------------------- */
 /* mmap() for anonymous fixed mappings                                       */
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
@@ -431,6 +643,8 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
     else
         protect = PAGE_NOACCESS;
 
+    if ((flags & (MAP_FIXED | MAP_FIXED_NOREPLACE)) && (got = CommitReservedGba(addr, length, protect)) != NULL)
+        return got; /* v1.34.1: a GBA region reserved first thing */
     got = VirtualAlloc(addr, length, MEM_RESERVE | MEM_COMMIT, protect);
     if (flags & (MAP_FIXED | MAP_FIXED_NOREPLACE))
     {
@@ -924,10 +1138,30 @@ int __wrap_main(int argc, char **argv)
     const char *error, *where = "";
     char **newArgv;
     int i, rc, found;
+    DWORD again;
 
+    /* v1.34.1 (public issue #2): the GBA regions, before anything else can take them; when one is taken, this exe
+       started again with them reserved first (above) */
+    ReserveGbaEarly();
+    if (sGbaConflict[0] != '\0' && !sGbaSecondStart && StartAgainWithGbaReserved(&again))
+        ExitProcess(again); /* whatever its end, a crash included: it showed its own messages */
 #ifdef FE8PC_WINGUI
     PortWinGui_Start(&argc, &argv);
 #endif
+    if (sGbaSecondStart)
+    {
+        const char *why = getenv("FE8PC_GBA_CONFLICT");
+
+        printf("[win32] started again with the GBA memory reserved first (the first start found %s)\n",
+            why != NULL && why[0] ? why : "it taken");
+        fflush(stdout);
+        _putenv("FE8PC_GBA_CONFLICT=");
+    }
+    else if (sGbaConflict[0] != '\0')
+    {
+        printf("[win32] %s, and starting again with it reserved first failed\n", sGbaConflict);
+        fflush(stdout);
+    }
     /* No ROM among the arguments (the save options may be there: main_pc.c's
        own parser says): the ROM found next to the exe or in its roms folder (or,
        in the window build, the one remembered or chosen) goes last. */
@@ -1346,3 +1580,7 @@ PORT_STATE_SESSION(sInDispatch)
 PORT_STATE_SESSION(sFaultContext)
 PORT_STATE_SESSION(freq)
 PORT_STATE_SESSION(timer)
+PORT_STATE_SESSION(sGba)
+PORT_STATE_SESSION(sGbaCount)
+PORT_STATE_SESSION(sGbaSecondStart)
+PORT_STATE_SESSION(sGbaConflict)
